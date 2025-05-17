@@ -34,8 +34,9 @@ command_exists() {
   command -v "$1" >/dev/null 2>&1
 }
 
-# Check if SQLite mode is enabled
+# Глобальные настройки
 USE_SQLITE=false
+AUTO_YES=false  # Автоматический ответ "yes" на все вопросы
 
 # Check requirements
 check_requirements() {
@@ -93,8 +94,16 @@ check_requirements() {
 
   if [[ "$all_requirements_met" == "false" ]]; then
     echo -e "${YELLOW}Some requirements are not met. Please install them and try again.${NC}"
-    echo -e "${YELLOW}Do you want to continue anyway? (y/n)${NC}"
-    read -r continue_anyway
+
+    local continue_anyway="n"
+    if [[ "$AUTO_YES" == "true" ]]; then
+      continue_anyway="y"
+      echo -e "${YELLOW}Automatically continuing despite missing requirements...${NC}"
+    else
+      echo -e "${YELLOW}Do you want to continue anyway? (y/n)${NC}"
+      read -r continue_anyway
+    fi
+
     if [[ "$continue_anyway" != "y" ]]; then
       exit 1
     fi
@@ -116,8 +125,15 @@ check_env() {
       echo -e "${GREEN}✓ .env file created. Please review and update the variables.${NC}"
       
       # Ask user to edit the file
-      echo -e "${YELLOW}Do you want to edit the .env file now? (y/n)${NC}"
-      read -r edit_env
+      local edit_env="n"
+      if [[ "$AUTO_YES" == "true" ]]; then
+        edit_env="n"
+        echo -e "${YELLOW}Automatically skipping .env editing...${NC}"
+      else
+        echo -e "${YELLOW}Do you want to edit the .env file now? (y/n)${NC}"
+        read -r edit_env
+      fi
+
       if [[ "$edit_env" == "y" ]]; then
         ${EDITOR:-nano} "$ENV_FILE"
       fi
@@ -153,12 +169,25 @@ check_env() {
     done
     
     echo -e "${YELLOW}Please add these variables to the .env file.${NC}"
-    echo -e "${YELLOW}Do you want to edit the .env file now? (y/n)${NC}"
-    read -r edit_env
+
+    local edit_env="n"
+    if [[ "$AUTO_YES" == "true" ]]; then
+      edit_env="n"
+      echo -e "${YELLOW}Automatically skipping .env editing...${NC}"
+    else
+      echo -e "${YELLOW}Do you want to edit the .env file now? (y/n)${NC}"
+      read -r edit_env
+    fi
+
     if [[ "$edit_env" == "y" ]]; then
       ${EDITOR:-nano} "$ENV_FILE"
     else
-      return 1
+      # В автоматическом режиме продолжаем, в обычном - возвращаем ошибку
+      if [[ "$AUTO_YES" == "true" ]]; then
+        echo -e "${YELLOW}Continuing without editing .env file...${NC}"
+      else
+        return 1
+      fi
     fi
   else
     echo -e "${GREEN}✓ All required environment variables are set.${NC}"
@@ -339,24 +368,30 @@ check_database() {
 # Start server in development mode
 start_server_dev() {
   echo -e "${BLUE}Starting server in development mode...${NC}"
-  
+
   if [[ ! -d "$SERVER_DIR" ]]; then
     echo -e "${RED}✗ Server directory not found!${NC}"
     return 1
   fi
-  
+
   # Copy .env to server directory
   cp "$ENV_FILE" "$SERVER_DIR/.env"
-  
+
   cd "$SERVER_DIR"
-  
+
   if command_exists bun; then
-    bun run dev
+    if [[ "$USE_SQLITE" == "true" ]]; then
+      echo -e "${BLUE}Starting server with SQLite...${NC}"
+      cd "$PROJECT_ROOT"
+      npm run use:sqlite
+      cd "$SERVER_DIR"
+    fi
+    AUTO_YES=$AUTO_YES bun run dev
   else
     echo -e "${RED}✗ Bun is required to start the server!${NC}"
     return 1
   fi
-  
+
   cd "$PROJECT_ROOT"
 }
 
@@ -387,18 +422,18 @@ start_frontend_dev() {
 # Start both server and frontend in development mode
 start_dev() {
   echo -e "${BLUE}Starting development environment...${NC}"
-  
+
   if [[ ! -d "$SERVER_DIR" || ! -d "$FRONTEND_DIR" ]]; then
     echo -e "${RED}✗ Server or frontend directory not found!${NC}"
     return 1
   fi
-  
+
   # Copy .env to both directories
   cp "$ENV_FILE" "$SERVER_DIR/.env"
   cp "$ENV_FILE" "$FRONTEND_DIR/.env"
-  
-  # Use the development script
-  node scripts/dev.js
+
+  # Use the development script with environment variables
+  USE_SQLITE=$USE_SQLITE AUTO_YES=$AUTO_YES node scripts/pass-args.js scripts/dev.js
 }
 
 # Run tests
@@ -546,10 +581,12 @@ show_help() {
   echo -e ""
   echo -e "Special Options:"
   echo -e "  ${GREEN}--sqlite3${NC}    Use SQLite instead of PostgreSQL (can be combined with other options)"
+  echo -e "  ${GREEN}--yes${NC}        Automatically answer 'yes' to all prompts (non-interactive mode)"
   echo -e ""
   echo -e "Examples:"
-  echo -e "  ${CYAN}./run.sh --install --sqlite3${NC}  Install with SQLite support instead of PostgreSQL"
-  echo -e "  ${CYAN}./run.sh --dev --sqlite3${NC}      Start development with SQLite database"
+  echo -e "  ${CYAN}./run.sh --install --sqlite3${NC}           Install with SQLite support instead of PostgreSQL"
+  echo -e "  ${CYAN}./run.sh --dev --sqlite3${NC}               Start development with SQLite database"
+  echo -e "  ${CYAN}./run.sh --install --sqlite3 --yes${NC}     Fully automated installation with SQLite"
   echo -e ""
   echo -e "If no option is specified, the script will launch in interactive mode."
 }
@@ -612,12 +649,16 @@ check_server_status() {
 interactive_mode() {
   show_logo
 
-  # First ask about SQLite mode
-  echo -e "${YELLOW}Do you want to use SQLite instead of PostgreSQL? (y/n)${NC}"
-  read -r use_sqlite_choice
-  if [[ "$use_sqlite_choice" == "y" ]]; then
-    USE_SQLITE=true
-    echo -e "${BLUE}Using SQLite mode${NC}"
+  # First ask about SQLite mode (skip in auto mode)
+  if [[ "$AUTO_YES" == "true" ]]; then
+    echo -e "${BLUE}Automatic mode: Using SQLite = $USE_SQLITE${NC}"
+  else
+    echo -e "${YELLOW}Do you want to use SQLite instead of PostgreSQL? (y/n)${NC}"
+    read -r use_sqlite_choice
+    if [[ "$use_sqlite_choice" == "y" ]]; then
+      USE_SQLITE=true
+      echo -e "${BLUE}Using SQLite mode${NC}"
+    fi
   fi
 
   check_requirements
@@ -733,6 +774,10 @@ for ((i=0; i<${#ARGS[@]}; i++)); do
       USE_SQLITE=true
       echo -e "${BLUE}Using SQLite mode${NC}"
       ;;
+    --yes|--y)
+      AUTO_YES=true
+      echo -e "${BLUE}Automatic mode: will answer 'yes' to all prompts${NC}"
+      ;;
     --install|--dev|--server|--frontend|--tests|--tests-mock|--docker|--check-db|--status|--help)
       COMMAND="${ARGS[$i]}"
       ;;
@@ -801,10 +846,10 @@ if [[ -n "$COMMAND" ]]; then
       check_env
       if [[ "$USE_SQLITE" == "true" ]]; then
         setup_sqlite
-        npm run dev:sqlite
+        USE_SQLITE=true AUTO_YES=$AUTO_YES npm run dev:sqlite
       else
         check_database
-        start_dev
+        USE_SQLITE=false AUTO_YES=$AUTO_YES node scripts/pass-args.js scripts/dev.js
       fi
       ;;
     --server)
@@ -813,12 +858,10 @@ if [[ -n "$COMMAND" ]]; then
       check_env
       if [[ "$USE_SQLITE" == "true" ]]; then
         setup_sqlite
-        cd "$SERVER_DIR"
-        npm run use:sqlite && bun run dev
       else
         check_database
-        start_server_dev
       fi
+      start_server_dev
       ;;
     --frontend)
       show_logo
