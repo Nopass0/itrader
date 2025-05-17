@@ -26,7 +26,11 @@
     "docker:build": "docker-compose build",
     "docker:up": "docker-compose up -d",
     "docker:down": "docker-compose down",
-    "docker:logs": "docker-compose logs -f"
+    "docker:logs": "docker-compose logs -f",
+    "install:sqlite": "./scripts/db-setup.sh --sqlite3",
+    "use:sqlite": "node scripts/use-sqlite.js",
+    "dev:sqlite": "npm run use:sqlite && node scripts/dev.js",
+    "start:sqlite": "npm run use:sqlite && node scripts/start.js"
   },
   "keywords": [
     "trading",
