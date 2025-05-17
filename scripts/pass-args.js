@@ -18,9 +18,75 @@ if (process.argv.includes('--sqlite3') || process.env.USE_SQLITE === 'true') {
 }
 
 // Запускаем указанный файл
+const path = require('path');
 const scriptToRun = process.argv[2];
+const fs = require('fs');
+
 if (scriptToRun) {
-  require(scriptToRun);
+  // Получаем абсолютный путь к скрипту относительно корневой директории проекта
+  const projectRoot = path.resolve(__dirname, '..');
+  const absolutePath = path.resolve(projectRoot, scriptToRun);
+  
+  try {
+    // Проверяем существование файла
+    if (!fs.existsSync(absolutePath)) {
+      // Если файл не найден, попробуем запустить процессы напрямую
+      console.log(`Script not found at ${absolutePath}`);
+      console.log(`Falling back to direct process launch...`);
+      
+      // Запускаем процессы вручную
+      if (scriptToRun.includes('dev.js')) {
+        const { spawn } = require('child_process');
+        console.log('Starting development mode manually...');
+        
+        // Создаем и запускаем процессы сервера и фронтенда
+        const serverProc = spawn('bun', ['run', 'dev'], { 
+          cwd: path.join(projectRoot, 'server'),
+          stdio: 'inherit',
+          env: { ...process.env }
+        });
+        
+        const frontendProc = spawn('npm', ['run', 'dev'], {
+          cwd: path.join(projectRoot, 'frontend'),
+          stdio: 'inherit',
+          env: { ...process.env }
+        });
+        
+        // Обработка завершения процессов
+        process.on('SIGINT', () => {
+          console.log('Shutting down development servers...');
+          serverProc.kill('SIGINT');
+          frontendProc.kill('SIGINT');
+          process.exit(0);
+        });
+        
+        // Ждем завершения обоих процессов
+        serverProc.on('close', (code) => {
+          console.log(`Server process exited with code ${code}`);
+        });
+        
+        frontendProc.on('close', (code) => {
+          console.log(`Frontend process exited with code ${code}`);
+        });
+        
+        // Держим процесс запущенным
+        console.log('Development servers are running. Press Ctrl+C to stop.');
+
+        // Бесконечный таймер для поддержания работы процесса
+        setInterval(() => {}, 60000);
+      } else {
+        console.error(`Cannot handle script: ${scriptToRun}`);
+        process.exit(1);
+      }
+    } else {
+      // Если файл существует, запускаем его
+      console.log(`Running script: ${absolutePath}`);
+      require(absolutePath);
+    }
+  } catch (error) {
+    console.error(`Error: ${error.message}`);
+    process.exit(1);
+  }
 } else {
   console.error('No script specified to run');
   process.exit(1);

@@ -433,7 +433,7 @@ start_dev() {
   cp "$ENV_FILE" "$FRONTEND_DIR/.env"
 
   # Use the development script with environment variables
-  USE_SQLITE=$USE_SQLITE AUTO_YES=$AUTO_YES node scripts/pass-args.js scripts/dev.js
+  USE_SQLITE=$USE_SQLITE AUTO_YES=$AUTO_YES node scripts/pass-args.js ./scripts/dev.js
 }
 
 # Run tests
@@ -587,6 +587,7 @@ show_help() {
   echo -e "  ${CYAN}./run.sh --install --sqlite3${NC}           Install with SQLite support instead of PostgreSQL"
   echo -e "  ${CYAN}./run.sh --dev --sqlite3${NC}               Start development with SQLite database"
   echo -e "  ${CYAN}./run.sh --install --sqlite3 --yes${NC}     Fully automated installation with SQLite"
+  echo -e "  ${CYAN}./run.sh --install --yes${NC}               Fully automated installation with PostgreSQL"
   echo -e ""
   echo -e "If no option is specified, the script will launch in interactive mode."
 }
@@ -849,7 +850,7 @@ if [[ -n "$COMMAND" ]]; then
         USE_SQLITE=true AUTO_YES=$AUTO_YES npm run dev:sqlite
       else
         check_database
-        USE_SQLITE=false AUTO_YES=$AUTO_YES node scripts/pass-args.js scripts/dev.js
+        USE_SQLITE=false AUTO_YES=$AUTO_YES node scripts/pass-args.js ./scripts/dev.js
       fi
       ;;
     --server)
