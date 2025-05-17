@@ -34,12 +34,15 @@ command_exists() {
   command -v "$1" >/dev/null 2>&1
 }
 
+# Check if SQLite mode is enabled
+USE_SQLITE=false
+
 # Check requirements
 check_requirements() {
   echo -e "${BLUE}Checking requirements...${NC}"
-  
+
   local all_requirements_met=true
-  
+
   # Check if Node.js is installed
   if ! command_exists node; then
     echo -e "${RED}✗ Node.js is not installed. Please install Node.js 18 or later.${NC}"
@@ -53,7 +56,7 @@ check_requirements() {
       echo -e "${GREEN}✓ Node.js is installed ($(node -v))${NC}"
     fi
   fi
-  
+
   # Check if npm is installed
   if ! command_exists npm; then
     echo -e "${RED}✗ npm is not installed. Please install npm.${NC}"
@@ -61,7 +64,7 @@ check_requirements() {
   else
     echo -e "${GREEN}✓ npm is installed ($(npm -v))${NC}"
   fi
-  
+
   # Check if Bun is installed
   if ! command_exists bun; then
     echo -e "${YELLOW}⚠ Bun is not installed. It is required for the server.${NC}"
@@ -70,15 +73,24 @@ check_requirements() {
   else
     echo -e "${GREEN}✓ Bun is installed ($(bun -v))${NC}"
   fi
-  
-  # Check if PostgreSQL is installed (for development mode)
-  if ! command_exists psql; then
-    echo -e "${YELLOW}⚠ PostgreSQL is not installed. It is required for development mode.${NC}"
+
+  # Check if SQLite3 is installed (if in SQLite mode)
+  if [[ "$USE_SQLITE" == "true" ]]; then
+    if ! command_exists sqlite3; then
+      echo -e "${YELLOW}⚠ SQLite3 is not installed. It is required when using SQLite mode.${NC}"
+      all_requirements_met=false
+    else
+      echo -e "${GREEN}✓ SQLite3 is installed${NC}"
+    fi
+  # Check if PostgreSQL is installed (for development mode, not in SQLite mode)
+  elif ! command_exists psql; then
+    echo -e "${YELLOW}⚠ PostgreSQL is not installed. It is required for PostgreSQL mode.${NC}"
+    echo -e "${YELLOW}  You can use SQLite mode instead by adding --sqlite3 flag.${NC}"
     all_requirements_met=false
   else
     echo -e "${GREEN}✓ PostgreSQL is installed${NC}"
   fi
-  
+
   if [[ "$all_requirements_met" == "false" ]]; then
     echo -e "${YELLOW}Some requirements are not met. Please install them and try again.${NC}"
     echo -e "${YELLOW}Do you want to continue anyway? (y/n)${NC}"
@@ -517,8 +529,8 @@ run_tests() {
 
 # Show help menu
 show_help() {
-  echo -e "Usage: ./run.sh [OPTION]"
-  echo -e "Run AI Trader in different modes and perform various operations."
+  echo -e "Usage: ./run.sh [OPTIONS]"
+  echo -e "Run iTrader in different modes and perform various operations."
   echo -e ""
   echo -e "Options:"
   echo -e "  ${GREEN}--install${NC}    Install all dependencies for server and frontend"
@@ -531,6 +543,13 @@ show_help() {
   echo -e "  ${GREEN}--check-db${NC}   Check database and run migrations if needed"
   echo -e "  ${GREEN}--status${NC}     Check server and database status"
   echo -e "  ${GREEN}--help${NC}       Show this help message"
+  echo -e ""
+  echo -e "Special Options:"
+  echo -e "  ${GREEN}--sqlite3${NC}    Use SQLite instead of PostgreSQL (can be combined with other options)"
+  echo -e ""
+  echo -e "Examples:"
+  echo -e "  ${CYAN}./run.sh --install --sqlite3${NC}  Install with SQLite support instead of PostgreSQL"
+  echo -e "  ${CYAN}./run.sh --dev --sqlite3${NC}      Start development with SQLite database"
   echo -e ""
   echo -e "If no option is specified, the script will launch in interactive mode."
 }
@@ -592,9 +611,22 @@ check_server_status() {
 # Main function for interactive mode
 interactive_mode() {
   show_logo
+
+  # First ask about SQLite mode
+  echo -e "${YELLOW}Do you want to use SQLite instead of PostgreSQL? (y/n)${NC}"
+  read -r use_sqlite_choice
+  if [[ "$use_sqlite_choice" == "y" ]]; then
+    USE_SQLITE=true
+    echo -e "${BLUE}Using SQLite mode${NC}"
+  fi
+
   check_requirements
   check_env
   create_directories
+
+  if [[ "$USE_SQLITE" == "true" ]]; then
+    setup_sqlite
+  fi
 
   echo -e "${YELLOW}What would you like to do?${NC}"
   echo -e "1) ${GREEN}Install dependencies${NC}"
@@ -619,18 +651,31 @@ interactive_mode() {
       interactive_mode
       ;;
     2)
-      check_database
-      start_dev
+      if [[ "$USE_SQLITE" == "true" ]]; then
+        npm run dev:sqlite
+      else
+        check_database
+        start_dev
+      fi
       ;;
     3)
-      check_database
-      start_server_dev
+      if [[ "$USE_SQLITE" == "true" ]]; then
+        cd "$SERVER_DIR"
+        npm run use:sqlite && bun run dev
+      else
+        check_database
+        start_server_dev
+      fi
       ;;
     4)
       start_frontend_dev
       ;;
     5)
-      check_database
+      if [[ "$USE_SQLITE" == "true" ]]; then
+        echo -e "${GREEN}✓ SQLite database is ready${NC}"
+      else
+        check_database
+      fi
       echo -e "${GREEN}Database check completed. Press any key to continue...${NC}"
       read -r
       interactive_mode
@@ -677,14 +722,76 @@ interactive_mode() {
   esac
 }
 
-# Handle command line arguments
-if [[ $# -gt 0 ]]; then
-  case $1 in
+# Prepare arguments
+ARGS=("$@")
+COMMAND=""
+
+# Process all arguments
+for ((i=0; i<${#ARGS[@]}; i++)); do
+  case "${ARGS[$i]}" in
+    --sqlite3)
+      USE_SQLITE=true
+      echo -e "${BLUE}Using SQLite mode${NC}"
+      ;;
+    --install|--dev|--server|--frontend|--tests|--tests-mock|--docker|--check-db|--status|--help)
+      COMMAND="${ARGS[$i]}"
+      ;;
+    *)
+      if [[ -z "$COMMAND" ]]; then
+        echo -e "${RED}Unknown option: ${ARGS[$i]}${NC}"
+        show_help
+        exit 1
+      fi
+      ;;
+  esac
+done
+
+# Setup SQLite if needed
+setup_sqlite() {
+  if [[ "$USE_SQLITE" == "true" ]]; then
+    echo -e "${BLUE}Setting up SQLite...${NC}"
+
+    # Create data directory if it doesn't exist
+    mkdir -p "$PROJECT_ROOT/data"
+
+    # Create SQLite database file if it doesn't exist
+    SQLITE_DB_PATH="$PROJECT_ROOT/data/aitrader.db"
+    if [[ ! -f "$SQLITE_DB_PATH" ]]; then
+      touch "$SQLITE_DB_PATH"
+      echo -e "${GREEN}✓ SQLite database file created${NC}"
+    fi
+
+    # Update .env file to use SQLite
+    if [[ -f "$ENV_FILE" ]]; then
+      # Check if DATABASE_URL already exists and replace it
+      if grep -q "^DATABASE_URL=" "$ENV_FILE"; then
+        sed -i "s|^DATABASE_URL=.*|DATABASE_URL=file:$SQLITE_DB_PATH|g" "$ENV_FILE"
+      else
+        # Add DATABASE_URL if it doesn't exist
+        echo "DATABASE_URL=file:$SQLITE_DB_PATH" >> "$ENV_FILE"
+      fi
+      echo -e "${GREEN}✓ Environment updated to use SQLite${NC}"
+    fi
+
+    # Run setup script for SQLite if available
+    if [[ -f "$PROJECT_ROOT/scripts/use-sqlite.js" ]]; then
+      echo -e "${BLUE}Running SQLite setup script...${NC}"
+      node "$PROJECT_ROOT/scripts/use-sqlite.js"
+    fi
+  fi
+}
+
+# Handle command based on what was parsed from arguments
+if [[ -n "$COMMAND" ]]; then
+  case $COMMAND in
     --install)
       show_logo
       check_requirements
       check_env
       create_directories
+      if [[ "$USE_SQLITE" == "true" ]]; then
+        setup_sqlite
+      fi
       install_server_deps
       install_frontend_deps
       ;;
@@ -692,15 +799,26 @@ if [[ $# -gt 0 ]]; then
       show_logo
       check_requirements
       check_env
-      check_database
-      start_dev
+      if [[ "$USE_SQLITE" == "true" ]]; then
+        setup_sqlite
+        npm run dev:sqlite
+      else
+        check_database
+        start_dev
+      fi
       ;;
     --server)
       show_logo
       check_requirements
       check_env
-      check_database
-      start_server_dev
+      if [[ "$USE_SQLITE" == "true" ]]; then
+        setup_sqlite
+        cd "$SERVER_DIR"
+        npm run use:sqlite && bun run dev
+      else
+        check_database
+        start_server_dev
+      fi
       ;;
     --frontend)
       show_logo
@@ -712,12 +830,18 @@ if [[ $# -gt 0 ]]; then
       show_logo
       check_requirements
       check_env
+      if [[ "$USE_SQLITE" == "true" ]]; then
+        setup_sqlite
+      fi
       run_tests
       ;;
     --tests-mock)
       show_logo
       check_requirements
       check_env
+      if [[ "$USE_SQLITE" == "true" ]]; then
+        setup_sqlite
+      fi
       run_tests "--mock"
       ;;
     --docker)
@@ -736,7 +860,12 @@ if [[ $# -gt 0 ]]; then
       show_logo
       check_requirements
       check_env
-      check_database
+      if [[ "$USE_SQLITE" == "true" ]]; then
+        setup_sqlite
+        echo -e "${GREEN}✓ SQLite database is ready${NC}"
+      else
+        check_database
+      fi
       ;;
     --status)
       show_logo
@@ -747,13 +876,8 @@ if [[ $# -gt 0 ]]; then
     --help)
       show_help
       ;;
-    *)
-      echo -e "${RED}Unknown option: $1${NC}"
-      show_help
-      exit 1
-      ;;
   esac
 else
-  # No arguments provided, go to interactive mode
+  # No command provided, go to interactive mode
   interactive_mode
 fi
