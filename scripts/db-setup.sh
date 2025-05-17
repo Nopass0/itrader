@@ -1,6 +1,6 @@
 #!/bin/bash
 # Скрипт настройки базы данных iTrader
-# Предполагает, что PostgreSQL, Node.js, npm и Bun уже установлены
+# Устанавливает PostgreSQL напрямую с официального сайта
 
 set -e  # Выход при ошибке
 
@@ -18,28 +18,114 @@ error() {
   exit 1
 }
 
-# Проверка наличия PostgreSQL
-if ! command -v psql &> /dev/null; then
-  error "PostgreSQL не установлен. Пожалуйста, установите его перед запуском этого скрипта."
+# Проверка наличия sudo прав
+if [ "$(id -u)" != "0" ]; then
+  log "Для установки PostgreSQL требуются права администратора"
+  if ! command -v sudo &> /dev/null; then
+    error "Команда sudo не найдена. Запустите скрипт от имени root или установите sudo."
+  fi
 fi
 
-# Настройка PostgreSQL
-log "Настройка PostgreSQL..."
+# Функция установки PostgreSQL
+install_postgresql() {
+  log "Установка PostgreSQL..."
+  
+  # Создаем временную директорию для загрузки файлов
+  TEMP_DIR=$(mktemp -d)
+  cd "$TEMP_DIR"
+  
+  # Определяем архитектуру системы
+  ARCH=$(uname -m)
+  if [ "$ARCH" = "x86_64" ]; then
+    ARCH="x86_64"
+  elif [ "$ARCH" = "aarch64" ]; then
+    ARCH="aarch64"
+  else
+    error "Неподдерживаемая архитектура: $ARCH"
+  fi
+  
+  # Загружаем PostgreSQL
+  PG_VERSION="15.4"
+  log "Загрузка PostgreSQL $PG_VERSION для $ARCH..."
+  wget -q "https://sbp.enterprisedb.com/getfile.jsp?pginstaller=postgresql-$PG_VERSION-1-linux-$ARCH.run" -O postgresql.run
+  
+  if [ ! -f postgresql.run ]; then
+    error "Не удалось загрузить установщик PostgreSQL"
+  fi
+  
+  # Делаем файл исполняемым
+  chmod +x postgresql.run
+  
+  # Устанавливаем PostgreSQL в неинтерактивном режиме
+  log "Запуск установщика PostgreSQL (это может занять несколько минут)..."
+  ./postgresql.run --mode unattended --superpassword postgres --servicename postgresql-$PG_VERSION
+  
+  # Проверяем успешность установки
+  if ! command -v /opt/PostgreSQL/$PG_VERSION/bin/psql &> /dev/null; then
+    error "Установка PostgreSQL не удалась"
+  fi
+  
+  # Добавляем PostgreSQL в PATH
+  echo "export PATH=\$PATH:/opt/PostgreSQL/$PG_VERSION/bin" > /etc/profile.d/postgresql.sh
+  chmod +x /etc/profile.d/postgresql.sh
+  source /etc/profile.d/postgresql.sh
+  
+  # Очистка
+  cd - > /dev/null
+  rm -rf "$TEMP_DIR"
+  
+  success "PostgreSQL $PG_VERSION успешно установлен"
+}
+
+# Проверка наличия PostgreSQL
+if ! command -v psql &> /dev/null; then
+  log "PostgreSQL не найден. Будет выполнена установка..."
+  install_postgresql
+else
+  success "PostgreSQL уже установлен: $(psql --version)"
+fi
+
+# Функция для выполнения команд PostgreSQL
+pg_cmd() {
+  if command -v sudo &> /dev/null; then
+    # Если установлен через пакетный менеджер (postgres пользователь)
+    if getent passwd postgres &> /dev/null; then
+      sudo -u postgres psql -c "$1"
+    # Если установлен через скрипт (enterprisedb пользователь)
+    elif getent passwd enterprisedb &> /dev/null; then
+      sudo -u enterprisedb psql -c "$1"
+    else
+      # Пробуем найти путь к psql
+      local PSQL_PATH
+      PSQL_PATH=$(which psql 2>/dev/null || echo "/opt/PostgreSQL/*/bin/psql" 2>/dev/null || echo "")
+      if [ -n "$PSQL_PATH" ]; then
+        sudo "$PSQL_PATH" -U postgres -c "$1"
+      else
+        error "Не удалось найти исполняемый файл psql"
+      fi
+    fi
+  else
+    # Если sudo недоступен
+    psql -U postgres -c "$1"
+  fi
+}
 
 # Проверка существования пользователя
-if ! sudo -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='aitrader'" | grep -q 1; then
+log "Проверка пользователя БД aitrader..."
+if ! pg_cmd "SELECT 1 FROM pg_roles WHERE rolname='aitrader'" | grep -q 1; then
   log "Создание пользователя БД aitrader..."
-  sudo -u postgres psql -c "CREATE USER aitrader WITH PASSWORD 'aitraderpassword';"
-  sudo -u postgres psql -c "ALTER USER aitrader CREATEDB;"
+  pg_cmd "CREATE USER aitrader WITH PASSWORD 'aitraderpassword';"
+  pg_cmd "ALTER USER aitrader CREATEDB;"
   success "Пользователь БД создан"
 else
   success "Пользователь БД уже существует"
 fi
 
 # Проверка существования базы данных
-if ! sudo -u postgres psql -lqt | cut -d \| -f 1 | grep -qw aitrader; then
+log "Проверка базы данных aitrader..."
+if ! pg_cmd "\l" | grep -q aitrader; then
   log "Создание базы данных aitrader..."
-  sudo -u postgres psql -c "CREATE DATABASE aitrader OWNER aitrader;"
+  pg_cmd "CREATE DATABASE aitrader OWNER aitrader;"
   success "База данных создана"
 else
   success "База данных уже существует"
