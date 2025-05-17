@@ -1,0 +1,45 @@
+{
+  "name": "aitrader",
+  "version": "1.0.0",
+  "description": "AI Trader platform with frontend and backend",
+  "private": true,
+  "scripts": {
+    "install:all": "npm run install:server && npm run install:frontend",
+    "install:server": "cd server && bun install",
+    "install:frontend": "cd frontend && npm install",
+    "dev": "node scripts/dev.js",
+    "dev:server": "cd server && bun run dev",
+    "dev:frontend": "cd frontend && npm run dev",
+    "build": "npm run build:server && npm run build:frontend",
+    "build:server": "cd server && bun run build",
+    "build:frontend": "cd frontend && npm run build",
+    "start": "node scripts/start.js",
+    "start:server": "cd server && bun run start",
+    "start:frontend": "cd frontend && npm run start",
+    "test": "npm run test:server && npm run test:frontend",
+    "test:server": "cd server && bun run test",
+    "test:frontend": "cd frontend && npm run test",
+    "lint": "npm run lint:server && npm run lint:frontend",
+    "lint:server": "cd server && bun run lint",
+    "lint:frontend": "cd frontend && npm run lint",
+    "db:check": "cd server && bun run db:check",
+    "docker:build": "docker-compose build",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "docker:logs": "docker-compose logs -f"
+  },
+  "keywords": [
+    "trading",
+    "gate.cx",
+    "bybit",
+    "api"
+  ],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "chalk": "^4.1.2",
+    "inquirer": "^8.2.6",
+    "ora": "^5.4.1",
+    "shelljs": "^0.8.5"
+  }
+}

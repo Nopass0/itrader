@@ -1,0 +1,89 @@
+version: '3.8'
+
+services:
+  # PostgreSQL database
+  db:
+    image: postgres:15
+    container_name: aitrader_db
+    environment:
+      POSTGRES_USER: aitrader
+      POSTGRES_PASSWORD: aitraderpassword
+      POSTGRES_DB: aitrader
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - aitrader_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aitrader"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Backend server
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: aitrader_server
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://aitrader:aitraderpassword@db:5432/aitrader
+      PORT: 3000
+      JWT_SECRET: ${JWT_SECRET:-aitrader_jwt_secret_change_in_production}
+      JWT_EXPIRATION: ${JWT_EXPIRATION:-24h}
+      CORS_ORIGINS: http://localhost:3001,https://localhost:3001
+    ports:
+      - "3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - aitrader_network
+    restart: unless-stopped
+
+  # Frontend application
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:3000
+        NEXT_PUBLIC_SOCKET_URL: http://localhost:3000
+    container_name: aitrader_frontend
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+    ports:
+      - "3001:3001"
+    depends_on:
+      - server
+    networks:
+      - aitrader_network
+    restart: unless-stopped
+
+  # Nginx reverse proxy with SSL
+  nginx:
+    image: nginx:alpine
+    container_name: aitrader_nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/conf:/etc/nginx/conf.d
+      - ./nginx/ssl:/etc/nginx/ssl
+      - ./nginx/www:/var/www/html
+    depends_on:
+      - server
+      - frontend
+    networks:
+      - aitrader_network
+    restart: unless-stopped
+
+networks:
+  aitrader_network:
+    driver: bridge
+
+volumes:
+  postgres_data:
