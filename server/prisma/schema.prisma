@@ -32,11 +32,25 @@ model User {
   
   // Platform credentials
   gateCredentials     GateCredentials?
-  bybitCredentials    BybitCredentials?
+  bybitCredentials    BybitCredentials[]
   
   // Sessions
   gateSessions        GateSession[]
   bybitSessions       BybitSession[]
+  
+  // Gate data
+  gateTransactions    GateTransaction[]
+  gateSms             GateSms[]
+  gatePush            GatePush[]
+  gateDashboardStats  GateDashboardStats[]
+
+  // Bybit P2P data
+  bybitP2PBalances     BybitP2PBalance[]
+  bybitP2PAds          BybitP2PAd[]
+  bybitP2POrders       BybitP2POrder[]
+  bybitP2PChatMessages BybitP2PChatMessage[]
+  bybitP2PUserInfo     BybitP2PUserInfo?
+  bybitP2PPaymentMethods BybitP2PPaymentMethod[]
 
   @@map("users")
 }
@@ -47,6 +61,11 @@ model GateCredentials {
   userId    Int      @unique @map("user_id")
   email     String
   password  String
+  status    String   @default("initializing") // initializing, active, error, disabled
+  errorMessage String? @map("error_message")
+  lastCheckAt DateTime? @map("last_check_at")
+  nextUpdateAt DateTime? @map("next_update_at") // Time for next authentication
+  userData  Json?    @map("user_data") // Store user info from Gate.cx
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -57,9 +76,13 @@ model GateCredentials {
 // Bybit credentials
 model BybitCredentials {
   id        Int      @id @default(autoincrement())
-  userId    Int      @unique @map("user_id")
-  apiKey    String
-  apiSecret String
+  userId    Int      @map("user_id")
+  apiKey    String   @map("api_key")
+  apiSecret String   @map("api_secret")
+  status    String   @default("initializing") // initializing, active, error, disabled
+  errorMessage String? @map("error_message")
+  lastCheckAt DateTime? @map("last_check_at")
+  accountInfo Json?   @map("account_info") // Store account info from Bybit
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -74,6 +97,8 @@ model GateSession {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   cookies   String   @db.Text
   userData  Json
+  accessToken String? @map("access_token") @db.Text
+  expiresAt DateTime? @map("expires_at") // When the session expires
   isActive  Boolean  @default(true) @map("is_active")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -94,6 +119,89 @@ model BybitSession {
   @@map("bybit_sessions")
 }
 
+// Bybit P2P balances
+model BybitP2PBalance {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  coin      String
+  balance   String
+  frozen    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([userId, coin])
+  @@map("bybit_p2p_balances")
+}
+
+// Bybit P2P ads
+model BybitP2PAd {
+  id                String   @id @map("bybit_id") // Bybit ad ID
+  userId            Int      @map("user_id")
+  side              String   // Buy or Sell
+  tokenId           String   @map("token_id")
+  currencyId        String   @map("currency_id")
+  price             String
+  amount            String
+  minAmount         String   @map("min_amount")
+  maxAmount         String   @map("max_amount")
+  paymentMethods    Json     @map("payment_methods")
+  remark            String?
+  status            String   // Online, Offline, Frozen
+  completedOrderNum Int      @map("completed_order_num")
+  completedRate     String   @map("completed_rate")
+  avgReleaseTime    String   @map("avg_release_time")
+  rawData           Json     @map("raw_data")
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  @@map("bybit_p2p_ads")
+}
+
+// Bybit P2P orders
+model BybitP2POrder {
+  id                   String   @id @map("bybit_order_id") // Bybit order ID
+  userId               Int      @map("user_id")
+  orderStatus          String   @map("order_status")
+  side                 String   // Buy or Sell
+  tokenId              String   @map("token_id")
+  currencyId           String   @map("currency_id")
+  price                String
+  amount               String
+  quantity             String
+  paymentMethod        Json     @map("payment_method")
+  counterPartyId       String   @map("counter_party_id")
+  counterPartyNickName String   @map("counter_party_nick_name")
+  adId                 String   @map("ad_id")
+  chatId               String   @map("chat_id")
+  lastUpdateTime       DateTime @map("last_update_time")
+  rawData              Json     @map("raw_data")
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  @@map("bybit_p2p_orders")
+}
+
+// Bybit P2P chat messages
+model BybitP2PChatMessage {
+  id           String   @id @map("bybit_message_id") // Bybit message ID
+  userId       Int      @map("user_id")
+  orderId      String   @map("order_id")
+  chatId       String   @map("chat_id")
+  content      String   @db.Text
+  messageType  String   @map("message_type")
+  fromUserId   String   @map("from_user_id")
+  fileUrl      String?  @map("file_url")
+  rawData      Json     @map("raw_data")
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@map("bybit_p2p_chat_messages")
+}
+
 // Transaction logs
 model TransactionLog {
   id        Int      @id @default(autoincrement())
@@ -104,4 +212,211 @@ model TransactionLog {
   createdAt DateTime @default(now()) @map("created_at")
 
   @@map("transaction_logs")
+}
+
+// Gate.cx transactions
+model GateTransaction {
+  id              Int      @id @default(autoincrement())
+  gateId          String   @unique @map("gate_id") // Transaction ID from Gate.cx
+  userId          Int      @map("user_id")
+  type            String   // e.g., "payment", "withdrawal", etc.
+  status          Int      // Status code from Gate.cx
+  statusText      String?  @map("status_text")
+  amount          String   // Amount as string to preserve precision
+  currency        String
+  amountUsdt      String?  @map("amount_usdt")
+  fee             String?
+  feeUsdt         String?  @map("fee_usdt")
+  wallet          String?  // Wallet type
+  fromAddress     String?  @map("from_address")
+  toAddress       String?  @map("to_address")
+  txHash          String?  @map("tx_hash")
+  network         String?
+  memo            String?
+  description     String?
+  rawData         Json     @map("raw_data") // Full response from Gate.cx
+  processedAt     DateTime @map("processed_at") // When Gate.cx processed it
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("gate_transactions")
+}
+
+// Gate.cx SMS messages
+model GateSms {
+  id           Int      @id @default(autoincrement())
+  gateId       String   @unique @map("gate_id") // SMS ID from Gate.cx
+  userId       Int      @map("user_id")
+  from         String   // Phone number or sender
+  text         String   @db.Text
+  status       Int      // Status from Gate.cx
+  statusText   String?  @map("status_text")
+  receivedAt   DateTime @map("received_at") // When Gate.cx received it
+  deviceId     String   @map("device_id")
+  deviceName   String   @map("device_name")
+  parsed       Json?    // Parsed data if available
+  rawData      Json     @map("raw_data") // Full response from Gate.cx
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@map("gate_sms")
+}
+
+// Gate.cx push notifications
+model GatePush {
+  id           Int      @id @default(autoincrement())
+  gateId       String   @unique @map("gate_id") // Push ID from Gate.cx
+  userId       Int      @map("user_id")
+  packageName  String   @map("package_name")
+  title        String?
+  text         String?  @db.Text
+  status       Int      // Status from Gate.cx
+  statusText   String?  @map("status_text")
+  receivedAt   DateTime @map("received_at") // When Gate.cx received it
+  deviceId     String   @map("device_id")
+  deviceName   String   @map("device_name")
+  parsed       Json?    // Parsed data if available
+  rawData      Json     @map("raw_data") // Full response from Gate.cx
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@map("gate_push")
+}
+
+// Gate.cx dashboard statistics
+model GateDashboardStats {
+  id           Int      @id @default(autoincrement())
+  userId       Int      @map("user_id")
+  stepType     String   @map("step_type") // "hour", "day", "week", "month"
+  stepValue    Int      @map("step_value") // 3600, 86400, 604800, 2592000
+  graphData    Json     @map("graph_data") // Graph array from dashboard API
+  avgData      Json     @map("avg_data") // Avg payments data
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@unique([userId, stepType])
+  @@map("gate_dashboard_stats")
+}
+
+// SOCKS5 proxy servers for Gate.cx requests
+model Proxy {
+  id              Int      @id @default(autoincrement())
+  host            String   // IP address or hostname
+  port            Int      // Port number
+  username        String?  // Optional authentication
+  password        String?  // Optional authentication
+  protocol        String   @default("socks5") // socks5, http, https
+  status          String   @default("unknown") // active, failed, testing, unknown
+  country         String?  // Country code if available
+  source          String?  // Where we got this proxy from (github, free-proxy-list, etc)
+  responseTime    Int?     @map("response_time") // Average response time in ms
+  successRate     Float?   @map("success_rate") // Success rate 0.0-1.0
+  lastChecked     DateTime? @map("last_checked") // Last validation check
+  lastUsed        DateTime? @map("last_used") // Last time used for request
+  failureCount    Int      @default(0) @map("failure_count") // Consecutive failures
+  successCount    Int      @default(0) @map("success_count") // Total successes
+  isActive        Boolean  @default(true) @map("is_active") // Can be used for requests
+  verifiedIP      String?  @map("verified_ip") // Last verified IP address from proxy
+  notes           String?  // Additional notes
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@unique([host, port])
+  @@index([status, isActive])
+  @@index([lastChecked])
+  @@map("proxies")
+}
+
+// Bybit P2P User detailed information
+model BybitP2PUserInfo {
+  id                    Int      @id @default(autoincrement())
+  userId                Int      @unique @map("user_id")
+  bybitUserId          String   @map("bybit_user_id")
+  nickName             String   @map("nick_name")
+  accountId            String   @map("account_id")
+  userType             String   @map("user_type")
+  kycLevel             String   @map("kyc_level")
+  authStatus           String   @map("auth_status")
+  kycCountryCode       String?  @map("kyc_country_code")
+  realName             String?  @map("real_name")
+  realNameEn           String?  @map("real_name_en")
+  email                String?
+  mobile               String?
+  registerTime         String?  @map("register_time")
+  recentRate           String?  @map("recent_rate")
+  totalFinishCount     Int?     @map("total_finish_count")
+  totalFinishSellCount Int?     @map("total_finish_sell_count")
+  totalFinishBuyCount  Int?     @map("total_finish_buy_count")
+  recentFinishCount    Int?     @map("recent_finish_count")
+  recentTradeAmount    String?  @map("recent_trade_amount")
+  totalTradeAmount     String?  @map("total_trade_amount")
+  accountCreateDays    Int?     @map("account_create_days")
+  firstTradeDays       Int?     @map("first_trade_days")
+  lastLogoutTime       String?  @map("last_logout_time")
+  isOnline             Boolean  @default(false) @map("is_online")
+  vipLevel             String?  @map("vip_level")
+  goodAppraiseRate     String?  @map("good_appraise_rate")
+  goodAppraiseCount    Int?     @map("good_appraise_count")
+  badAppraiseCount     Int?     @map("bad_appraise_count")
+  paymentCount         Int?     @map("payment_count")
+  contactCount         Int?     @map("contact_count")
+  userCancelCountLimit Int?     @map("user_cancel_count_limit")
+  blocked              Boolean  @default(false)
+  defaultNickName      Boolean  @default(false) @map("default_nick_name")
+  averageReleaseTime   String?  @map("average_release_time")
+  averageTransferTime  String?  @map("average_transfer_time")
+  rawData              Json     @map("raw_data")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("bybit_p2p_user_info")
+}
+
+// Bybit P2P Payment Methods
+model BybitP2PPaymentMethod {
+  id                        Int      @id @default(autoincrement())
+  userId                   Int      @map("user_id")
+  paymentId                String   @map("payment_id")
+  realName                 String?  @map("real_name")
+  paymentType              String   @map("payment_type")
+  bankName                 String?  @map("bank_name")
+  branchName               String?  @map("branch_name")
+  accountNo                String?  @map("account_no")
+  qrcode                   String?
+  online                   String?
+  visible                  Int?
+  payMessage               String?  @map("pay_message")
+  firstName                String?  @map("first_name")
+  lastName                 String?  @map("last_name")
+  secondLastName           String?  @map("second_last_name")
+  clabe                    String?
+  debitCardNumber          String?  @map("debit_card_number")
+  concept                  String?
+  countNo                  String?  @map("count_no")
+  paymentExt1              String?  @map("payment_ext1")
+  paymentExt2              String?  @map("payment_ext2")
+  paymentExt3              String?  @map("payment_ext3")
+  paymentExt4              String?  @map("payment_ext4")
+  paymentExt5              String?  @map("payment_ext5")
+  paymentExt6              String?  @map("payment_ext6")
+  paymentTemplateVersion   Int?     @map("payment_template_version")
+  hasPaymentTemplateChanged Boolean @default(false) @map("has_payment_template_changed")
+  paymentConfigVo          Json?    @map("payment_config_vo")
+  realNameVerified         Boolean  @default(false) @map("real_name_verified")
+  channel                  String?
+  currencyBalance          Json?    @map("currency_balance")
+  rawData                  Json     @map("raw_data")
+  createdAt                DateTime @default(now()) @map("created_at")
+  updatedAt                DateTime @updatedAt @map("updated_at")
+
+  user                     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, paymentId])
+  @@map("bybit_p2p_payment_methods")
 }

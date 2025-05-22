@@ -21,8 +21,7 @@ export function useApiCheck(url: string = process.env.NEXT_PUBLIC_API_URL || 'ht
         headers: {
           'Accept': 'application/json',
           'Content-Type': 'application/json'
-        },
-        withCredentials: true
+        }
       });
 
       // Check if we got a successful response with the expected structure

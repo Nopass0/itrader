@@ -25,7 +25,9 @@ export function ParticlesContainer({
 
   // Update color based on theme
   useEffect(() => {
-    setColor(theme === 'dark' ? '#7e84fb' : '#646cff');
+    // For dark theme, use white color for particles
+    // For light theme, use darker blue particles
+    setColor(theme === 'dark' ? 'rgba(255, 255, 255, 0.6)' : 'rgba(60, 65, 176, 0.8)');
   }, [theme]);
 
   const particlesInit = useCallback(async (engine: Engine) => {
@@ -105,13 +107,20 @@ export function DotPattern({
   dotColor = 'rgba(100, 108, 255, 0.4)',
   dotSize = 1,
   dotSpacing = 20,
+}: {
+  className?: string;
+  dotColor?: string;
+  dotSize?: number;
+  dotSpacing?: number;
 }) {
   const { theme } = useTheme();
   const [color, setColor] = useState(dotColor);
 
   // Update color based on theme
   useEffect(() => {
-    setColor(theme === 'dark' ? 'rgba(120, 130, 255, 0.4)' : 'rgba(100, 108, 255, 0.4)');
+    // Use a brighter white for dark theme with higher opacity
+    // Use darker dots for light theme
+    setColor(theme === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(52, 58, 138, 0.6)');
   }, [theme]);
 
   return (
@@ -126,7 +135,7 @@ export function DotPattern({
   );
 }
 
-export function FlickeringGrid({ className }) {
+export function FlickeringGrid({ className }: { className?: string }) {
   return (
     <div className={`grid grid-cols-8 gap-6 ${className}`}>
       {Array.from({ length: 64 }).map((_, i) => (

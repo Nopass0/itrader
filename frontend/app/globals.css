@@ -45,25 +45,25 @@
   }
 
   .dark {
-    /* Apple-inspired color palette - Dark mode */
-    --background: 220 20% 10%;
-    --foreground: 210 40% 98%;
+    /* Darker color palette for Dark mode - #1f1f1f base */
+    --background: 0 0% 12%;
+    --foreground: 0 0% 98%;
 
-    --card: 222.2 20% 12%;
-    --card-foreground: 210 40% 98%;
+    --card: 0 0% 15%;
+    --card-foreground: 0 0% 98%;
 
-    --popover: 222.2 20% 12%;
-    --popover-foreground: 210 40% 98%;
+    --popover: 0 0% 15%;
+    --popover-foreground: 0 0% 98%;
 
     /* Blue accent color inspired by Apple UI */
     --primary: 210 100% 50%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
+    --secondary: 0 0% 14%;
+    --secondary-foreground: 0 0% 98%;
 
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
+    --muted: 0 0% 16%;
+    --muted-foreground: 0 0% 70%;
 
     --accent: 210 100% 50%;
     --accent-foreground: 0 0% 100%;
@@ -71,14 +71,14 @@
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%;
 
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
+    --border: 0 0% 20%;
+    --input: 0 0% 18%;
     --ring: 224 76% 48%;
 
     /* Glassmorphism variables for dark mode */
-    --glass-background: 0 0 0;
-    --glass-background-opacity: 0.3;
-    --glass-border-opacity: 0.08;
+    --glass-background: 20 20 20;
+    --glass-background-opacity: 0.2;
+    --glass-border-opacity: 0.1;
     --glass-blur: 20px;
   }
 }
@@ -93,7 +93,15 @@
   }
 
   body {
-    @apply bg-background text-foreground bg-gradient-to-br from-background to-secondary min-h-screen overflow-x-hidden;
+    @apply bg-background text-foreground min-h-screen overflow-x-hidden;
+  }
+
+  body {
+    @apply bg-gradient-to-br from-background to-secondary;
+  }
+
+  .dark body {
+    @apply bg-gradient-to-br from-background via-[#1f1f1f] to-[#171717];
   }
 
   h1, h2, h3, h4, h5, h6 {

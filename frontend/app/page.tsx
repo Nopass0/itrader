@@ -3,16 +3,19 @@
 import { useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
+import { useTheme } from 'next-themes';
 import { useAuthStore } from '@/store/auth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import ApiStatus from '@/components/ApiStatus';
 import Logo from '@/components/Logo';
+import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { RobotEmoji, MoneyFaceEmoji, ChartIncreasingEmoji, DollarEmoji, MoneyBagEmoji } from '@/components/ui/animated-emoji';
 import { ParticlesContainer, DotPattern, AuroraText, AnimatedText } from '@/components/ui/particles';
 
 export default function Home() {
   const { token, user } = useAuthStore();
+  const { resolvedTheme } = useTheme();
   const router = useRouter();
 
   // If user is logged in, redirect to dashboard
@@ -25,8 +28,15 @@ export default function Home() {
   return (
     <AnimatePresence>
       <div className="flex flex-col min-h-screen bg-gradient-to-br from-background to-muted relative overflow-hidden">
+        <div className="absolute top-4 right-4 z-50">
+          <ThemeToggle size="sm" variant="icon" />
+        </div>
         <ParticlesContainer className="absolute inset-0 -z-10" quantity={40} />
-        <DotPattern className="absolute inset-0 -z-5 opacity-30" dotSpacing={30} />
+        <DotPattern
+          className="absolute inset-0 -z-5 opacity-30"
+          dotSpacing={30}
+          dotSize={resolvedTheme === 'dark' ? 1.5 : 1}
+        />
       <main className="flex-grow flex items-center justify-center p-4 sm:p-6 md:p-8 lg:p-12 relative z-10">
         <div className="w-full max-w-6xl mx-auto">
           <motion.div

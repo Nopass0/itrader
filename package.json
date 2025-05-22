@@ -1,15 +1,16 @@
 {
   "name": "aitrader",
   "version": "1.0.0",
+  "type": "module",
   "description": "AI Trader platform with frontend and backend",
   "private": true,
   "scripts": {
     "install:all": "npm run install:server && npm run install:frontend",
     "install:server": "cd server && bun install",
     "install:frontend": "cd frontend && npm install",
-    "dev": "node scripts/dev.js",
-    "dev:server": "cd server && bun run dev",
-    "dev:frontend": "cd frontend && npm run dev",
+    "dev": "node scripts/dev-server.js",
+    "dev:server": "node scripts/check-ports.js && cd server && bun run dev",
+    "dev:frontend": "node scripts/check-ports.js && cd frontend && npm run dev",
     "build": "npm run build:server && npm run build:frontend",
     "build:server": "cd server && bun run build",
     "build:frontend": "cd frontend && npm run build",
@@ -30,7 +31,9 @@
     "install:sqlite": "./scripts/db-setup.sh --sqlite3",
     "use:sqlite": "node scripts/use-sqlite.js",
     "dev:sqlite": "npm run use:sqlite && node scripts/dev.js",
-    "start:sqlite": "npm run use:sqlite && node scripts/start.js"
+    "start:sqlite": "npm run use:sqlite && node scripts/start.js",
+    "ports:check": "node scripts/check-ports.js",
+    "ports:clean": "node scripts/check-ports.js"
   },
   "keywords": [
     "trading",

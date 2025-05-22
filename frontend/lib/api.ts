@@ -131,8 +131,8 @@ class ApiClient {
 // Create a singleton instance
 const apiClient = new ApiClient(
   typeof window !== 'undefined' 
-    ? process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'
-    : 'http://localhost:3000'
+    ? (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000') + '/api'
+    : 'http://localhost:3000/api'
 );
 
 export default apiClient;

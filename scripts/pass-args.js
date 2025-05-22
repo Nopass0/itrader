@@ -5,6 +5,13 @@
  * Позволяет передавать флаги auto_yes из run.sh в dev.js и start.js
  */
 
+import path from 'path';
+import fs from 'fs';
+import { spawn } from 'child_process';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
 // Проверяем, передан ли флаг --yes или AUTO_YES
 if (process.argv.includes('--yes') || process.argv.includes('--y') || process.env.AUTO_YES === 'true') {
   process.env.AUTO_YES = 'true';
@@ -18,9 +25,7 @@ if (process.argv.includes('--sqlite3') || process.env.USE_SQLITE === 'true') {
 }
 
 // Запускаем указанный файл
-const path = require('path');
 const scriptToRun = process.argv[2];
-const fs = require('fs');
 
 if (scriptToRun) {
   // Получаем абсолютный путь к скрипту относительно корневой директории проекта
@@ -36,7 +41,6 @@ if (scriptToRun) {
       
       // Запускаем процессы вручную
       if (scriptToRun.includes('dev.js')) {
-        const { spawn } = require('child_process');
         console.log('Starting development mode manually...');
         
         // Создаем и запускаем процессы сервера и фронтенда
@@ -79,9 +83,9 @@ if (scriptToRun) {
         process.exit(1);
       }
     } else {
-      // Если файл существует, запускаем его
+      // Если файл существует, импортируем его (динамический импорт для ES modules)
       console.log(`Running script: ${absolutePath}`);
-      require(absolutePath);
+      await import(absolutePath);
     }
   } catch (error) {
     console.error(`Error: ${error.message}`);

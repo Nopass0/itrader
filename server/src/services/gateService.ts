@@ -43,26 +43,33 @@ export class GateService {
       // Extract user data from response
       const userData = loginResponse.data.response.user;
       
-      // Save or update the session
-      const session = await prisma.gateSession.upsert({
-        where: {
-          userId_isActive: {
-            userId,
-            isActive: true,
-          },
-        },
-        update: {
-          cookies: cookies.join('; '),
-          userData,
-          updatedAt: new Date(),
-        },
-        create: {
-          userId,
-          cookies: cookies.join('; '),
-          userData,
-          isActive: true,
-        },
+      // Find existing session or create new one
+      const existingSession = await prisma.gateSession.findFirst({
+        where: { userId, isActive: true }
       });
+
+      let session;
+      if (existingSession) {
+        // Update existing session
+        session = await prisma.gateSession.update({
+          where: { id: existingSession.id },
+          data: {
+            cookies: cookies.join('; '),
+            userData,
+            updatedAt: new Date(),
+          }
+        });
+      } else {
+        // Create new session
+        session = await prisma.gateSession.create({
+          data: {
+            userId,
+            cookies: cookies.join('; '),
+            userData,
+            isActive: true,
+          }
+        });
+      }
       
       return session;
     } catch (error) {

@@ -1,7 +1,11 @@
 #!/usr/bin/env node
-const fs = require('fs');
-const path = require('path');
-const chalk = require('chalk');
+import fs from 'fs';
+import path from 'path';
+import chalk from 'chalk';
+import { spawn } from 'child_process';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 /**
  * Скрипт для включения SQLite в проекте
@@ -84,7 +88,7 @@ function generatePrismaClient() {
   console.log(chalk.cyan('Генерация клиента Prisma для SQLite...'));
   
   try {
-    const { spawnSync } = require('child_process');
+    const { spawnSync } = await import('child_process');
     
     // Переходим в директорию сервера
     process.chdir(path.resolve(process.cwd(), 'server'));

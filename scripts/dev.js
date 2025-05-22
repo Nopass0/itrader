@@ -1,10 +1,14 @@
 #!/usr/bin/env node
 
-const inquirer = require('inquirer');
-const { exec, spawn } = require('child_process');
-const chalk = require('chalk');
-const ora = require('ora');
-const shell = require('shelljs');
+import inquirer from 'inquirer';
+import { exec, spawn } from 'child_process';
+import chalk from 'chalk';
+import ora from 'ora';
+import shell from 'shelljs';
+import { fileURLToPath } from 'url';
+import path from 'path';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // ASCII art logo
 const logo = `
