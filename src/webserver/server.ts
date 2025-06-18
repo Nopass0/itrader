@@ -62,6 +62,13 @@ export class WebSocketServer {
     this.setupMiddleware();
     this.setupEventHandlers();
   }
+  
+  /**
+   * Get the Socket.IO server instance
+   */
+  getIO(): Server {
+    return this.io;
+  }
 
   /**
    * Настройка middleware
@@ -306,6 +313,8 @@ export class WebSocketServer {
       socket.on('receipts:delete', withAuth(ReceiptController.deleteReceipt));
       socket.on('receipts:getStats', withAuth(ReceiptController.getReceiptStats));
       socket.on('receipts:matchUnmatched', withAuth(ReceiptController.matchUnmatchedReceipts));
+      socket.on('receipts:subscribe', withAuth(ReceiptController.subscribe));
+      socket.on('receipts:unsubscribe', withAuth(ReceiptController.unsubscribe));
 
       // Управление логами
       socket.on('logs:get', withAuth(async (socket, data, callback) => {

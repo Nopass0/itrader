@@ -34,8 +34,10 @@ import Link from 'next/link';
 import { useReceipts } from '@/hooks/useReceipts';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useSocketApi } from '@/hooks/useSocketApi';
 
 export default function ReceiptsPage() {
+  const { isConnected } = useSocketApi();
   const {
     receipts,
     totalCount,
@@ -116,7 +118,15 @@ export default function ReceiptsPage() {
           className="flex items-center justify-between"
         >
           <div>
-            <h1 className="text-2xl font-bold">Чеки Тинькофф</h1>
+            <h1 className="text-2xl font-bold flex items-center gap-3">
+              Чеки Тинькофф
+              {isConnected && (
+                <Badge variant="outline" className="bg-green-500/10 text-green-500 border-green-500/20">
+                  <div className="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse" />
+                  Real-time
+                </Badge>
+              )}
+            </h1>
             <p className="text-muted-foreground">Все загруженные чеки и их сопоставление</p>
           </div>
           

@@ -13,6 +13,37 @@ const prisma = new PrismaClient();
 
 export class ReceiptController {
   /**
+   * Subscribe to receipt updates
+   */
+  static async subscribe(
+    socket: AuthenticatedSocket,
+    data: any,
+    callback: Function
+  ) {
+    try {
+      socket.join('receipts:updates');
+      handleSuccess({}, 'Subscribed to receipt updates', callback);
+    } catch (error) {
+      handleError(error, callback);
+    }
+  }
+  
+  /**
+   * Unsubscribe from receipt updates
+   */
+  static async unsubscribe(
+    socket: AuthenticatedSocket,
+    data: any,
+    callback: Function
+  ) {
+    try {
+      socket.leave('receipts:updates');
+      handleSuccess({}, 'Unsubscribed from receipt updates', callback);
+    } catch (error) {
+      handleError(error, callback);
+    }
+  }
+  /**
    * Получить список всех чеков с фильтрацией
    */
   static async listReceipts(

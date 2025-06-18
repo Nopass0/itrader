@@ -40,15 +40,18 @@ export class ReceiptProcessorService extends EventEmitter {
   public isRunning = false;
   private processedEmails = new Set<string>();
   private receiptMatcher: ReceiptMatcher;
+  private io?: any; // WebSocket server instance
 
   constructor(
     private gmailManager: GmailManager,
-    private gateClient: GateClient,
+    private gateClient: GateClient | null,
     private bybitManager: BybitP2PManagerService,
     config: ReceiptProcessorConfig = {},
+    io?: any
   ) {
     super();
 
+    this.io = io;
     this.config = {
       checkInterval: config.checkInterval || 10000, // 10 секунд
       pdfStoragePath: config.pdfStoragePath || "data/pdf",
@@ -114,6 +117,11 @@ export class ReceiptProcessorService extends EventEmitter {
    * Проверяет существующие payout со статусом 5
    */
   private async checkExistingPayouts(): Promise<void> {
+    if (!this.gateClient) {
+      logger.debug("No Gate client available, skipping payout check");
+      return;
+    }
+    
     try {
       const payouts = await prisma.payout.findMany({
         where: { status: 5 },
@@ -167,7 +175,13 @@ export class ReceiptProcessorService extends EventEmitter {
    * Основной метод обработки чеков
    */
   private async processReceipts(): Promise<void> {
-    logger.info("Starting receipt processing cycle...");
+    logger.info("Starting receipt processing cycle...", {
+      hasGmailManager: !!this.gmailManager,
+      gmailManagerClients: this.gmailManager ? this.gmailManager.clients.size : 0,
+      hasGateClient: !!this.gateClient,
+      pdfPath: this.config.pdfStoragePath
+    });
+    
     try {
       // Используем аккаунт из базы данных
       const gmailAccount = await prisma.gmailAccount.findFirst({
@@ -179,6 +193,13 @@ export class ReceiptProcessorService extends EventEmitter {
         await this.processAccountReceipts(gmailAccount.email);
       } else {
         logger.warn("No active Gmail account found");
+        
+        // Если нет аккаунта в БД, но есть клиенты в менеджере
+        if (this.gmailManager && this.gmailManager.clients.size > 0) {
+          const firstEmail = Array.from(this.gmailManager.clients.keys())[0];
+          logger.warn(`No DB account, but found client in manager: ${firstEmail}`);
+          await this.processAccountReceipts(firstEmail);
+        }
       }
     } catch (error) {
       logger.error("Error in processReceipts", error);
@@ -195,8 +216,18 @@ export class ReceiptProcessorService extends EventEmitter {
       if (!gmailClient) {
         logger.error("No Gmail client found", { 
           email,
-          availableClients: Array.from(this.gmailManager.clients.keys())
+          availableClients: Array.from(this.gmailManager.clients.keys()),
+          clientsSize: this.gmailManager.clients.size
         });
+        // Попробуем найти клиента по другому email если он есть
+        if (this.gmailManager.clients.size > 0) {
+          const firstEmail = Array.from(this.gmailManager.clients.keys())[0];
+          logger.warn(`Using first available client with email: ${firstEmail}`);
+          const client = this.gmailManager.getClient(firstEmail);
+          if (client) {
+            await this.processAccountReceipts(firstEmail);
+          }
+        }
         return;
       }
 
@@ -403,6 +434,27 @@ export class ReceiptProcessorService extends EventEmitter {
       });
 
       logger.info("Receipt saved to database", { receiptId: receipt.id });
+      
+      // Emit WebSocket event for real-time updates
+      if (this.io) {
+        const io = this.io;
+        io.emit('receipts:new', {
+          receipt: {
+            id: receipt.id,
+            amount: receipt.amount,
+            senderName: receipt.senderName,
+            recipientName: receipt.recipientName,
+            recipientPhone: receipt.recipientPhone,
+            recipientCard: receipt.recipientCard,
+            transactionDate: receipt.transactionDate,
+            status: receipt.status,
+            fileHash: receipt.fileHash,
+            bank: receipt.bank,
+            reference: receipt.reference,
+            createdAt: receipt.createdAt
+          }
+        });
+      }
       // Получаем все активные payout со статусом 5
       const activePayouts = await prisma.transaction.findMany({
         where: {
@@ -489,28 +541,45 @@ export class ReceiptProcessorService extends EventEmitter {
       // Читаем файл чека для отправки
       const receiptData = await fs.readFile(receiptPath);
 
-      // Апрувим на Gate.io
-      logger.info("Approving payout on Gate.io", { gatePayoutId: payout.gatePayoutId });
-      await this.gateClient.approvePayout(
-        payout.gatePayoutId.toString(),
-        receiptData,
-      );
+      // Апрувим на Gate.io (если есть Gate клиент)
+      if (this.gateClient) {
+        logger.info("Approving payout on Gate.io", { gatePayoutId: payout.gatePayoutId });
+        await this.gateClient.approvePayout(
+          payout.gatePayoutId.toString(),
+          receiptData,
+        );
 
-      // 2. Обновляем статус payout
-      await prisma.payout.update({
-        where: { id: payoutId },
-        data: {
-          status: 10, // Approved
-          approvedAt: new Date(),
-          attachments: JSON.stringify([
-            {
-              type: "receipt",
-              path: receiptPath,
-              emailId: emailId,
-            },
-          ]),
-        },
-      });
+        // 2. Обновляем статус payout
+        await prisma.payout.update({
+          where: { id: payoutId },
+          data: {
+            status: 10, // Approved
+            approvedAt: new Date(),
+            attachments: JSON.stringify([
+              {
+                type: "receipt",
+                path: receiptPath,
+                emailId: emailId,
+              },
+            ]),
+          },
+        });
+      } else {
+        logger.warn("No Gate client available, marking receipt but not approving", { payoutId });
+        // Только связываем чек с payout, но не апрувим
+        await prisma.payout.update({
+          where: { id: payoutId },
+          data: {
+            attachments: JSON.stringify([
+              {
+                type: "receipt",
+                path: receiptPath,
+                emailId: emailId,
+              },
+            ]),
+          },
+        });
+      }
 
       // 3. Обновляем транзакцию
       const transaction = await prisma.transaction.update({
@@ -552,6 +621,16 @@ export class ReceiptProcessorService extends EventEmitter {
               });
 
               logger.info("✅ Transaction completed successfully", { transactionId });
+              
+              // Emit WebSocket event for receipt matched
+              if (this.io) {
+                this.io.emit('receipts:matched', {
+                  receiptId,
+                  payoutId,
+                  transactionId,
+                  approved: true
+                });
+              }
 
               // Удаляем объявление после успешного завершения
               try {

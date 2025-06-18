@@ -85,7 +85,7 @@ export function useReceipts() {
     sortOrder: 'desc'
   });
 
-  const { api, isConnected } = useSocketApi();
+  const { api, isConnected, socket } = useSocketApi();
 
   const loadReceipts = useCallback(async () => {
     if (!isConnected) return;
@@ -223,6 +223,51 @@ export function useReceipts() {
       loadStats();
     }
   }, [isConnected, loadReceipts, loadStats]);
+
+  // Subscribe to real-time receipt events
+  useEffect(() => {
+    if (!socket || !isConnected) return;
+
+    const handleNewReceipt = (data: { receipt: TinkoffReceipt }) => {
+      console.log('New receipt received:', data.receipt);
+      setReceipts(prev => [data.receipt, ...prev]);
+      setTotalCount(prev => prev + 1);
+      // Reload stats to update counters
+      loadStats();
+    };
+
+    const handleReceiptMatched = (data: { receiptId: string; payoutId: string }) => {
+      console.log('Receipt matched:', data);
+      setReceipts(prev => prev.map(receipt => 
+        receipt.id === data.receiptId 
+          ? { ...receipt, payoutId: data.payoutId, isProcessed: true }
+          : receipt
+      ));
+      // Reload stats to update counters
+      loadStats();
+    };
+
+    const handleReceiptDeleted = (data: { receiptId: string }) => {
+      setReceipts(prev => prev.filter(receipt => receipt.id !== data.receiptId));
+      setTotalCount(prev => prev - 1);
+      loadStats();
+    };
+
+    // Subscribe to events
+    socket.on('receipts:new', handleNewReceipt);
+    socket.on('receipts:matched', handleReceiptMatched);
+    socket.on('receipts:deleted', handleReceiptDeleted);
+
+    // Subscribe to receipt updates room
+    api.emit('receipts:subscribe', {});
+
+    return () => {
+      socket.off('receipts:new', handleNewReceipt);
+      socket.off('receipts:matched', handleReceiptMatched);
+      socket.off('receipts:deleted', handleReceiptDeleted);
+      api.emit('receipts:unsubscribe', {});
+    };
+  }, [socket, isConnected, api, loadStats]);
 
   return {
     receipts,

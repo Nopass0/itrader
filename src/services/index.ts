@@ -16,3 +16,9 @@ export {
 
 // Сервис обработки чеков Тинькофф
 export * from "./tinkoffReceiptService";
+
+// Gmail Receipt Processor - автоматическая обработка чеков из Gmail
+export { GmailReceiptProcessor } from "./GmailReceiptProcessor";
+
+// Enhanced Tinkoff PDF Parser
+export { TinkoffPDFParser } from "./TinkoffPDFParser";
