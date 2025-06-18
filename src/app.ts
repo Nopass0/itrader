@@ -33,6 +33,7 @@ interface AppContext {
   instantOrderMonitor: InstantOrderMonitorService | null;
   tinkoffReceiptService: TinkoffReceiptService | null;
   isManualMode: boolean;
+  webSocketServer?: WebSocketServer;
 }
 
 async function promptUser(message: string): Promise<boolean> {
@@ -519,6 +520,56 @@ async function main() {
         }
       } catch (error) {
         console.error("[Init] Error running initial Gate payouts sync:", error);
+      }
+      
+      // Initialize ReceiptProcessorService after Gmail is ready
+      if (context.gmailManager && context.webSocketServer) {
+        try {
+          const io = context.webSocketServer.getIO();
+          
+          // Get Gate client if available
+          let gateClient = null;
+          const gateAccounts = await context.db.getActiveGateAccounts();
+          if (gateAccounts.length > 0) {
+            try {
+              gateClient = context.gateAccountManager.getClient(gateAccounts[0].email);
+              logger.info("[Init] Found Gate client for receipt processor");
+            } catch (error) {
+              logger.warn("[Init] Failed to get Gate client, will work without approval", error);
+            }
+          }
+          
+          // Initialize ReceiptProcessor with or without Gate client
+          context.receiptProcessor = new ReceiptProcessorService(
+            context.gmailManager,
+            gateClient,
+            context.bybitManager,
+            {
+              checkInterval: 10000, // 10 seconds for faster checking
+              pdfStoragePath: "data/receipts",
+            },
+            io
+          );
+          
+          if (gateClient) {
+            logger.info("[Init] ✅ ReceiptProcessorService initialized with Gate client (full features)");
+            console.log("[Init] ✅ ReceiptProcessorService initialized with Gate client (full features)");
+          } else {
+            logger.info("[Init] ✅ ReceiptProcessorService initialized WITHOUT Gate client (download only)");
+            console.log("[Init] ✅ ReceiptProcessorService initialized WITHOUT Gate client (download only)");
+          }
+          
+          // Start the processor
+          await context.receiptProcessor.start();
+          logger.info("[Init] ✅ ReceiptProcessorService started");
+          console.log("[Init] ✅ ReceiptProcessorService started");
+        } catch (error) {
+          logger.error("[Init] Failed to initialize ReceiptProcessorService", error as Error);
+          console.error("[Init] Failed to initialize ReceiptProcessorService:", error);
+        }
+      } else {
+        logger.warn("[Init] Gmail or WebSocket not available, ReceiptProcessor not initialized");
+        console.log("[Init] ⚠️ Gmail or WebSocket not available, ReceiptProcessor not initialized");
       }
     });
 
@@ -1709,55 +1760,8 @@ async function main() {
     });
     console.log(`WebSocket server started on port ${webSocketPort}`);
     
-    // Now initialize ReceiptProcessorService with WebSocket IO
-    if (context.gmailManager) {
-      try {
-        const io = webSocketServer.getIO();
-        
-        // Get Gate client if available
-        let gateClient = null;
-        const gateAccounts = await context.db.getActiveGateAccounts();
-        if (gateAccounts.length > 0) {
-          try {
-            gateClient = context.gateAccountManager.getClient(gateAccounts[0].email);
-            logger.info("[Init] Found Gate client for receipt processor");
-          } catch (error) {
-            logger.warn("[Init] Failed to get Gate client, will work without approval", error);
-          }
-        }
-        
-        // Initialize ReceiptProcessor with or without Gate client
-        context.receiptProcessor = new ReceiptProcessorService(
-          context.gmailManager,
-          gateClient,
-          context.bybitManager,
-          {
-            checkInterval: 10000, // 10 seconds for faster checking
-            pdfStoragePath: "data/receipts",
-          },
-          io
-        );
-        
-        if (gateClient) {
-          logger.info("[Init] ✅ ReceiptProcessorService initialized with Gate client (full features)");
-          console.log("[Init] ✅ ReceiptProcessorService initialized with Gate client (full features)");
-        } else {
-          logger.info("[Init] ✅ ReceiptProcessorService initialized WITHOUT Gate client (download only)");
-          console.log("[Init] ✅ ReceiptProcessorService initialized WITHOUT Gate client (download only)");
-        }
-        
-        // Start the processor
-        await context.receiptProcessor.start();
-        logger.info("[Init] ✅ ReceiptProcessorService started");
-        console.log("[Init] ✅ ReceiptProcessorService started");
-      } catch (error) {
-        logger.error("[Init] Failed to initialize ReceiptProcessorService", error as Error);
-        console.error("[Init] Failed to initialize ReceiptProcessorService:", error);
-      }
-    } else {
-      logger.warn("[Init] No Gmail manager available, ReceiptProcessor not initialized");
-      console.log("[Init] ⚠️ No Gmail manager available, ReceiptProcessor not initialized");
-    }
+    // Store WebSocket server reference for later use
+    context.webSocketServer = webSocketServer;
     
     // Start log cleanup service
     const { getLogCleanupService } = await import('./services/logCleanupService');
