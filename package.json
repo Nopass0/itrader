@@ -1,0 +1,49 @@
+{
+  "name": "itrader_project",
+  "module": "src/app.ts",
+  "type": "module",
+  "scripts": {
+    "dev": "bun run --watch src/index.ts",
+    "build": "bun build src/index.ts --target=bun --outdir=dist",
+    "start": "bun run src/index.ts",
+    "cli": "bun run src/index.ts --cli",
+    "app": "bun run src/app.ts",
+    "setup": "bun run db:generate && bun run db:push",
+    "setup:gmail": "bun run setup-gmail.ts",
+    "db:push": "bunx prisma db push",
+    "db:generate": "bunx prisma generate",
+    "db:migrate": "bunx prisma migrate dev",
+    "db:seed": "bunx prisma db seed",
+    "test": "bun test",
+    "test:setup": "bun run test-setup.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "prisma": "^6.9.0"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.9.0",
+    "@types/bcrypt": "^5.0.2",
+    "@types/jsonwebtoken": "^9.0.9",
+    "@types/pdf-parse": "^1.1.5",
+    "axios": "^1.9.0",
+    "better-sqlite3": "^11.10.0",
+    "bybit-api": "^4.1.9",
+    "decimal.js": "^10.5.0",
+    "googleapis": "^150.0.1",
+    "inquirer": "^12.6.3",
+    "jsonwebtoken": "^9.0.2",
+    "node-cron": "^4.1.0",
+    "open": "^10.1.2",
+    "pdf-lib": "^1.17.1",
+    "pdf-parse": "^1.1.1",
+    "socket.io": "^4.8.1",
+    "socket.io-client": "^4.8.1",
+    "toml": "^3.0.0",
+    "uuid": "^11.1.0",
+    "zod": "^3.25.53"
+  }
+}

@@ -1,0 +1,3 @@
+@echo off
+echo Starting P2P automation for active orders...
+bun run process-active-orders.ts

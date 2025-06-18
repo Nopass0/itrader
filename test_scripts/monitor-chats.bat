@@ -1,0 +1,3 @@
+@echo off
+echo Monitoring chats in real-time...
+bun run monitor-chats.ts

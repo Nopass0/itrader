@@ -1,0 +1,43 @@
+# Itrader Configuration
+
+[orchestrator]
+# Whether the orchestrator starts in paused state
+# When paused, no tasks will be executed
+start_paused = false
+
+# Task intervals (in seconds)
+[orchestrator.intervals]
+work_acceptor = 300        # 5 minutes
+ad_creator = 10           # 10 seconds
+receipt_processor = 3600  # 1 hour
+chat_processor = 2        # 2 seconds
+order_checker = 3         # 3 seconds
+chat_monitor = 1          # 1 second
+successer = 300           # 5 minutes
+gate_balance_setter = 14400 # 4 hours
+
+[webserver]
+# WebSocket server port
+port = 3001
+
+[automation]
+# Default mode: "auto" or "manual"
+mode = "auto"
+
+[gmail]
+# Gmail check interval (in seconds)
+check_interval = 30
+
+[bybit]
+# Order polling interval (in milliseconds)
+polling_interval = 10000
+max_retries = 3
+retry_delay = 5000
+
+[gate]
+# Default balance to set for Gate accounts
+default_balance = 10000000
+
+[instant_monitor]
+# Instant order monitoring settings
+enabled = true

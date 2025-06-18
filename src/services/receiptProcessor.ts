@@ -1,0 +1,678 @@
+/**
+ * Сервис обработки чеков и завершения транзакций
+ */
+
+import { EventEmitter } from "events";
+import { PrismaClient } from "../../generated/prisma";
+import { GmailManager, GmailClient } from "../gmail";
+import { ReceiptMatcher } from "./receiptMatcher";
+import { GateClient } from "../gate";
+import { BybitP2PManagerService } from "./bybitP2PManager";
+import { EmailAttachment, GmailMessage } from "../gmail/types/models";
+import { TinkoffReceiptParser } from "../ocr/receiptParser";
+import * as fs from "fs/promises";
+import * as path from "path";
+import * as crypto from "crypto";
+import { createLogger } from "../logger";
+
+const logger = createLogger('ReceiptProcessor');
+
+const prisma = new PrismaClient();
+
+interface ReceiptProcessorConfig {
+  checkInterval?: number; // Интервал проверки почты (мс)
+  pdfStoragePath?: string; // Путь для сохранения PDF
+  maxRetries?: number;
+}
+
+interface ProcessedReceipt {
+  id: string;
+  emailId: string;
+  fileName: string;
+  transactionId?: string;
+  payoutId?: string;
+  processedAt: Date;
+}
+
+export class ReceiptProcessorService extends EventEmitter {
+  private config: Required<ReceiptProcessorConfig>;
+  private intervalId?: NodeJS.Timeout;
+  public isRunning = false;
+  private processedEmails = new Set<string>();
+  private receiptMatcher: ReceiptMatcher;
+
+  constructor(
+    private gmailManager: GmailManager,
+    private gateClient: GateClient,
+    private bybitManager: BybitP2PManagerService,
+    config: ReceiptProcessorConfig = {},
+  ) {
+    super();
+
+    this.config = {
+      checkInterval: config.checkInterval || 10000, // 10 секунд
+      pdfStoragePath: config.pdfStoragePath || "data/pdf",
+      maxRetries: config.maxRetries || 3,
+    };
+
+    this.receiptMatcher = new ReceiptMatcher();
+  }
+
+  /**
+   * Запускает обработчик чеков
+   */
+  async start(): Promise<void> {
+    if (this.isRunning) {
+      logger.info("Receipt processor already running");
+      return;
+    }
+
+    this.isRunning = true;
+    logger.info("Starting receipt processor...", {
+      checkInterval: this.config.checkInterval,
+      pdfStoragePath: this.config.pdfStoragePath
+    });
+
+    // Создаем директорию для PDF если не существует
+    await this.ensureStorageDirectory();
+
+    // Загружаем обработанные email из БД
+    await this.loadProcessedEmails();
+
+    // Проверяем существующие payout со статусом 5
+    await this.checkExistingPayouts();
+
+    // Первая проверка сразу при запуске
+    logger.info("Running initial receipt check...");
+    await this.processReceipts();
+
+    // Запускаем периодическую проверку
+    this.intervalId = setInterval(() => {
+      this.processReceipts().catch((error) => {
+        logger.error("Error processing receipts", error);
+      });
+    }, this.config.checkInterval);
+
+    logger.info("Receipt processor started successfully", {
+      checkInterval: `${this.config.checkInterval / 1000}s`
+    });
+  }
+
+  /**
+   * Останавливает обработчик
+   */
+  stop(): void {
+    if (this.intervalId) {
+      clearInterval(this.intervalId);
+      this.intervalId = undefined;
+    }
+    this.isRunning = false;
+    logger.info("Receipt processor stopped");
+  }
+
+  /**
+   * Проверяет существующие payout со статусом 5
+   */
+  private async checkExistingPayouts(): Promise<void> {
+    try {
+      const payouts = await prisma.payout.findMany({
+        where: { status: 5 },
+        include: { transaction: true },
+      });
+
+      logger.info("Found payouts with status 5", { count: payouts.length });
+
+      for (const payout of payouts) {
+        try {
+          // Проверяем текущий статус в Gate.io
+          const gatePayouts = await this.gateClient.searchPayouts({
+            id: payout.gatePayoutId.toString(),
+          });
+
+          if (gatePayouts.length > 0) {
+            const currentStatus = gatePayouts[0].status;
+
+            if (currentStatus !== payout.status) {
+              logger.info("Payout status changed", {
+                payoutId: payout.id,
+                oldStatus: payout.status,
+                newStatus: currentStatus
+              });
+
+              await prisma.payout.update({
+                where: { id: payout.id },
+                data: {
+                  status: currentStatus,
+                  updatedAt: new Date(),
+                },
+              });
+
+              this.emit("payoutStatusChanged", {
+                payoutId: payout.id,
+                oldStatus: payout.status,
+                newStatus: currentStatus,
+              });
+            }
+          }
+        } catch (error) {
+          logger.error("Error checking payout", error, { payoutId: payout.id });
+        }
+      }
+    } catch (error) {
+      logger.error("Error checking existing payouts", error);
+    }
+  }
+
+  /**
+   * Основной метод обработки чеков
+   */
+  private async processReceipts(): Promise<void> {
+    logger.info("Starting receipt processing cycle...");
+    try {
+      // Используем аккаунт из базы данных
+      const gmailAccount = await prisma.gmailAccount.findFirst({
+        where: { isActive: true }
+      });
+
+      if (gmailAccount) {
+        logger.info("Found active Gmail account", { email: gmailAccount.email });
+        await this.processAccountReceipts(gmailAccount.email);
+      } else {
+        logger.warn("No active Gmail account found");
+      }
+    } catch (error) {
+      logger.error("Error in processReceipts", error);
+    }
+  }
+
+  /**
+   * Обрабатывает чеки для конкретного аккаунта
+   */
+  private async processAccountReceipts(email: string): Promise<void> {
+    try {
+      // Gmail manager stores clients by email
+      const gmailClient = this.gmailManager.getClient(email);
+      if (!gmailClient) {
+        logger.error("No Gmail client found", { 
+          email,
+          availableClients: Array.from(this.gmailManager.clients.keys())
+        });
+        return;
+      }
+
+      // Ищем письма от Тинькофф за сегодня
+      const today = new Date();
+      const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      logger.info("Searching for Tinkoff emails", {
+        email: email,
+        after: startOfDay.toISOString(),
+        sender: "noreply@tinkoff.ru"
+      });
+      
+      const searchResult = await gmailClient.getEmailsFromSender(
+        "noreply@tinkoff.ru",
+        {
+          after: startOfDay,
+          maxResults: 100,
+        },
+      );
+
+      // Проверяем, что результат - это EmailSearchResult, а не массив
+      const messages = Array.isArray(searchResult) ? searchResult : searchResult.messages;
+
+      if (!messages || messages.length === 0) {
+        logger.info("No emails from Tinkoff found", { 
+          email,
+          after: startOfDay.toISOString()
+        });
+        return;
+      }
+
+      logger.info("Found emails from Tinkoff", { 
+        count: messages.length, 
+        email,
+        messageIds: messages.slice(0, 5).map(m => m.id)
+      });
+
+      for (const message of messages) {
+        if (this.processedEmails.has(message.id)) {
+          continue; // Уже обработано
+        }
+
+        try {
+          await this.processEmail(gmailClient, message.id);
+        } catch (error) {
+          logger.error("Error processing email", error, { messageId: message.id });
+        }
+      }
+    } catch (error) {
+      logger.error("Error processing receipts for email", error, { email });
+    }
+  }
+
+  /**
+   * Обрабатывает отдельное письмо
+   */
+  private async processEmail(
+    gmailClient: GmailClient,
+    messageId: string,
+  ): Promise<void> {
+    try {
+      // Проверяем, не обработан ли уже этот email
+      const existingReceipt = await prisma.receipt.findUnique({
+        where: { emailId: messageId }
+      });
+
+      if (existingReceipt) {
+        logger.info("Email already processed", { messageId });
+        this.processedEmails.add(messageId);
+        return;
+      }
+
+      const fullMessage = await gmailClient.getMessage(messageId);
+      if (!fullMessage) {
+        return;
+      }
+
+      // Проверяем есть ли PDF вложения
+      const pdfAttachments = fullMessage.attachments?.filter((att) =>
+        att.filename?.toLowerCase().endsWith(".pdf"),
+      ) || [];
+
+      if (pdfAttachments.length === 0) {
+        return; // Нет PDF чеков
+      }
+
+      logger.info("Processing PDF attachments", { count: pdfAttachments.length, messageId });
+
+      for (const attachment of pdfAttachments) {
+        try {
+          // Скачиваем PDF
+          const pdfData = await gmailClient.downloadAttachment(
+            messageId,
+            attachment,
+          );
+
+          // Декодируем base64 в Buffer
+          const pdfBuffer = Buffer.from(pdfData.data, 'base64');
+
+          // Вычисляем хеш файла для проверки дубликатов
+          const fileHash = crypto.createHash('sha256').update(pdfBuffer).digest('hex');
+
+          // Проверяем, не обработан ли уже этот файл
+          const existingReceiptByHash = await prisma.receipt.findUnique({
+            where: { fileHash }
+          });
+
+          if (existingReceiptByHash) {
+            logger.info("Receipt with hash already processed", { fileHash });
+            continue;
+          }
+
+          // Сохраняем PDF
+          const savedPath = await this.savePDF(
+            pdfBuffer,
+            attachment.filename || "receipt.pdf",
+          );
+
+          // Обрабатываем чек и сохраняем в БД
+          await this.processReceipt(
+            pdfBuffer, 
+            savedPath, 
+            messageId,
+            fullMessage.from || 'noreply@tinkoff.ru',
+            fullMessage.subject || '',
+            attachment.filename || "receipt.pdf",
+            fileHash
+          );
+        } catch (error) {
+          logger.error("Error processing attachment", error, { filename: attachment.filename });
+        }
+      }
+
+      // Помечаем email как обработанный
+      this.processedEmails.add(messageId);
+
+      // Сохраняем в БД
+      await prisma.processedEmail
+        .create({
+          data: {
+            emailId: messageId,
+            processedAt: new Date(),
+          },
+        })
+        .catch(() => {
+          // Игнорируем если уже существует
+        });
+    } catch (error) {
+      logger.error("Error processing email", error, { messageId });
+    }
+  }
+
+  /**
+   * Обрабатывает PDF чек
+   */
+  private async processReceipt(
+    pdfBuffer: Buffer,
+    filePath: string,
+    emailId: string,
+    emailFrom: string,
+    emailSubject: string,
+    attachmentName: string,
+    fileHash: string,
+  ): Promise<void> {
+    try {
+      // Парсим чек используя OCR модуль
+      const parser = new TinkoffReceiptParser();
+      const parsedReceipt = await parser.parseFromBuffer(pdfBuffer);
+      
+      if (!parsedReceipt) {
+        logger.error("Failed to parse receipt");
+        return;
+      }
+
+      // Сохраняем чек в базу данных
+      const receipt = await prisma.receipt.create({
+        data: {
+          emailId,
+          emailFrom,
+          emailSubject,
+          attachmentName,
+          filePath,
+          fileHash,
+          amount: parsedReceipt.amount,
+          bank: "Tinkoff",
+          reference: `${parsedReceipt.sender} -> ${
+            'recipientName' in parsedReceipt ? parsedReceipt.recipientName :
+            'recipientPhone' in parsedReceipt ? parsedReceipt.recipientPhone :
+            parsedReceipt.recipientCard
+          }`,
+          transferType: parsedReceipt.transferType,
+          status: parsedReceipt.status,
+          senderName: parsedReceipt.sender,
+          recipientName: 'recipientName' in parsedReceipt ? parsedReceipt.recipientName : null,
+          recipientPhone: 'recipientPhone' in parsedReceipt ? parsedReceipt.recipientPhone : null,
+          recipientCard: parsedReceipt.recipientCard || null,
+          recipientBank: 'recipientBank' in parsedReceipt ? parsedReceipt.recipientBank : null,
+          commission: parsedReceipt.commission || null,
+          transactionDate: parsedReceipt.datetime,
+          parsedData: parsedReceipt as any,
+          rawText: parser.lastExtractedText || null,
+          isProcessed: false
+        }
+      });
+
+      logger.info("Receipt saved to database", { receiptId: receipt.id });
+      // Получаем все активные payout со статусом 5
+      const activePayouts = await prisma.transaction.findMany({
+        where: {
+          payout: {
+            status: 5, // Ожидающие подтверждения
+          },
+          status: {
+            in: ["pending", "chat_started", "waiting_payment"],
+          },
+        },
+        include: {
+          payout: true,
+        },
+      });
+
+      logger.info("Checking receipt against active payouts", { count: activePayouts.length });
+
+      // Проверяем чек против каждого payout
+      for (const transaction of activePayouts) {
+        if (!transaction.payout) continue;
+
+        try {
+          const matches =
+            await this.receiptMatcher.matchPayoutWithReceiptBuffer(
+              transaction.id,
+              pdfBuffer,
+            );
+
+          if (matches) {
+            logger.info("✅ Receipt matches transaction", { transactionId: transaction.id });
+
+            // Обрабатываем совпадение
+            await this.handleMatchedReceipt(
+              transaction.id,
+              transaction.payoutId,
+              filePath,
+              emailId,
+              receipt.id,
+            );
+
+            // Обновляем чек как обработанный
+            await prisma.receipt.update({
+              where: { id: receipt.id },
+              data: {
+                isProcessed: true,
+                payoutId: transaction.payoutId
+              }
+            });
+
+            // Один чек может соответствовать только одной транзакции
+            break;
+          }
+        } catch (error) {
+          logger.error("Error matching receipt with transaction", error, { transactionId: transaction.id });
+        }
+      }
+    } catch (error) {
+      logger.error("Error processing receipt", error);
+    }
+  }
+
+  /**
+   * Обрабатывает совпавший чек
+   */
+  private async handleMatchedReceipt(
+    transactionId: string,
+    payoutId: string,
+    receiptPath: string,
+    emailId: string,
+    receiptId: string,
+  ): Promise<void> {
+    try {
+      logger.info("Processing matched receipt", { transactionId });
+
+      // 1. Апрувим payout на Gate.io с приложением чека
+      const payout = await prisma.payout.findUnique({
+        where: { id: payoutId },
+      });
+
+      if (!payout) {
+        throw new Error(`Payout ${payoutId} not found`);
+      }
+
+      // Читаем файл чека для отправки
+      const receiptData = await fs.readFile(receiptPath);
+
+      // Апрувим на Gate.io
+      logger.info("Approving payout on Gate.io", { gatePayoutId: payout.gatePayoutId });
+      await this.gateClient.approvePayout(
+        payout.gatePayoutId.toString(),
+        receiptData,
+      );
+
+      // 2. Обновляем статус payout
+      await prisma.payout.update({
+        where: { id: payoutId },
+        data: {
+          status: 10, // Approved
+          approvedAt: new Date(),
+          attachments: JSON.stringify([
+            {
+              type: "receipt",
+              path: receiptPath,
+              emailId: emailId,
+            },
+          ]),
+        },
+      });
+
+      // 3. Обновляем транзакцию
+      const transaction = await prisma.transaction.update({
+        where: { id: transactionId },
+        data: {
+          status: "payment_received",
+          checkReceivedAt: new Date(),
+        },
+        include: {
+          payout: true,
+        },
+      });
+
+      // 4. Если есть orderId, отпускаем средства на Bybit
+      if (transaction.orderId) {
+        logger.info("Releasing assets for order", { orderId: transaction.orderId });
+
+        try {
+          // Находим Bybit аккаунт по объявлению
+          const advertisement = await prisma.advertisement.findUnique({
+            where: { id: transaction.advertisementId },
+            include: { bybitAccount: true }
+          });
+
+          if (advertisement) {
+            const bybitClient = this.bybitManager.getClient(
+              advertisement.bybitAccount.accountId,
+            );
+            if (bybitClient) {
+              await bybitClient.releaseAssets(transaction.orderId);
+
+              // Обновляем статус транзакции
+              await prisma.transaction.update({
+                where: { id: transactionId },
+                data: {
+                  status: "completed",
+                  completedAt: new Date(),
+                },
+              });
+
+              logger.info("✅ Transaction completed successfully", { transactionId });
+
+              // Удаляем объявление после успешного завершения
+              try {
+                if (advertisement.bybitAdId && !advertisement.bybitAdId.startsWith('temp_')) {
+                  logger.info("Deleting advertisement", { bybitAdId: advertisement.bybitAdId });
+                  await bybitClient.deleteAdvertisement(advertisement.bybitAdId);
+                  logger.info("✅ Advertisement deleted from Bybit");
+                }
+
+                // Помечаем объявление как неактивное в БД
+                await prisma.advertisement.update({
+                  where: { id: advertisement.id },
+                  data: { isActive: false }
+                });
+                logger.info("✅ Advertisement marked as inactive in database");
+              } catch (deleteError) {
+                logger.error("Error deleting advertisement", deleteError);
+                // Не критично, продолжаем
+              }
+            }
+          }
+        } catch (error) {
+          logger.error("Error releasing assets for order", error, { orderId: transaction.orderId });
+          // Не прерываем процесс, транзакция уже подтверждена
+        }
+      }
+
+      // 5. Генерируем событие
+      this.emit("receiptProcessed", {
+        transactionId,
+        payoutId,
+        receiptPath,
+        status: "success",
+      });
+    } catch (error) {
+      logger.error("Error handling matched receipt", error);
+
+      // Обновляем статус транзакции на failed
+      await prisma.transaction
+        .update({
+          where: { id: transactionId },
+          data: {
+            status: "failed",
+            failureReason: `Receipt processing error: ${error instanceof Error ? error.message : String(error)}`,
+          },
+        })
+        .catch(() => {});
+
+      this.emit("receiptProcessed", {
+        transactionId,
+        payoutId,
+        receiptPath,
+        status: "failed",
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  /**
+   * Сохраняет PDF файл
+   */
+  private async savePDF(data: Buffer, originalName: string): Promise<string> {
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const fileName = `${timestamp}_${originalName}`;
+    const filePath = path.join(this.config.pdfStoragePath, fileName);
+
+    await fs.writeFile(filePath, data);
+
+    return filePath;
+  }
+
+
+  /**
+   * Создает директорию для хранения PDF
+   */
+  private async ensureStorageDirectory(): Promise<void> {
+    try {
+      await fs.mkdir(this.config.pdfStoragePath, { recursive: true });
+    } catch (error) {
+      logger.error("Error creating storage directory", error);
+    }
+  }
+
+  /**
+   * Загружает обработанные email из БД
+   */
+  private async loadProcessedEmails(): Promise<void> {
+    try {
+      const processed = await prisma.processedEmail.findMany({
+        where: {
+          processedAt: {
+            gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), // За последние 7 дней
+          },
+        },
+      });
+
+      processed.forEach((email) => {
+        this.processedEmails.add(email.emailId);
+      });
+
+      logger.info("Loaded processed emails", { count: processed.length });
+    } catch (error) {
+      logger.error("Error loading processed emails", error);
+    }
+  }
+}
+
+// Экспортируем для удобства
+export async function startReceiptProcessor(
+  gmailManager: GmailManager,
+  gateClient: GateClient,
+  bybitManager: BybitP2PManagerService,
+  config?: ReceiptProcessorConfig,
+): Promise<ReceiptProcessorService> {
+  const processor = new ReceiptProcessorService(
+    gmailManager,
+    gateClient,
+    bybitManager,
+    config,
+  );
+
+  await processor.start();
+  return processor;
+}

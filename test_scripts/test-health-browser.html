@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket Health Check Test</title>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+</head>
+<body>
+    <h1>WebSocket Health Check Test</h1>
+    <div id="status">Connecting...</div>
+    <div id="response"></div>
+    <button onclick="checkHealth()">Check Health</button>
+    
+    <script>
+        const socket = io('http://localhost:3001', {
+            transports: ['websocket', 'polling']
+        });
+        
+        socket.on('connect', () => {
+            document.getElementById('status').innerHTML = '✅ Connected! Socket ID: ' + socket.id;
+            console.log('Connected to WebSocket server');
+        });
+        
+        socket.on('connect_error', (error) => {
+            document.getElementById('status').innerHTML = '❌ Connection error: ' + error.message;
+            console.error('Connection error:', error);
+        });
+        
+        function checkHealth() {
+            console.log('Sending health check...');
+            socket.emit('health:check', (response) => {
+                console.log('Health check response:', response);
+                document.getElementById('response').innerHTML = '<pre>' + JSON.stringify(response, null, 2) + '</pre>';
+            });
+        }
+        
+        // Auto check health on connect
+        socket.on('connect', () => {
+            setTimeout(checkHealth, 500);
+        });
+    </script>
+</body>
+</html>

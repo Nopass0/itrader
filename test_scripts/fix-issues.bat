@@ -1,0 +1,9 @@
+@echo off
+echo Fixing time sync and finding orders...
+echo.
+echo Step 1: Testing time sync...
+bun run test-time-sync.ts
+echo.
+echo Step 2: Finding orders...
+bun run find-orders-advanced.ts
+pause
