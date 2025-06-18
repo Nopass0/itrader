@@ -88,6 +88,7 @@ export function useSocketApi(options?: UseSocketApiOptions) {
     call,
     subscribe,
     api: socketApi,
+    socket: socketApi.getSocket(), // Add raw socket access
     // Direct access to API namespaces
     accounts: socketApi.accounts,
     transactions: socketApi.transactions,

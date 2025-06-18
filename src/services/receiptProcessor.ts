@@ -438,6 +438,7 @@ export class ReceiptProcessorService extends EventEmitter {
       // Emit WebSocket event for real-time updates
       if (this.io) {
         const io = this.io;
+        logger.info("Emitting WebSocket event: receipts:new", { receiptId: receipt.id });
         io.emit('receipts:new', {
           receipt: {
             id: receipt.id,
@@ -454,6 +455,8 @@ export class ReceiptProcessorService extends EventEmitter {
             createdAt: receipt.createdAt
           }
         });
+      } else {
+        logger.warn("No WebSocket IO available, cannot emit receipt event");
       }
       // Получаем все активные payout со статусом 5
       const activePayouts = await prisma.transaction.findMany({

@@ -132,11 +132,17 @@ class SocketApiClient {
       'rate:changed',
       'chat:message',
       'orchestrator:started',
-      'orchestrator:stopped'
+      'orchestrator:stopped',
+      'receipts:new',
+      'receipts:matched',
+      'receipts:deleted'
     ];
 
     events.forEach(event => {
       this.socket!.on(event, (data: any) => {
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`[SocketApiClient] Event received: ${event}`, data);
+        }
         this.triggerHandlers(event, data);
       });
     });
@@ -333,6 +339,11 @@ class SocketApiClient {
   // Connection status
   isConnected(): boolean {
     return this.socket?.connected || false;
+  }
+  
+  // Get raw socket instance
+  getSocket(): Socket | null {
+    return this.socket;
   }
 
   disconnect(): void {

@@ -85,7 +85,7 @@ export function useReceipts() {
     sortOrder: 'desc'
   });
 
-  const { api, isConnected, socket } = useSocketApi();
+  const { api, isConnected, socket, subscribe } = useSocketApi();
 
   const loadReceipts = useCallback(async () => {
     if (!isConnected) return;
@@ -226,10 +226,10 @@ export function useReceipts() {
 
   // Subscribe to real-time receipt events
   useEffect(() => {
-    if (!socket || !isConnected) return;
+    if (!isConnected) return;
 
     const handleNewReceipt = (data: { receipt: TinkoffReceipt }) => {
-      console.log('New receipt received:', data.receipt);
+      console.log('[useReceipts] New receipt received:', data.receipt);
       setReceipts(prev => [data.receipt, ...prev]);
       setTotalCount(prev => prev + 1);
       // Reload stats to update counters
@@ -237,7 +237,7 @@ export function useReceipts() {
     };
 
     const handleReceiptMatched = (data: { receiptId: string; payoutId: string }) => {
-      console.log('Receipt matched:', data);
+      console.log('[useReceipts] Receipt matched:', data);
       setReceipts(prev => prev.map(receipt => 
         receipt.id === data.receiptId 
           ? { ...receipt, payoutId: data.payoutId, isProcessed: true }
@@ -248,26 +248,29 @@ export function useReceipts() {
     };
 
     const handleReceiptDeleted = (data: { receiptId: string }) => {
+      console.log('[useReceipts] Receipt deleted:', data.receiptId);
       setReceipts(prev => prev.filter(receipt => receipt.id !== data.receiptId));
       setTotalCount(prev => prev - 1);
       loadStats();
     };
 
-    // Subscribe to events
-    socket.on('receipts:new', handleNewReceipt);
-    socket.on('receipts:matched', handleReceiptMatched);
-    socket.on('receipts:deleted', handleReceiptDeleted);
+    // Use the subscribe method from useSocketApi
+    const unsubscribeNew = subscribe('receipts:new', handleNewReceipt);
+    const unsubscribeMatched = subscribe('receipts:matched', handleReceiptMatched);
+    const unsubscribeDeleted = subscribe('receipts:deleted', handleReceiptDeleted);
 
     // Subscribe to receipt updates room
+    console.log('[useReceipts] Subscribing to receipt updates');
     api.emit('receipts:subscribe', {});
 
     return () => {
-      socket.off('receipts:new', handleNewReceipt);
-      socket.off('receipts:matched', handleReceiptMatched);
-      socket.off('receipts:deleted', handleReceiptDeleted);
+      console.log('[useReceipts] Unsubscribing from receipt updates');
+      unsubscribeNew();
+      unsubscribeMatched();
+      unsubscribeDeleted();
       api.emit('receipts:unsubscribe', {});
     };
-  }, [socket, isConnected, api, loadStats]);
+  }, [isConnected, api, loadStats, subscribe]);
 
   return {
     receipts,
