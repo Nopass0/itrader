@@ -53,7 +53,6 @@ export default function PanelLayout({
       toast({
         title: "Демо-режим активен",
         description: "Система работает с тестовыми данными",
-        variant: "warning",
         duration: 5000,
       });
     }

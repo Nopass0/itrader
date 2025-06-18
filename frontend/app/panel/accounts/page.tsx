@@ -36,6 +36,7 @@ import { RobotEmoji, MoneyBagEmoji, ChartIncreasingEmoji } from "@/components/ui
 import { AddAccountDialog } from "@/components/panel/AddAccountDialog";
 import { useGateAccounts, useBybitAccounts, GateAccount, BybitAccount } from "@/hooks/useAccounts";
 import { useGateDashboardStats, useGateAccountData } from '@/hooks/useGateAccount';
+import { useGmailAccounts } from '@/hooks/useGmailAccounts';
 
 // Status badge component
 const StatusBadge: React.FC<{ status: string; errorMessage?: string }> = ({ status, errorMessage }) => {
@@ -198,6 +199,7 @@ const GateAccountCard: React.FC<{
 }> = ({ account, onDelete, onRefresh }) => {
   const [showDetails, setShowDetails] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isToggling, setIsToggling] = useState(false);
   const { toast } = useToast();
   
   const { stats } = useGateDashboardStats(parseInt(account.id) || 0, 'week');
@@ -210,7 +212,6 @@ const GateAccountCard: React.FC<{
         toast({
           title: "Аккаунт удален",
           description: "Аккаунт Gate.cx успешно удален",
-          variant: "success",
         });
       }
     }
@@ -224,7 +225,6 @@ const GateAccountCard: React.FC<{
       toast({
         title: "Синхронизация запущена",
         description: "Данные обновятся в течение нескольких секунд",
-        variant: "success",
       });
     } catch (error) {
       toast({
@@ -234,6 +234,34 @@ const GateAccountCard: React.FC<{
       });
     } finally {
       setIsSyncing(false);
+    }
+  };
+
+  const handleToggleActive = async () => {
+    setIsToggling(true);
+    try {
+      const response = await socketApi.emit('accounts:updateGateAccount', {
+        id: account.id,
+        updates: { isActive: !account.isActive }
+      });
+      
+      if (response.success) {
+        onRefresh();
+        toast({
+          title: account.isActive ? "Аккаунт отключен" : "Аккаунт включен",
+          description: account.isActive ? 
+            "Аккаунт больше не будет использоваться для операций" : 
+            "Аккаунт теперь будет использоваться для операций",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Ошибка",
+        description: "Не удалось изменить статус аккаунта",
+        variant: "destructive",
+      });
+    } finally {
+      setIsToggling(false);
     }
   };
 
@@ -353,11 +381,21 @@ const GateAccountCard: React.FC<{
           </div>
           <div className="flex gap-2">
             <Button
+              variant={account.isActive ? "ghost" : "outline"}
+              size="icon"
+              className="h-8 w-8"
+              onClick={handleToggleActive}
+              disabled={isToggling}
+              title={account.isActive ? "Отключить аккаунт" : "Включить аккаунт"}
+            >
+              {account.isActive ? <Eye size={14} /> : <EyeOff size={14} />}
+            </Button>
+            <Button
               variant="ghost"
               size="icon"
               className="h-8 w-8"
               onClick={handleSync}
-              disabled={isSyncing}
+              disabled={isSyncing || !account.isActive}
             >
               <RefreshCw size={14} className={isSyncing ? 'animate-spin' : ''} />
             </Button>
@@ -394,6 +432,7 @@ const BybitAccountCard: React.FC<{
   const [accountInfo, setAccountInfo] = useState<any>(null);
   const [p2pAds, setP2PAds] = useState<any[]>([]);
   const [loadingInfo, setLoadingInfo] = useState(false);
+  const [isToggling, setIsToggling] = useState(false);
   const { toast } = useToast();
 
   // Load account info and P2P data
@@ -438,9 +477,36 @@ const BybitAccountCard: React.FC<{
         toast({
           title: "Аккаунт удален",
           description: "Аккаунт Bybit успешно удален",
-          variant: "success",
         });
       }
+    }
+  };
+
+  const handleToggleActive = async () => {
+    setIsToggling(true);
+    try {
+      const response = await socketApi.emit('accounts:updateBybitAccount', {
+        id: account.id,
+        updates: { isActive: !account.isActive }
+      });
+      
+      if (response.success) {
+        onRefresh();
+        toast({
+          title: account.isActive ? "Аккаунт отключен" : "Аккаунт включен",
+          description: account.isActive ? 
+            "Аккаунт больше не будет использоваться для операций" : 
+            "Аккаунт теперь будет использоваться для операций",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Ошибка",
+        description: "Не удалось изменить статус аккаунта",
+        variant: "destructive",
+      });
+    } finally {
+      setIsToggling(false);
     }
   };
 
@@ -564,6 +630,16 @@ const BybitAccountCard: React.FC<{
           </div>
           <div className="flex gap-2">
             <Button
+              variant={account.isActive ? "ghost" : "outline"}
+              size="icon"
+              className="h-8 w-8"
+              onClick={handleToggleActive}
+              disabled={isToggling}
+              title={account.isActive ? "Отключить аккаунт" : "Включить аккаунт"}
+            >
+              {account.isActive ? <Eye size={14} /> : <EyeOff size={14} />}
+            </Button>
+            <Button
               variant="ghost"
               size="icon"
               className="h-8 w-8"
@@ -571,7 +647,7 @@ const BybitAccountCard: React.FC<{
                 loadAccountInfo();
                 onRefresh();
               }}
-              disabled={loadingInfo}
+              disabled={loadingInfo || !account.isActive}
             >
               <RefreshCw size={14} className={loadingInfo ? 'animate-spin' : ''} />
             </Button>
@@ -618,15 +694,24 @@ export default function AccountsPage() {
     refetch: refetchBybit,
     deleteAccount: deleteBybitAccount
   } = useBybitAccounts();
+  
+  const {
+    accounts: gmailAccounts,
+    loading: gmailLoading,
+    refresh: refreshGmail,
+    deleteAccount: deleteGmailAccount
+  } = useGmailAccounts();
 
   const handleRefreshAll = () => {
     refetchGate();
     refetchBybit();
+    refreshGmail();
   };
 
   const handleAccountAdded = () => {
     refetchGate();
     refetchBybit();
+    refreshGmail();
   };
 
   return (
@@ -686,6 +771,10 @@ export default function AccountsPage() {
             <TabsTrigger value="bybit" className="flex items-center gap-2">
               <MoneyBagEmoji size={16} />
               Bybit ({bybitAccounts.length})
+            </TabsTrigger>
+            <TabsTrigger value="gmail" className="flex items-center gap-2">
+              📧
+              Gmail ({gmailAccounts.length})
             </TabsTrigger>
           </TabsList>
 
@@ -823,6 +912,106 @@ export default function AccountsPage() {
                     ))}
                   </AnimatePresence>
                 </div>
+              )}
+            </motion.div>
+          </TabsContent>
+
+          {/* Gmail Accounts */}
+          <TabsContent value="gmail">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.3 }}
+              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+            >
+              {gmailLoading ? (
+                <div className="col-span-full text-center py-8">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+                  <p className="mt-4 text-muted-foreground">Загрузка Gmail аккаунтов...</p>
+                </div>
+              ) : gmailAccounts.length === 0 ? (
+                <Card className="col-span-full glassmorphism">
+                  <CardContent className="text-center py-16">
+                    <div className="w-20 h-20 rounded-full bg-muted/20 flex items-center justify-center mx-auto mb-4">
+                      <span className="text-4xl">📧</span>
+                    </div>
+                    <h3 className="text-lg font-medium mb-2">Нет Gmail аккаунтов</h3>
+                    <p className="text-muted-foreground mb-6">
+                      Добавьте Gmail аккаунт для получения чеков и уведомлений
+                    </p>
+                    <Button onClick={() => setIsAddDialogOpen(true)}>
+                      <PlusCircle size={16} className="mr-2" />
+                      Добавить Gmail
+                    </Button>
+                  </CardContent>
+                </Card>
+              ) : (
+                gmailAccounts.map((account, index) => (
+                  <motion.div
+                    key={account.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: index * 0.1 }}
+                  >
+                    <Card className="glassmorphism hover:glow-card group">
+                      <CardHeader>
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <CardTitle className="text-lg flex items-center gap-2">
+                              <span className="text-xl">📧</span>
+                              Gmail
+                            </CardTitle>
+                            <CardDescription className="mt-1">
+                              {account.email}
+                            </CardDescription>
+                          </div>
+                          <Badge variant={account.isActive ? "default" : "secondary"}>
+                            {account.isActive ? "Активен" : "Неактивен"}
+                          </Badge>
+                        </div>
+                      </CardHeader>
+                      
+                      <CardContent className="space-y-4">
+                        <div className="space-y-2">
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm text-muted-foreground">Статус токена:</span>
+                            <Badge variant={account.hasRefreshToken ? "outline" : "destructive"}>
+                              {account.hasRefreshToken ? "Авторизован" : "Требуется авторизация"}
+                            </Badge>
+                          </div>
+                          
+                          {account.lastSync && (
+                            <div className="flex justify-between items-center">
+                              <span className="text-sm text-muted-foreground">Последняя синхронизация:</span>
+                              <span className="text-sm">
+                                {new Date(account.lastSync).toLocaleString('ru-RU')}
+                              </span>
+                            </div>
+                          )}
+                          
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm text-muted-foreground">Добавлен:</span>
+                            <span className="text-sm">
+                              {new Date(account.createdAt).toLocaleDateString('ru-RU')}
+                            </span>
+                          </div>
+                        </div>
+                      </CardContent>
+                      
+                      <CardFooter className="gap-2">
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => deleteGmailAccount(account.id)}
+                          className="flex-1"
+                        >
+                          <Trash size={14} className="mr-1" />
+                          Удалить
+                        </Button>
+                      </CardFooter>
+                    </Card>
+                  </motion.div>
+                ))
               )}
             </motion.div>
           </TabsContent>

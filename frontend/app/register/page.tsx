@@ -69,13 +69,12 @@ export default function RegisterPage() {
           toast({
             title: "Регистрация успешна",
             description: "Теперь вы можете войти в систему",
-            variant: "success",
           });
           router.push('/login');
         } else {
           toast({
             title: "Ошибка регистрации",
-            description: response.error || "Не удалось зарегистрировать пользователя",
+            description: typeof response.error === 'string' ? response.error : response.error?.message || "Не удалось зарегистрировать пользователя",
             variant: "destructive",
           });
         }
@@ -109,7 +108,6 @@ export default function RegisterPage() {
     toast({
       title: "Регистрация успешна (ДЕМО)",
       description: "Регистрация выполнена в демо-режиме. Теперь вы можете войти в систему.",
-      variant: "success",
     });
     
     router.push('/login');

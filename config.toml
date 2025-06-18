@@ -18,7 +18,7 @@ gate_balance_setter = 14400 # 4 hours
 
 [webserver]
 # WebSocket server port
-port = 3001
+port = 3002
 
 [automation]
 # Default mode: "auto" or "manual"

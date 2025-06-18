@@ -90,34 +90,40 @@ export class LogsController {
     }
   }
 
-  async handleGetCleanupConfig(socket: Socket, data: any, callback: Function) {
+  async handleGetCleanupConfig(socket: Socket, data: any, callback?: Function) {
     try {
       const { getLogCleanupService } = await import('../../services/logCleanupService');
       const service = getLogCleanupService();
       const config = service.getConfig();
       
-      callback({
-        success: true,
-        data: config
-      });
+      if (callback) {
+        callback({
+          success: true,
+          data: config
+        });
+      }
     } catch (error) {
       logger.error('Failed to get cleanup config', error as Error);
-      callback({
-        success: false,
-        error: 'Failed to get cleanup config'
-      });
+      if (callback) {
+        callback({
+          success: false,
+          error: 'Failed to get cleanup config'
+        });
+      }
     }
   }
 
-  async handleSetCleanupConfig(socket: Socket, data: any, callback: Function) {
+  async handleSetCleanupConfig(socket: Socket, data: any, callback?: Function) {
     try {
       // Only admins can change cleanup settings
       const user = (socket as any).user;
       if (user?.role !== 'admin') {
-        callback({
-          success: false,
-          error: 'Only admins can change cleanup settings'
-        });
+        if (callback) {
+          callback({
+            success: false,
+            error: 'Only admins can change cleanup settings'
+          });
+        }
         return;
       }
       
@@ -125,28 +131,34 @@ export class LogsController {
       const service = getLogCleanupService();
       await service.saveConfig(data);
       
-      callback({
-        success: true,
-        data: service.getConfig()
-      });
+      if (callback) {
+        callback({
+          success: true,
+          data: service.getConfig()
+        });
+      }
     } catch (error) {
       logger.error('Failed to set cleanup config', error as Error);
-      callback({
-        success: false,
-        error: 'Failed to set cleanup config'
-      });
+      if (callback) {
+        callback({
+          success: false,
+          error: 'Failed to set cleanup config'
+        });
+      }
     }
   }
 
-  async handleCleanupNow(socket: Socket, data: any, callback: Function) {
+  async handleCleanupNow(socket: Socket, data: any, callback?: Function) {
     try {
       // Only admins can trigger manual cleanup
       const user = (socket as any).user;
       if (user?.role !== 'admin') {
-        callback({
-          success: false,
-          error: 'Only admins can trigger manual cleanup'
-        });
+        if (callback) {
+          callback({
+            success: false,
+            error: 'Only admins can trigger manual cleanup'
+          });
+        }
         return;
       }
       
@@ -154,16 +166,20 @@ export class LogsController {
       const service = getLogCleanupService();
       await service.performCleanup();
       
-      callback({
-        success: true,
-        message: 'Cleanup completed'
-      });
+      if (callback) {
+        callback({
+          success: true,
+          message: 'Cleanup completed'
+        });
+      }
     } catch (error) {
       logger.error('Failed to perform cleanup', error as Error);
-      callback({
-        success: false,
-        error: 'Failed to perform cleanup'
-      });
+      if (callback) {
+        callback({
+          success: false,
+          error: 'Failed to perform cleanup'
+        });
+      }
     }
   }
 }

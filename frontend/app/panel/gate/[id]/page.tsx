@@ -281,12 +281,13 @@ export default function GateAccountDetailPage() {
       
       if (response.success && response.data) {
         // Update balance immediately with the response data
-        if (response.data.wallet) {
+        const data = response.data as any;
+        if (data.wallet) {
           const newBalance = {
             ...accountBalance,
-            totalBalanceRub: response.data.wallet.balance,
+            totalBalanceRub: data.wallet.balance,
             balances: {
-              [response.data.wallet.currency.code]: response.data.wallet.balance
+              [data.wallet.currency.code]: data.wallet.balance
             }
           };
           setAccountBalance(newBalance);
@@ -299,7 +300,7 @@ export default function GateAccountDetailPage() {
         // Show success toast
         toast({
           title: "Баланс обновлен",
-          description: `Новый баланс: ${response.data.wallet.balance} ${response.data.wallet.currency.code.toUpperCase()}`,
+          description: `Новый баланс: ${data.wallet.balance} ${data.wallet.currency.code.toUpperCase()}`,
           duration: 3000,
         });
       } else {

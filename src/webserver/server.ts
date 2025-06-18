@@ -210,6 +210,10 @@ export class WebSocketServer {
       socket.on('accounts:updateBybitAccount', withAuth(PlatformAccountController.updateBybitAccount));
       socket.on('accounts:deleteBybitAccount', withAuth(PlatformAccountController.deleteBybitAccount));
       socket.on('accounts:getBybitAccountStats', withAuth(PlatformAccountController.getBybitAccountStats));
+      socket.on('accounts:startGmailOAuth', withAuth(PlatformAccountController.startGmailOAuth));
+      socket.on('accounts:completeGmailOAuth', withAuth(PlatformAccountController.completeGmailOAuth));
+      socket.on('accounts:listGmailAccounts', withAuth(PlatformAccountController.listGmailAccounts));
+      socket.on('accounts:deleteGmailAccount', withAuth(PlatformAccountController.deleteGmailAccount));
 
       // Управление транзакциями
       socket.on('transactions:list', withAuthAndLogging(TransactionController.list, 'listTransactions', 'transactions:list', (data) => ({ page: data?.page, limit: data?.limit, status: data?.status })));

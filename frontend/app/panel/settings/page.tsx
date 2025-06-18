@@ -314,7 +314,7 @@ export default function SettingsPage() {
   );
 
   return (
-    <div className="container mx-auto p-4 lg:p-6 max-w-7xl">
+    <div className="w-full px-4 sm:px-6 lg:px-8">
       {/* Breadcrumbs */}
       <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
         <span>Панель</span>
@@ -519,10 +519,10 @@ export default function SettingsPage() {
                       <Zap className="h-5 w-5 text-secondary-foreground" />
                     </div>
                     <div>
-                      <p className="font-medium flex items-center gap-2">
+                      <div className="font-medium flex items-center gap-2">
                         Автоматический курс
                         <Lock className="h-4 w-4 text-muted-foreground" />
-                      </p>
+                      </div>
                       <p className="text-sm text-muted-foreground">
                         Курс обновляется автоматически из внешних источников
                       </p>
@@ -548,12 +548,12 @@ export default function SettingsPage() {
                       <Calculator className="h-5 w-5 text-primary" />
                     </div>
                     <div>
-                      <p className="font-medium flex items-center gap-2">
+                      <div className="font-medium flex items-center gap-2">
                         Фиксированный курс
                         <Badge variant="default" className="text-xs">
                           Активно
                         </Badge>
-                      </p>
+                      </div>
                       <p className="text-sm text-muted-foreground">
                         Использовать заданное значение курса
                       </p>

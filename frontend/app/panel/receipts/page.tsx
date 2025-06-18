@@ -374,7 +374,7 @@ export default function ReceiptsPage() {
             <Card className="glassmorphism">
               <CardContent className="p-12 text-center">
                 <XCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-                <p className="text-red-500">{typeof error === 'string' ? error : error?.message || 'Произошла ошибка'}</p>
+                <p className="text-red-500">{typeof error === 'string' ? error : (error as any)?.message || 'Произошла ошибка'}</p>
                 <Button variant="outline" onClick={loadReceipts} className="mt-4">
                   Попробовать снова
                 </Button>
@@ -457,7 +457,7 @@ export default function ReceiptsPage() {
                                       className="h-5 w-5 p-0"
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        navigator.clipboard.writeText(receipt.payout.gatePayoutId!.toString());
+                                        navigator.clipboard.writeText(receipt.payout?.gatePayoutId?.toString() || '');
                                         // Simple visual feedback
                                         const btn = e.currentTarget;
                                         btn.classList.add('text-green-500');

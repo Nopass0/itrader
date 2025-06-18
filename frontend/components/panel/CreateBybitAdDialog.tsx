@@ -621,7 +621,7 @@ export function CreateBybitAdDialog({ isOpen, onClose, onCreateAd, initialData, 
                   }
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  Нажмите кнопку "Добавить" выше, чтобы добавить платежный метод.
+                  Нажмите кнопку &quot;Добавить&quot; выше, чтобы добавить платежный метод.
                 </p>
               </div>
             )}

@@ -37,6 +37,21 @@ async function main() {
     }
   });
 
+  // Kill processes on specific ports
+  log('DEV', colors.yellow, 'Killing processes on ports 3000, 3001, 3002...');
+  const ports = [3000, 3001, 3002];
+  ports.forEach(port => {
+    try {
+      const pid = execSync(`lsof -ti:${port}`, { encoding: 'utf-8' }).trim();
+      if (pid) {
+        execSync(`kill -9 ${pid}`, { stdio: 'ignore' });
+        log('DEV', colors.green, `Killed process on port ${port}`);
+      }
+    } catch (e) {
+      // Port might not be in use, that's okay
+    }
+  });
+
   // Wait for processes to stop
   log('DEV', colors.yellow, 'Waiting for processes to stop...');
   await new Promise(resolve => setTimeout(resolve, 2000));

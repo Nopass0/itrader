@@ -205,14 +205,18 @@ export default function BybitAccountDetailPage() {
         const userInfoResponse = await apiClient.get(`/bybit/accounts/${accountId}/user-info`);
         if (userInfoResponse.success && userInfoResponse.data) {
           // Update account info with P2P user info
-          setAccountInfo(prev => ({
-            ...(prev || {}),
-            p2pUserInfo: {
-              nickName: userInfoResponse.data.nickName,
-              uid: userInfoResponse.data.userId,
-              emailAddress: userInfoResponse.data.email
-            }
-          }));
+          const data = userInfoResponse.data as any;
+          setAccountInfo(prev => {
+            if (!prev) return null;
+            return {
+              ...prev,
+              p2pUserInfo: {
+                nickName: data.nickName,
+                uid: data.userId,
+                emailAddress: data.email
+              }
+            };
+          });
         }
       } catch (err) {
         console.error('Failed to load P2P user info:', err);
@@ -222,7 +226,7 @@ export default function BybitAccountDetailPage() {
       try {
         const p2pOrdersResponse = await apiClient.get(`/bybit/accounts/${accountId}/orders`);
         if (p2pOrdersResponse.success && p2pOrdersResponse.data) {
-          const orders = p2pOrdersResponse.data;
+          const orders = p2pOrdersResponse.data as any;
           setP2POrders(Array.isArray(orders) ? orders : (orders.items || orders.list || []));
         }
       } catch (err) {
@@ -233,7 +237,7 @@ export default function BybitAccountDetailPage() {
       try {
         const p2pAdsResponse = await apiClient.get(`/bybit/accounts/${accountId}/ads`);
         if (p2pAdsResponse.success && p2pAdsResponse.data) {
-          const ads = p2pAdsResponse.data;
+          const ads = p2pAdsResponse.data as any;
           setP2PAds(Array.isArray(ads) ? ads : (ads.items || ads.list || []));
         }
       } catch (err) {
@@ -463,7 +467,7 @@ export default function BybitAccountDetailPage() {
                       <Badge variant="secondary">KYC: {accountInfo.kycLevel}</Badge>
                     )}
                     {Array.isArray(p2pAds) && p2pAds.length > 0 && (
-                      <Badge variant="default">Активных объявлений: {p2pAds.filter(ad => ad.status === '10' || ad.status === 10).length}</Badge>
+                      <Badge variant="default">Активных объявлений: {p2pAds.filter((ad: any) => ad.status === '10' || ad.status === 10).length}</Badge>
                     )}
                   </>
                 )}
@@ -516,13 +520,14 @@ export default function BybitAccountDetailPage() {
                       let total = 0;
                       
                       // Add unified balance if exists
-                      if (walletBalance?.unified?.totalEquityInUSD) {
-                        total += parseFloat(walletBalance.unified.totalEquityInUSD);
+                      const wb = walletBalance as any;
+                      if (wb?.unified?.totalEquityInUSD) {
+                        total += parseFloat(wb.unified.totalEquityInUSD);
                       }
                       
                       // Add funding balance if exists
-                      if (walletBalance?.funding?.coins) {
-                        walletBalance.funding.coins.forEach((coin: any) => {
+                      if (wb?.funding?.coins) {
+                        wb.funding.coins.forEach((coin: any) => {
                           if (coin.usdValue) {
                             total += parseFloat(coin.usdValue);
                           } else if (coin.coin === 'USD') {
@@ -555,24 +560,24 @@ export default function BybitAccountDetailPage() {
                         let totalUsd = 0;
                         
                         // Check funding balance first
-                        if (walletBalance?.funding?.coins) {
-                          const usdCoin = walletBalance.funding.coins.find((c: any) => c.coin === 'USD');
-                          const usdtCoin = walletBalance.funding.coins.find((c: any) => c.coin === 'USDT');
+                        if ((walletBalance as any)?.funding?.coins) {
+                          const usdCoin = (walletBalance as any).funding.coins.find((c: any) => c.coin === 'USD');
+                          const usdtCoin = (walletBalance as any).funding.coins.find((c: any) => c.coin === 'USDT');
                           
                           if (usdCoin) totalUsd += parseFloat(usdCoin.walletBalance || '0');
                           if (usdtCoin) totalUsd += parseFloat(usdtCoin.walletBalance || '0');
                         }
                         
                         // Check unified balance
-                        if (walletBalance?.unified?.coins) {
-                          const usdtCoin = walletBalance.unified.coins.find((c: any) => c.coin === 'USDT');
+                        if ((walletBalance as any)?.unified?.coins) {
+                          const usdtCoin = (walletBalance as any).unified.coins.find((c: any) => c.coin === 'USDT');
                           if (usdtCoin) totalUsd += parseFloat(usdtCoin.walletBalance || '0');
                         }
                         
                         // Fallback to old format
                         if (totalUsd === 0 && walletBalance?.coins) {
                           const usdtCoin = walletBalance.coins.find((c: any) => c.coin === 'USDT');
-                          if (usdtCoin) totalUsd = parseFloat(usdtCoin.free || usdtCoin.walletBalance || '0');
+                          if (usdtCoin) totalUsd = parseFloat(usdtCoin.free || (usdtCoin as any).walletBalance || '0');
                         }
                         
                         return formatAmount(totalUsd.toString(), 2);
@@ -650,7 +655,6 @@ export default function BybitAccountDetailPage() {
               </CardContent>
             </Card>
           </motion.div>
-        )}
 
         {/* Tabs */}
         <motion.div
@@ -774,15 +778,15 @@ export default function BybitAccountDetailPage() {
                     const allCoins: any[] = [];
                     
                     // Add coins from unified account
-                    if (walletBalance?.unified?.coins) {
-                      walletBalance.unified.coins.forEach((coin: any) => {
+                    if ((walletBalance as any)?.unified?.coins) {
+                      (walletBalance as any).unified.coins.forEach((coin: any) => {
                         allCoins.push({ ...coin, accountType: 'Unified' });
                       });
                     }
                     
                     // Add coins from funding account
-                    if (walletBalance?.funding?.coins) {
-                      walletBalance.funding.coins.forEach((coin: any) => {
+                    if ((walletBalance as any)?.funding?.coins) {
+                      (walletBalance as any).funding.coins.forEach((coin: any) => {
                         allCoins.push({ ...coin, accountType: 'Funding' });
                       });
                     }
@@ -1053,7 +1057,7 @@ export default function BybitAccountDetailPage() {
                         <h3 className="text-lg font-semibold">Мои объявления</h3>
                         <Button 
                           onClick={() => setShowCreateAdDialog(true)}
-                          disabled={Array.isArray(p2pAds) && p2pAds.filter(ad => ad.status === '10' || ad.status === 10).length >= 2}
+                          disabled={Array.isArray(p2pAds) && p2pAds.filter((ad: any) => ad.status === '10' || ad.status === 10).length >= 2}
                         >
                           <Plus size={16} className="mr-2" />
                           Создать объявление
@@ -1075,8 +1079,8 @@ export default function BybitAccountDetailPage() {
                                     <Badge variant={ad.side === '1' ? 'destructive' : 'default'}>
                                       {ad.side === '1' ? 'Продажа' : 'Покупка'}
                                     </Badge>
-                                    <Badge variant={ad.status === '10' || ad.status === 10 ? 'default' : 'secondary'}>
-                                      {ad.status === '10' || ad.status === 10 ? 'Активно' : 'Неактивно'}
+                                    <Badge variant={(ad as any).status === '10' || (ad as any).status === 10 ? 'default' : 'secondary'}>
+                                      {(ad as any).status === '10' || (ad as any).status === 10 ? 'Активно' : 'Неактивно'}
                                     </Badge>
                                   </div>
                                   <div className="flex gap-2">
@@ -1412,7 +1416,7 @@ export default function BybitAccountDetailPage() {
             minAmount: selectedAd.minAmount,
             maxAmount: selectedAd.maxAmount,
             paymentMethodIds: [],
-            remark: selectedAd.remark
+            remark: (selectedAd as any).remark || ''
           }}
           editMode={true}
         />

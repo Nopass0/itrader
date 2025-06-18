@@ -59,7 +59,6 @@ export default function LoginPage() {
         if (success) {
           toast({
             title: "Вход успешно выполнен",
-            variant: "success",
           });
           // Don't manually navigate, let AuthProvider handle it
         } else {
@@ -90,7 +89,6 @@ export default function LoginPage() {
       toast({
         title: "Вход в режиме ДЕМО",
         description: "Вход выполнен в демо-режиме. Данные являются тестовыми.",
-        variant: "success",
       });
       // Don't manually navigate, let AuthProvider handle it
     } else {
