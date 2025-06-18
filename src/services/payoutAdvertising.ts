@@ -103,6 +103,7 @@ export class PayoutAdvertisingService {
           id: cuid(),
           payoutId,
           advertisementId: advertisement.id,
+          amount: amount, // Add amount from payout.amountTrader["643"]
           status: "pending",
           createdAt: new Date(),
           updatedAt: new Date()
@@ -116,7 +117,8 @@ export class PayoutAdvertisingService {
       logger.info("Created transaction", {
         transactionId: transaction.id,
         payoutId,
-        advertisementId: advertisement.id
+        advertisementId: advertisement.id,
+        amount
       });
 
       return transaction;

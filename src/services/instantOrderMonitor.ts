@@ -417,6 +417,7 @@ export class InstantOrderMonitorService {
         where: { id: transaction.id },
         data: {
           orderId: order.id,
+          amount: transaction.amount || orderAmount, // Set amount if not already set
           status:
             order.status === 10
               ? "chat_started"
@@ -440,6 +441,7 @@ export class InstantOrderMonitorService {
         data: {
           advertisementId: advertisement.id,
           orderId: order.id,
+          amount: orderAmount, // Add order amount
           status:
             order.status === 10
               ? "chat_started"
