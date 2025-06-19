@@ -338,22 +338,33 @@ export class GateClient {
       ...form.getHeaders(),
     };
 
+    console.log(`[GateClient] Sending POST request to: ${this.baseUrl}/payments/payouts/${transactionId}/approve`);
+    
     const response = await this.client.post(
       `${this.baseUrl}/payments/payouts/${transactionId}/approve`,
       form,
       config,
     );
 
+    console.log(`[GateClient] Response status: ${response.status}`);
+    console.log(`[GateClient] Response data:`, response.data);
+
     this.checkResponse(response);
 
     const data = response.data as GateResponse<PayoutResponse>;
     if (!data.success) {
+      console.error(`[GateClient] Approval failed:`, data.error);
       throw new GateApiError(data.error || "Ошибка подтверждения транзакции");
     }
 
     console.log(
       `[GateClient] Транзакция ${transactionId} успешно подтверждена с чеком`,
     );
+    
+    if (data.response?.payout) {
+      console.log(`[GateClient] New payout status: ${data.response.payout.status} (${data.response.payout.statusLabel})`);
+    }
+    
     return data.response!.payout;
   }
 
@@ -555,13 +566,16 @@ export class GateClient {
 
     try {
       const formData = new FormData();
-      formData.append('receipt', new Blob([receiptData], { type: 'application/pdf' }), 'receipt.pdf');
+      formData.append('attachments[]', receiptData, {
+        filename: 'receipt.pdf',
+        contentType: 'application/pdf'
+      });
       
       const response = await this.client.post(url, formData, {
         ...this.getRequestConfig(),
         headers: {
           ...this.getRequestConfig().headers,
-          'Content-Type': 'multipart/form-data'
+          // Не устанавливаем Content-Type вручную - axios сделает это автоматически для FormData
         }
       });
       
@@ -572,7 +586,18 @@ export class GateClient {
         throw new GateApiError(data.error || "Failed to approve payout");
       }
       
-      console.log(`[GateClient] Payout ${payoutId} approved successfully`);
+      // Логируем детали успешного апрува
+      if (data.response?.payout) {
+        const payout = data.response.payout;
+        console.log(`[GateClient] Payout ${payoutId} approved successfully:`, {
+          status: payout.status,
+          approved_at: payout.approved_at,
+          attachments_count: payout.attachments?.length || 0
+        });
+      } else {
+        console.log(`[GateClient] Payout ${payoutId} approved successfully`);
+      }
+      
       return true;
     } catch (error) {
       console.error(`[GateClient] Error approving payout ${payoutId}:`, error);

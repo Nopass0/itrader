@@ -9,6 +9,7 @@ import { ReceiptMatcher } from "./receiptMatcher";
 import { GateClient } from "../gate";
 import { BybitP2PManagerService } from "./bybitP2PManager";
 import { EmailAttachment, GmailMessage } from "../gmail/types/models";
+import { MailSlurpService, getMailSlurpService } from "./mailslurpService";
 import { TinkoffReceiptParser } from "../ocr/receiptParser";
 import * as fs from "fs/promises";
 import * as path from "path";
@@ -41,6 +42,7 @@ export class ReceiptProcessorService extends EventEmitter {
   private processedEmails = new Set<string>();
   private receiptMatcher: ReceiptMatcher;
   private io?: any; // WebSocket server instance
+  private mailslurpService?: MailSlurpService;
 
   constructor(
     private gmailManager: GmailManager,
@@ -183,26 +185,124 @@ export class ReceiptProcessorService extends EventEmitter {
     });
     
     try {
-      // Используем аккаунт из базы данных
-      const gmailAccount = await prisma.gmailAccount.findFirst({
+      // Try MailSlurp first
+      const mailslurpAccount = await prisma.mailslurpAccount.findFirst({
         where: { isActive: true }
       });
 
-      if (gmailAccount) {
-        logger.info("Found active Gmail account", { email: gmailAccount.email });
-        await this.processAccountReceipts(gmailAccount.email);
+      if (mailslurpAccount) {
+        logger.info("Found active MailSlurp account", { email: mailslurpAccount.email });
+        await this.processMailSlurpReceipts();
       } else {
-        logger.warn("No active Gmail account found");
-        
-        // Если нет аккаунта в БД, но есть клиенты в менеджере
-        if (this.gmailManager && this.gmailManager.clients.size > 0) {
-          const firstEmail = Array.from(this.gmailManager.clients.keys())[0];
-          logger.warn(`No DB account, but found client in manager: ${firstEmail}`);
-          await this.processAccountReceipts(firstEmail);
+        // Fallback to Gmail if no MailSlurp
+        const gmailAccount = await prisma.gmailAccount.findFirst({
+          where: { isActive: true }
+        });
+
+        if (gmailAccount) {
+          logger.info("Found active Gmail account", { email: gmailAccount.email });
+          await this.processAccountReceipts(gmailAccount.email);
+        } else {
+          logger.warn("No active email account found (neither MailSlurp nor Gmail)");
+          
+          // Если нет аккаунта в БД, но есть клиенты в менеджере
+          if (this.gmailManager && this.gmailManager.clients.size > 0) {
+            const firstEmail = Array.from(this.gmailManager.clients.keys())[0];
+            logger.warn(`No DB account, but found client in manager: ${firstEmail}`);
+            await this.processAccountReceipts(firstEmail);
+          }
         }
       }
     } catch (error) {
       logger.error("Error in processReceipts", error);
+    }
+  }
+
+  /**
+   * Process receipts from MailSlurp
+   */
+  private async processMailSlurpReceipts(): Promise<void> {
+    try {
+      if (!this.mailslurpService) {
+        this.mailslurpService = await getMailSlurpService();
+      }
+
+      // Get emails from last check
+      const lastCheck = new Date(Date.now() - this.config.checkInterval - 60000); // Check last interval + 1 minute
+      await this.mailslurpService.processReceipts(lastCheck);
+
+      // Also check for any receipts already in DB that need processing
+      const unprocessedReceipts = await prisma.receipt.findMany({
+        where: {
+          processed: false,
+          sender: { contains: '@tbank.ru' }
+        },
+        orderBy: { receivedAt: 'desc' },
+        take: 10
+      });
+
+      logger.info(`Found ${unprocessedReceipts.length} unprocessed receipts in DB`);
+
+      for (const receipt of unprocessedReceipts) {
+        try {
+          // Parse receipt if not already parsed
+          if (!receipt.parsedData || Object.keys(receipt.parsedData as any).length === 0) {
+            logger.info("Parsing receipt", { receiptId: receipt.id, filepath: receipt.filepath });
+            
+            if (receipt.filepath) {
+              const parser = new TinkoffReceiptParser();
+              const parsedData = await parser.parseReceiptPDF(receipt.filepath);
+              
+              await prisma.receipt.update({
+                where: { id: receipt.id },
+                data: {
+                  amount: parsedData.amount,
+                  senderName: parsedData.senderName,
+                  recipientName: parsedData.recipientName,
+                  recipientCard: parsedData.recipientCard,
+                  transactionDate: parsedData.transactionDate ? new Date(parsedData.transactionDate) : undefined,
+                  parsedData: parsedData as any,
+                  rawText: parsedData.rawText
+                }
+              });
+            }
+          }
+
+          // Match with transaction
+          const updatedReceipt = await prisma.receipt.findUnique({
+            where: { id: receipt.id }
+          });
+
+          if (updatedReceipt && updatedReceipt.amount) {
+            const matchResult = await this.receiptMatcher.matchReceiptToTransaction(updatedReceipt);
+            
+            if (matchResult.success && matchResult.transactionId) {
+              logger.info("Receipt matched to transaction", {
+                receiptId: receipt.id,
+                transactionId: matchResult.transactionId,
+                confidence: matchResult.confidence
+              });
+
+              // Update receipt as processed
+              await prisma.receipt.update({
+                where: { id: receipt.id },
+                data: { 
+                  processed: true,
+                  isProcessed: true,
+                  payoutId: matchResult.payoutId
+                }
+              });
+
+              // Complete transaction
+              await this.completeTransaction(matchResult.transactionId, receipt.id);
+            }
+          }
+        } catch (error) {
+          logger.error("Error processing receipt from DB", error, { receiptId: receipt.id });
+        }
+      }
+    } catch (error) {
+      logger.error("Error processing MailSlurp receipts", error);
     }
   }
 
@@ -596,9 +696,9 @@ export class ReceiptProcessorService extends EventEmitter {
         },
       });
 
-      // 4. Если есть orderId, отпускаем средства на Bybit
+      // 4. Если есть orderId, отправляем сообщение и отпускаем средства на Bybit
       if (transaction.orderId) {
-        logger.info("Releasing assets for order", { orderId: transaction.orderId });
+        logger.info("Processing Bybit order", { orderId: transaction.orderId });
 
         try {
           // Находим Bybit аккаунт по объявлению
@@ -612,6 +712,18 @@ export class ReceiptProcessorService extends EventEmitter {
               advertisement.bybitAccount.accountId,
             );
             if (bybitClient) {
+              // Отправляем сообщение в чат
+              try {
+                await this.bybitManager.manager.sendChatMessage({
+                  orderId: transaction.orderId,
+                  message: "Чек получен. Ожидайте, в течении 2 минут отпущу крипту."
+                }, advertisement.bybitAccount.accountId);
+                logger.info("Sent receipt confirmation message", { orderId: transaction.orderId });
+              } catch (error) {
+                logger.error("Failed to send chat message", error, { orderId: transaction.orderId });
+              }
+              
+              // Отпускаем средства
               await bybitClient.releaseAssets(transaction.orderId);
 
               // Обновляем статус транзакции
@@ -698,11 +810,12 @@ export class ReceiptProcessorService extends EventEmitter {
   private async savePDF(data: Buffer, originalName: string): Promise<string> {
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
     const fileName = `${timestamp}_${originalName}`;
-    const filePath = path.join(this.config.pdfStoragePath, fileName);
+    const absolutePath = path.join(this.config.pdfStoragePath, fileName);
 
-    await fs.writeFile(filePath, data);
+    await fs.writeFile(absolutePath, data);
 
-    return filePath;
+    // Return relative path for database storage
+    return path.join('data', 'receipts', fileName);
   }
 
 
@@ -737,6 +850,112 @@ export class ReceiptProcessorService extends EventEmitter {
       logger.info("Loaded processed emails", { count: processed.length });
     } catch (error) {
       logger.error("Error loading processed emails", error);
+    }
+  }
+  
+  /**
+   * Complete transaction after receipt match
+   */
+  private async completeTransaction(transactionId: string, receiptId: string): Promise<void> {
+    try {
+      const transaction = await prisma.transaction.findUnique({
+        where: { id: transactionId },
+        include: {
+          payout: true,
+          advertisement: {
+            include: { bybitAccount: true }
+          }
+        }
+      });
+      
+      if (!transaction) {
+        logger.error('Transaction not found', { transactionId });
+        return;
+      }
+      
+      // 1. Approve payout on Gate.io
+      if (transaction.payout && this.gateClient) {
+        try {
+          logger.info('Approving payout on Gate.io', { 
+            payoutId: transaction.payoutId,
+            gatePayoutId: transaction.payout.gatePayoutId 
+          });
+          
+          const receipt = await prisma.receipt.findUnique({
+            where: { id: receiptId }
+          });
+          
+          if (receipt && receipt.filePath) {
+            // Convert relative path to absolute for reading
+            const absolutePath = path.isAbsolute(receipt.filePath) 
+              ? receipt.filePath 
+              : path.join(process.cwd(), receipt.filePath);
+            const receiptData = await fs.readFile(absolutePath);
+            await this.gateClient.approvePayout(
+              transaction.payout.gatePayoutId.toString(),
+              receiptData
+            );
+            
+            await prisma.payout.update({
+              where: { id: transaction.payoutId },
+              data: {
+                status: 10, // Approved
+                approvedAt: new Date()
+              }
+            });
+          }
+        } catch (error) {
+          logger.error('Failed to approve payout on Gate', error);
+        }
+      }
+      
+      // 2. Update transaction status
+      await prisma.transaction.update({
+        where: { id: transactionId },
+        data: {
+          status: 'payment_received',
+          checkReceivedAt: new Date()
+        }
+      });
+      
+      // 3. Send message and release on Bybit
+      if (transaction.orderId && transaction.advertisement) {
+        const bybitClient = this.bybitManager.getClient(
+          transaction.advertisement.bybitAccount.accountId
+        );
+        
+        if (bybitClient) {
+          try {
+            // Send confirmation message
+            await this.bybitManager.manager.sendChatMessage({
+              orderId: transaction.orderId,
+              message: "Чек получен. Ожидайте, в течении 2 минут отпущу крипту."
+            }, transaction.advertisement.bybitAccount.accountId);
+            
+            // Release assets
+            await bybitClient.releaseAssets(transaction.orderId);
+            
+            // Update to completed
+            await prisma.transaction.update({
+              where: { id: transactionId },
+              data: {
+                status: 'completed',
+                completedAt: new Date()
+              }
+            });
+            
+            logger.info('Transaction completed successfully', { transactionId });
+          } catch (error) {
+            logger.error('Failed to complete Bybit order', error);
+          }
+        }
+      }
+      
+      // Emit completion event
+      this.emit('transactionCompleted', { transactionId, receiptId });
+      
+    } catch (error) {
+      logger.error('Failed to complete transaction', error, { transactionId });
     }
   }
 }

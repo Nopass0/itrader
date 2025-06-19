@@ -527,11 +527,51 @@ export class ChatAutomationService extends EventEmitter {
       });
       const wallet = payout_?.wallet;
 
-      // Get Gmail account for receiving checks
-      const gmailAccount = await db.getActiveGmailAccount();
-      if (!gmailAccount) {
-        throw new Error("No active Gmail account configured");
+      // Get first available MailSlurp email
+      const { getMailSlurpService } = await import('./mailslurpService');
+      
+      let receiptEmail = '';
+      
+      try {
+        const mailslurpService = await getMailSlurpService();
+        const emails = mailslurpService.getEmailAddresses();
+        
+        if (emails.length > 0) {
+          receiptEmail = emails[0]; // Just take the first email
+          logger.info("Using first MailSlurp email", { 
+            receiptEmail,
+            totalEmails: emails.length 
+          });
+        } else {
+          logger.error("No MailSlurp emails available!");
+          throw new Error("No MailSlurp emails configured");
+        }
+      } catch (error) {
+        logger.error("Failed to get MailSlurp email", error);
+        throw new Error("Failed to get receipt email");
       }
+      
+      // Update payout meta with assigned email
+      if (transaction.payoutId) {
+        const currentMeta = payout.meta || {};
+        await db.prisma.payout.update({
+          where: { id: transaction.payoutId },
+          data: {
+            meta: {
+              ...(typeof currentMeta === 'object' ? currentMeta : {}),
+              receiptEmail
+            }
+          }
+        });
+      }
+      
+      logger.info("Assigned receipt email for transaction", {
+        transactionId,
+        receiptEmail,
+        amount: finalAmount,
+        wallet,
+        bankName
+      });
 
       const paymentDetails = `Реквизиты для оплаты:
 Банк: ${bankName}
@@ -539,7 +579,7 @@ export class ChatAutomationService extends EventEmitter {
 
 Сумма: ${finalAmount} RUB
 
-Email для чека: ${gmailAccount.email}
+Email для чека: ${receiptEmail}
 
 После оплаты отправьте чек в формате PDF на указанный email  с официальной почты банка.`;
 
@@ -548,7 +588,7 @@ Email для чека: ${gmailAccount.email}
         bankName,
         wallet,
         finalAmount,
-        email: gmailAccount.email,
+        email: receiptEmail,
         paymentMethod: transaction.advertisement.paymentMethod,
       });
 

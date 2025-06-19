@@ -164,6 +164,17 @@ model GmailAccount {
   updatedAt    DateTime  @updatedAt
 }
 
+model MailslurpAccount {
+  id        String    @id @default(cuid())
+  email     String    @unique
+  inboxId   String    @unique
+  apiKey    String
+  isActive  Boolean   @default(true)
+  lastSync  DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
 model BlacklistedTransaction {
   id        String   @id @default(cuid())
   payoutId  String
@@ -325,27 +336,40 @@ model TinkoffReceipt {
 model Receipt {
   id              String    @id @default(cuid())
   emailId         String    @unique
-  emailFrom       String
+  emailFrom       String?
   emailSubject    String?
-  attachmentName  String
-  filePath        String
+  attachmentName  String?
+  filePath        String?
   fileHash        String?   @unique
-  amount          Float
-  bank            String
+  amount          Float?
+  bank            String?
   reference       String?
   transferType    String?
-  status          String
+  status          String?
   senderName      String?
   recipientName   String?
   recipientPhone  String?
   recipientCard   String?
   recipientBank   String?
   commission      Float?
-  transactionDate DateTime
-  parsedData      Json
+  transactionDate DateTime?
+  total           Float?
+  operationId     String?
+  sbpCode         String?
+  receiptNumber   String?
+  senderAccount   String?
+  parsedData      Json?
   rawText         String?
   isProcessed     Boolean   @default(false)
   payoutId        String?
+  filename        String?
+  sender          String?
+  subject         String?
+  receivedAt      DateTime?
+  processed       Boolean   @default(false)
+  rawEmailData    Json?
+  isParsed        Boolean   @default(false)
+  parseError      String?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
@@ -356,6 +380,7 @@ model Receipt {
   @@index([transactionDate])
   @@index([isProcessed])
   @@index([payoutId])
+  @@index([isParsed])
 }
 
 model SystemLog {

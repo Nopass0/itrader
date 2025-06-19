@@ -34,6 +34,10 @@ interface AppContext {
   tinkoffReceiptService: TinkoffReceiptService | null;
   isManualMode: boolean;
   webSocketServer?: WebSocketServer;
+  mailslurpService?: any;
+  receiptParsingService?: any;
+  receiptPayoutLinker?: any;
+  assetReleaseService?: any;
 }
 
 async function promptUser(message: string): Promise<boolean> {
@@ -141,6 +145,9 @@ async function main() {
       name: "Itrader",
       context,
     });
+    
+    // Set global context for exports
+    globalContext = context;
 
     // One-time initialization
     orchestrator.addOneTime("init", async (taskContext: any) => {
@@ -197,7 +204,75 @@ async function main() {
       // Initialize Bybit accounts
       await context.bybitManager.initialize();
 
-      // Initialize Gmail
+      // Initialize MailSlurp (primary email service)
+      logger.info("📧 Initializing MailSlurp...");
+      console.log("[Init] 📧 Initializing MailSlurp...");
+      
+      const mailslurpApiKey = process.env.MAILSLURP_API_KEY;
+      if (mailslurpApiKey) {
+        try {
+          const { getMailSlurpService } = await import("./services/mailslurpService");
+          const { ensureMultipleMailslurpEmails } = await import("./services/enhancedMailslurpService");
+          
+          const mailslurpService = await getMailSlurpService();
+          const email = await mailslurpService.initialize();
+          
+          // Ensure we have multiple emails
+          // Commented out to prevent creating new emails on each startup
+          // await ensureMultipleMailslurpEmails(mailslurpService);
+          
+          const allEmails = mailslurpService.getEmailAddresses();
+          logger.info("✅ MailSlurp initialized successfully", { 
+            primaryEmail: email,
+            totalEmails: allEmails.length,
+            emails: allEmails 
+          });
+          console.log(`[Init] ✅ MailSlurp initialized with ${allEmails.length} emails: ${allEmails.join(', ')}`);
+          
+          // Store service in context for later use
+          context.mailslurpService = mailslurpService;
+          
+          // Set up event listeners for receipt processing
+          mailslurpService.on('receipt:new', async (receipt) => {
+            logger.info("📨 New receipt detected via MailSlurp", {
+              receiptId: receipt.id,
+              filename: receipt.filename
+            });
+            console.log(`[MailSlurp] 📨 New receipt: ${receipt.filename}`);
+          });
+
+          mailslurpService.on('receipt:matched', async (data) => {
+            logger.info("✅ Receipt matched to transaction!", {
+              receiptId: data.receipt.id,
+              transactionId: data.transactionId,
+              payoutId: data.payoutId
+            });
+            console.log(`[MailSlurp] ✅ Receipt matched! Transaction: ${data.transactionId}`);
+            
+            // Complete the transaction
+            try {
+              if (context.chatAutomation) {
+                await context.chatAutomation.completeTransaction(data.transactionId, data.receipt.id);
+              }
+            } catch (error) {
+              logger.error("Failed to complete transaction after receipt match", error);
+            }
+          });
+          
+          // Start monitoring for receipts
+          mailslurpService.startMonitoring(60000); // Check every 60 seconds to avoid rate limits
+          logger.info("📬 MailSlurp monitoring started");
+          console.log("[Init] 📬 MailSlurp monitoring started (checking every 60s)");
+        } catch (error) {
+          logger.error("Failed to initialize MailSlurp", error as Error);
+          console.error("[Init] Failed to initialize MailSlurp:", error);
+        }
+      } else {
+        logger.warn("MAILSLURP_API_KEY not configured");
+        console.log("[Init] ⚠️ MAILSLURP_API_KEY not configured. MailSlurp features disabled.");
+      }
+
+      // Initialize Gmail (legacy, fallback)
       logger.info("🔐 Initializing Gmail...");
       console.log("[Init] 🔐 Initializing Gmail...");
 
@@ -522,8 +597,69 @@ async function main() {
         console.error("[Init] Error running initial Gate payouts sync:", error);
       }
       
-      // Initialize ReceiptProcessorService after Gmail is ready
-      if (context.gmailManager && context.webSocketServer) {
+      // Initialize Receipt Parsing Service
+      console.log("[Init] 🔄 Starting Receipt Parsing Service...");
+      try {
+        const { startReceiptParsingService } = await import("./services/receiptParsingService");
+        const parsingService = await startReceiptParsingService(2000); // Check every 2 seconds
+        context.receiptParsingService = parsingService;
+        
+        logger.info("✅ Receipt Parsing Service started", {
+          interval: "2s"
+        });
+        console.log("[Init] ✅ Receipt Parsing Service started (checking every 2s)");
+        
+        // Get initial stats
+        const stats = await parsingService.getStats();
+        console.log(`[Init] Receipt stats: Total: ${stats.total}, Parsed: ${stats.parsed}, Unparsed: ${stats.unparsed}`);
+      } catch (error) {
+        logger.error("Failed to start Receipt Parsing Service", error as Error);
+        console.error("[Init] Failed to start Receipt Parsing Service:", error);
+      }
+      
+      // Initialize Receipt Payout Linker Service
+      console.log("[Init] 🔗 Starting Receipt Payout Linker Service...");
+      try {
+        const { startReceiptPayoutLinker } = await import("./services/receiptPayoutLinkerService");
+        const linkerService = await startReceiptPayoutLinker(5000); // Check every 5 seconds
+        context.receiptPayoutLinker = linkerService;
+        
+        logger.info("✅ Receipt Payout Linker Service started", {
+          interval: "5s"
+        });
+        console.log("[Init] ✅ Receipt Payout Linker Service started (checking every 5s)");
+        
+        // Get initial stats
+        const linkerStats = await linkerService.getStats();
+        console.log(`[Init] Linker stats: Total receipts: ${linkerStats.totalReceipts}, Linked: ${linkerStats.linkedReceipts}, Unlinked: ${linkerStats.unlinkedReceipts}`);
+      } catch (error) {
+        logger.error("Failed to start Receipt Payout Linker Service", error as Error);
+        console.error("[Init] Failed to start Receipt Payout Linker Service:", error);
+      }
+      
+      // Initialize Asset Release Service
+      console.log("[Init] 💸 Starting Asset Release Service...");
+      try {
+        const { startAssetReleaseService } = await import("./services/assetReleaseService");
+        const releaseService = await startAssetReleaseService(10000); // Check every 10 seconds
+        context.assetReleaseService = releaseService;
+        
+        logger.info("✅ Asset Release Service started", {
+          interval: "10s"
+        });
+        console.log("[Init] ✅ Asset Release Service started (checking every 10s)");
+        
+        // Get initial stats
+        const releaseStats = await releaseService.getStats();
+        console.log(`[Init] Release stats: Pending: ${releaseStats.pendingRelease}, Ready: ${releaseStats.readyForRelease}, Completed: ${releaseStats.completed}`);
+      } catch (error) {
+        logger.error("Failed to start Asset Release Service", error as Error);
+        console.error("[Init] Failed to start Asset Release Service:", error);
+      }
+      
+      // Initialize ReceiptProcessorService after email service is ready
+      const hasEmailService = context.gmailManager || (await context.db.getActiveMailslurpAccount());
+      if (hasEmailService && context.webSocketServer) {
         try {
           const io = context.webSocketServer.getIO();
           
@@ -568,8 +704,20 @@ async function main() {
           console.error("[Init] Failed to initialize ReceiptProcessorService:", error);
         }
       } else {
-        logger.warn("[Init] Gmail or WebSocket not available, ReceiptProcessor not initialized");
-        console.log("[Init] ⚠️ Gmail or WebSocket not available, ReceiptProcessor not initialized");
+        logger.warn("[Init] Email service or WebSocket not available, ReceiptProcessor not initialized");
+        console.log("[Init] ⚠️ Email service or WebSocket not available, ReceiptProcessor not initialized");
+      }
+      
+      // Sync Bybit advertisements
+      console.log("[Init] 🔄 Syncing Bybit advertisements...");
+      try {
+        const { syncAdvertisements } = await import("./services/advertisementSyncService");
+        await syncAdvertisements(context.bybitManager);
+        logger.info("✅ Bybit advertisements synchronized");
+        console.log("[Init] ✅ Bybit advertisements synchronized");
+      } catch (error) {
+        logger.error("Failed to sync Bybit advertisements", error as Error);
+        console.error("[Init] Failed to sync Bybit advertisements:", error);
       }
     });
 
@@ -1802,6 +1950,11 @@ async function main() {
           orchestrator.context.receiptProcessor.stop();
         }
 
+        // Stop receipt parsing service
+        if (orchestrator.context.receiptParsingService) {
+          orchestrator.context.receiptParsingService.stop();
+        }
+
         // Stop active orders monitor
         if (orchestrator.context.activeOrdersMonitor) {
           await orchestrator.context.activeOrdersMonitor.cleanup();
@@ -1869,6 +2022,12 @@ async function main() {
 
 // Export main for CLI
 export default main;
+
+// Export helper to get receipt processor
+let globalContext: AppContext | null = null;
+export function getReceiptProcessor(): ReceiptProcessorService | null {
+  return globalContext?.receiptProcessor || null;
+}
 
 // Check if running directly
 if (require.main === module) {

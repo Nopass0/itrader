@@ -499,6 +499,26 @@ export class P2PClient extends EventEmitter {
   // ========== Polling Methods (WebSocket simulation) ==========
 
   /**
+   * Cancel/Remove advertisement
+   */
+  async cancelAdvertisement(itemId: string): Promise<any> {
+    try {
+      const endpoint = "/v5/p2p/item/cancel";
+      const params = { itemId };
+      
+      const response = await this.httpClient.post<any>(endpoint, params);
+      
+      console.log(`[P2PClient] Advertisement ${itemId} cancelled successfully`);
+      this.emitEvent("advertisementCancelled", { itemId });
+      
+      return response.result;
+    } catch (error: any) {
+      console.error(`[P2PClient] Error cancelling advertisement ${itemId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
    * Start polling for order updates
    */
   startOrderPolling(intervalMs: number = 5000): void {

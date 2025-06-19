@@ -432,37 +432,49 @@ export class P2POrderProcessor extends EventEmitter {
   private async deleteAdvertisement(advertisementId: string, accountId: string): Promise<void> {
     const client = this.bybitManager.getClient(accountId);
     if (!client) {
+      logger.error(`No client found for account ${accountId}`);
       return;
     }
 
     try {
-      // Get Bybit advertisement details
-      const advertisement = await prisma.bybitAdvertisement.findUnique({
+      // Get advertisement details from DB
+      const advertisement = await prisma.advertisement.findUnique({
         where: { id: advertisementId }
       });
 
       if (!advertisement || !advertisement.bybitAdId) {
-        logger.error(`Advertisement ${advertisementId} not found`);
+        logger.error(`Advertisement ${advertisementId} not found or has no bybitAdId`);
         return;
       }
 
-      // Cancel on Bybit
-      await client.request({
-        method: 'POST',
-        endpoint: '/v5/p2p/item/cancel',
-        data: { itemId: advertisement.bybitAdId }
-      });
+      logger.info(`Deleting advertisement ${advertisementId} (Bybit ID: ${advertisement.bybitAdId})`);
+
+      // Cancel on Bybit using the new method
+      await client.cancelAdvertisement(advertisement.bybitAdId);
 
       // Update status in DB
-      await prisma.bybitAdvertisement.update({
+      await prisma.advertisement.update({
         where: { id: advertisementId },
-        data: { status: 'DELETED' }
+        data: { 
+          isActive: false,
+          updatedAt: new Date()
+        }
       });
 
-      logger.info(`Deleted advertisement ${advertisementId}`);
+      // Also update the Bybit account's active ads count
+      await prisma.bybitAccount.update({
+        where: { id: advertisement.bybitAccountId },
+        data: {
+          activeAdsCount: {
+            decrement: 1
+          }
+        }
+      });
+
+      logger.info(`✅ Advertisement ${advertisementId} deleted successfully from Bybit`);
     } catch (error) {
       logger.error(`Error deleting advertisement ${advertisementId}:`, error);
-      throw error;
+      // Don't throw - we don't want to fail the whole order process
     }
   }
 

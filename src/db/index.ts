@@ -7,6 +7,7 @@ import {
   type GateAccount,
   type BybitAccount,
   type GmailAccount,
+  type MailslurpAccount,
   type BlacklistedTransaction,
   type Settings,
 } from "../../generated/prisma";
@@ -634,6 +635,34 @@ class DatabaseClient {
         where: { isActive: true },
       });
     }, "Get active Gmail account");
+  }
+
+  // ========== MailSlurp Methods ==========
+
+  async upsertMailslurpAccount(data: {
+    email: string;
+    inboxId: string;
+    apiKey: string;
+  }): Promise<MailslurpAccount> {
+    return await this.executeWithRetry(async () => {
+      return await this.prisma.mailslurpAccount.upsert({
+        where: { email: data.email },
+        update: {
+          inboxId: data.inboxId,
+          apiKey: data.apiKey,
+          isActive: true,
+        },
+        create: data,
+      });
+    }, "Upsert MailSlurp account");
+  }
+
+  async getActiveMailslurpAccount(): Promise<MailslurpAccount | null> {
+    return await this.executeWithRetry(async () => {
+      return await this.prisma.mailslurpAccount.findFirst({
+        where: { isActive: true },
+      });
+    }, "Get active MailSlurp account");
   }
 
   // ========== Blacklist Methods ==========

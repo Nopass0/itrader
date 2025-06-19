@@ -43,10 +43,20 @@ async function getPdfParse() {
  */
 export async function extractTextFromPdf(filePath: string): Promise<string> {
   try {
-    // Читаем файл
+    // Сначала пробуем pdftotext, так как он надежнее
+    try {
+      const { stdout } = await execAsync(`pdftotext "${filePath}" -`);
+      if (stdout && stdout.trim().length > 0) {
+        return stdout;
+      }
+    } catch (error: unknown) {
+      console.warn('pdftotext failed, trying pdf-parse:', error);
+    }
+    
+    // Читаем файл для pdf-parse
     const dataBuffer = await fs.readFile(filePath);
     
-    // Пробуем извлечь текст напрямую
+    // Пробуем извлечь текст через pdf-parse
     try {
       const pdf = await getPdfParse();
       const data = await pdf(dataBuffer);
@@ -54,31 +64,7 @@ export async function extractTextFromPdf(filePath: string): Promise<string> {
         return data.text;
       }
     } catch (error: unknown) {
-      console.warn('Direct text extraction failed, trying alternative method:', error);
-    }
-    
-    // Альтернативный метод с pdf-lib
-    try {
-      const pdfDoc = await PDFDocument.load(dataBuffer);
-      const pages = pdfDoc.getPages();
-      let text = '';
-      
-      // pdf-lib не поддерживает извлечение текста напрямую
-      // Используем pdftotext если доступен
-      try {
-        const { stdout } = await execAsync(`pdftotext "${filePath}" -`);
-        if (stdout && stdout.trim().length > 0) {
-          return stdout;
-        }
-      } catch (error: unknown) {
-        console.warn('pdftotext not available:', error);
-      }
-      
-      // Если ничего не работает, возвращаем пустую строку
-      // В реальном приложении здесь можно использовать OCR
-      return text;
-    } catch (error: unknown) {
-      console.error('pdf-lib failed:', error);
+      console.warn('pdf-parse failed:', error);
     }
     
     throw new OcrError('Не удалось извлечь текст из PDF');
@@ -95,10 +81,29 @@ export async function extractTextFromPdf(filePath: string): Promise<string> {
  */
 export async function extractTextFromPdfBuffer(pdfBuffer: Buffer): Promise<string> {
   try {
-    const pdf = await getPdfParse();
-    const data = await pdf(pdfBuffer);
-    if (data.text && data.text.trim().length > 0) {
-      return data.text;
+    // Сначала пробуем pdftotext через временный файл
+    const tmpFile = `/tmp/receipt_${Date.now()}.pdf`;
+    try {
+      await fs.writeFile(tmpFile, pdfBuffer);
+      const { stdout } = await execAsync(`pdftotext "${tmpFile}" -`);
+      await fs.unlink(tmpFile).catch(() => {}); // Cleanup
+      if (stdout && stdout.trim().length > 0) {
+        return stdout;
+      }
+    } catch (error: unknown) {
+      console.warn('pdftotext from buffer failed:', error);
+      await fs.unlink(tmpFile).catch(() => {}); // Cleanup on error
+    }
+    
+    // Fallback to pdf-parse
+    try {
+      const pdf = await getPdfParse();
+      const data = await pdf(pdfBuffer);
+      if (data.text && data.text.trim().length > 0) {
+        return data.text;
+      }
+    } catch (error: unknown) {
+      console.warn('pdf-parse from buffer failed:', error);
     }
     
     throw new OcrError('PDF не содержит текста');

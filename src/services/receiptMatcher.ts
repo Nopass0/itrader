@@ -186,16 +186,27 @@ export class ReceiptMatcher {
    */
   private matchWallet(payoutWallet: string, receipt: ParsedReceipt): boolean {
     const wallet = payoutWallet.trim();
+    
+    console.log('[ReceiptMatcher] matchWallet:', {
+      payoutWallet,
+      receiptType: receipt.transferType,
+      recipientPhone: (receipt as any).recipientPhone,
+      recipientCard: (receipt as any).recipientCard
+    });
 
     // Проверяем тип перевода
     switch (receipt.transferType) {
       case TransferType.BY_PHONE:
         // Сравниваем телефоны
-        if (!receipt.recipientPhone) return false;
+        const phone = (receipt as any).recipientPhone;
+        if (!phone) {
+          console.log('[ReceiptMatcher] No recipientPhone in receipt');
+          return false;
+        }
         
         // Нормализуем телефоны для сравнения
         const normalizedWallet = wallet.replace(/\D/g, "");
-        const normalizedReceiptPhone = receipt.recipientPhone.replace(/\D/g, "");
+        const normalizedReceiptPhone = phone.replace(/\D/g, "");
         
         // Сравниваем последние 10 цифр (без кода страны)
         const walletLast10 = normalizedWallet.slice(-10);
@@ -263,14 +274,26 @@ export class ReceiptMatcher {
    * Выполняет сопоставление payout с распарсенным чеком
    */
   private performMatching(payout: any, receipt: ParsedReceipt): boolean {
+    console.log('[ReceiptMatcher] performMatching called with:', {
+      payoutId: payout.id,
+      receiptAmount: receipt.amount,
+      receiptStatus: receipt.status
+    });
+    
     // 1. Проверяем статус
     if (receipt.status !== "SUCCESS") {
+      console.log('[ReceiptMatcher] Receipt status is not SUCCESS:', receipt.status);
       return false;
     }
 
     // 2. Проверяем дату - сравниваем только даты без времени
     const payoutDate = new Date(payout.createdAt);
-    const receiptDate = receipt.datetime;
+    // Поддерживаем и datetime (из ParsedReceipt) и transactionDate (из parsedData)
+    const receiptDateRaw = receipt.datetime || (receipt as any).transactionDate;
+    if (!receiptDateRaw) {
+      return false;
+    }
+    const receiptDate = new Date(receiptDateRaw);
     const receiptDateUTC = new Date(receiptDate.getTime() - 3 * 60 * 60 * 1000);
     
     // Получаем только даты без времени
@@ -283,7 +306,9 @@ export class ReceiptMatcher {
     }
 
     // 3. Проверяем банк
-    const payoutBank = JSON.parse(payout.bank) as PayoutBank;
+    const payoutBank = typeof payout.bank === 'string' 
+      ? JSON.parse(payout.bank) as PayoutBank
+      : payout.bank as PayoutBank;
     if (!this.matchBank(payoutBank, receipt)) {
       return false;
     }
@@ -294,7 +319,9 @@ export class ReceiptMatcher {
     }
 
     // 5. Проверяем сумму
-    const amountTrader = JSON.parse(payout.amountTrader) as AmountTrader;
+    const amountTrader = typeof payout.amountTrader === 'string'
+      ? JSON.parse(payout.amountTrader) as AmountTrader
+      : payout.amountTrader as AmountTrader;
     const payoutAmount = amountTrader["643"];
     
     if (payoutAmount !== receipt.amount) {
@@ -302,6 +329,87 @@ export class ReceiptMatcher {
     }
 
     return true;
+  }
+
+  /**
+   * Match receipt to any transaction
+   * Returns transaction and payout IDs if match found
+   */
+  async matchReceiptToTransaction(receipt: any): Promise<{
+    success: boolean;
+    transactionId?: string;
+    payoutId?: string;
+    confidence?: number;
+  }> {
+    try {
+      // Get all active transactions with payouts
+      const transactions = await prisma.transaction.findMany({
+        where: {
+          status: {
+            in: ['pending', 'chat_started', 'waiting_payment', 'payment_confirmed']
+          },
+          payout: {
+            status: {
+              in: [5, 7] // Waiting confirmation or processing
+            }
+          }
+        },
+        include: {
+          payout: true
+        }
+      });
+
+      console.log(`[ReceiptMatcher] Checking receipt against ${transactions.length} active transactions`);
+
+      for (const transaction of transactions) {
+        if (!transaction.payout) continue;
+
+        // Parse receipt if raw text provided
+        let parsedReceipt: ParsedReceipt;
+        if (receipt.rawText && !receipt.parsedData) {
+          try {
+            // Parse from raw text
+            parsedReceipt = await this.parser.parseFromBuffer(Buffer.from(receipt.rawText));
+          } catch (error) {
+            console.error('Failed to parse receipt:', error);
+            continue;
+          }
+        } else if (receipt.parsedData) {
+          console.log('[ReceiptMatcher] Using parsedData from database');
+          // Ensure status is set from parsedData
+          const parsedData = receipt.parsedData as any;
+          parsedReceipt = {
+            ...parsedData,
+            status: parsedData.status || 'SUCCESS',
+            datetime: parsedData.datetime || parsedData.transactionDate ? new Date(parsedData.transactionDate) : new Date(),
+            recipientBank: parsedData.recipientBank || parsedData.bankReceiver
+          } as ParsedReceipt;
+        } else {
+          console.error('No parsable data in receipt');
+          continue;
+        }
+
+        // Try to match
+        const matches = this.performMatching(transaction.payout, parsedReceipt);
+        
+        if (matches) {
+          console.log(`[ReceiptMatcher] ✅ Receipt matches transaction ${transaction.id}`);
+          return {
+            success: true,
+            transactionId: transaction.id,
+            payoutId: transaction.payoutId,
+            confidence: 0.95
+          };
+        }
+      }
+
+      console.log('[ReceiptMatcher] No matching transaction found');
+      return { success: false };
+
+    } catch (error) {
+      console.error('[ReceiptMatcher] Error matching receipt:', error);
+      return { success: false };
+    }
   }
 }
 
