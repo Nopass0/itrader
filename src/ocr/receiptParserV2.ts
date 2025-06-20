@@ -247,7 +247,7 @@ export class TinkoffReceiptParserV2 {
    */
   private extractSequentialFields(lines: string[], result: TinkoffReceiptData): void {
     // В последовательной структуре значения могут быть как после лейблов, так и между ними
-    const labels = ['Комиссия', 'Отправитель', 'Телефон получателя', 'Получатель', 'Банк получателя', 'Счет списания'];
+    const labels = ['Комиссия', 'Отправитель', 'Телефон получателя', 'Получатель', 'Банк получателя', 'Счет списания', 'Карта получателя'];
     
     // Находим индексы лейблов
     const labelIndices: {[key: string]: number} = {};
@@ -346,6 +346,13 @@ export class TinkoffReceiptParserV2 {
               break;
             }
             continue;
+            
+          case 'Карта получателя':
+            if (!result.recipientCard && line.match(/^\d{4,6}\*{4,}\d{4}$/)) {
+              result.recipientCard = line;
+              break;
+            }
+            continue;
         }
         
         // Если нашли значение, прерываем цикл для этого лейбла
@@ -400,6 +407,11 @@ export class TinkoffReceiptParserV2 {
           result.senderAccount = value;
         }
         break;
+      case 'Карта получателя':
+        if (value.match(/^\d{4,6}\*{4,}\d{4}$/)) {
+          result.recipientCard = value;
+        }
+        break;
     }
   }
 
@@ -427,16 +439,21 @@ export class TinkoffReceiptParserV2 {
       // Try the next line first (sequential format)
       if (amountIdx + 1 < lines.length) {
         const nextLine = lines[amountIdx + 1];
-        const amountMatch = nextLine.match(/^([\d\s]+)\s*[₽i]/);
+        // Support amounts with comma as decimal separator
+        const amountMatch = nextLine.match(/^([\d\s,]+)\s*[₽i]/);
         if (amountMatch) {
-          const amountStr = amountMatch[1].replace(/\s/g, '');
-          return parseInt(amountStr) || 0;
+          const amountStr = amountMatch[1]
+            .replace(/\s/g, '') // Remove spaces
+            .replace(',', '.'); // Replace comma with dot
+          return parseFloat(amountStr) || 0;
         }
       }
       // Try line + 2 (columnar format)
       if (amountIdx + 2 < lines.length) {
-        const amountStr = lines[amountIdx + 2].replace(/[^\d]/g, '');
-        return parseInt(amountStr) || 0;
+        const amountStr = lines[amountIdx + 2]
+          .replace(/[^\d,]/g, '')
+          .replace(',', '.');
+        return parseFloat(amountStr) || 0;
       }
     }
     return 0;
@@ -448,10 +465,12 @@ export class TinkoffReceiptParserV2 {
       // Check next few lines for amount
       for (let i = 1; i <= 3 && totalIdx + i < lines.length; i++) {
         const line = lines[totalIdx + i];
-        const match = line.match(/^([\d\s]+)\s*[₽i]/);
+        const match = line.match(/^([\d\s,]+)\s*[₽i]/);
         if (match) {
-          const totalStr = match[1].replace(/\s/g, '');
-          return parseInt(totalStr) || 0;
+          const totalStr = match[1]
+            .replace(/\s/g, '') // Remove spaces
+            .replace(',', '.'); // Replace comma with dot
+          return parseFloat(totalStr) || 0;
         }
       }
     }

@@ -58,6 +58,24 @@ export class ChatAutomationService extends EventEmitter {
         transactionId,
       });
 
+      // Also check transaction status in database
+      const transaction = await db.getTransactionWithDetails(transactionId);
+      if (!transaction) {
+        logger.error("Transaction not found", { transactionId });
+        return;
+      }
+
+      if (transaction.chatStep > 0) {
+        logger.info(
+          "Transaction already has chat progress, skipping automation start",
+          {
+            transactionId,
+            chatStep: transaction.chatStep,
+          },
+        );
+        return;
+      }
+
       // Check if we already sent messages
       const messages = await db.getChatMessages(transactionId);
       const ourMessages = messages.filter(
@@ -118,7 +136,7 @@ export class ChatAutomationService extends EventEmitter {
   async processUnprocessedMessages(): Promise<void> {
     logger.info("🔍 Checking for unprocessed messages", {
       timestamp: new Date().toISOString(),
-      caller: new Error().stack?.split('\n')[2]?.trim() // Log who called this
+      caller: new Error().stack?.split("\n")[2]?.trim(), // Log who called this
     });
     const messages = await db.getUnprocessedChatMessages();
 
@@ -231,7 +249,9 @@ export class ChatAutomationService extends EventEmitter {
         });
 
         // Check if payment details already sent (prevent duplicate sending)
-        const latestTransaction = await db.getTransactionWithDetails(transaction.id);
+        const latestTransaction = await db.getTransactionWithDetails(
+          transaction.id,
+        );
         if (latestTransaction && latestTransaction.chatStep === 999) {
           logger.info("🔒 Payment details already sent, skipping", {
             transactionId: transaction.id,
@@ -347,7 +367,11 @@ export class ChatAutomationService extends EventEmitter {
         (msg) =>
           msg.sender === "me" &&
           (msg.message?.includes("Реквизиты для оплаты") ||
-            msg.content?.includes("Реквизиты для оплаты")),
+            msg.content?.includes("Реквизиты для оплаты") ||
+            msg.message?.includes("Сумма:") ||
+            msg.content?.includes("Сумма:") ||
+            msg.message?.includes("⚠️ ФИО не спрашивать") ||
+            msg.content?.includes("⚠️ ФИО не спрашивать")),
       );
 
       logger.info("📋 Checking for existing payment messages", {
@@ -422,7 +446,7 @@ export class ChatAutomationService extends EventEmitter {
           transactionId,
           payoutId: transaction.payoutId,
         });
-        
+
         // Try to find correct payout by matching order amount
         let correctPayout = null;
         if (orderAmount > 0) {
@@ -432,13 +456,14 @@ export class ChatAutomationService extends EventEmitter {
               transaction: null,
             },
           });
-          
+
           for (const p of availablePayouts) {
-            const amountData = typeof p.amountTrader === "string" 
-              ? JSON.parse(p.amountTrader) 
-              : p.amountTrader;
+            const amountData =
+              typeof p.amountTrader === "string"
+                ? JSON.parse(p.amountTrader)
+                : p.amountTrader;
             const payoutAmount = amountData?.["643"] || 0;
-            
+
             if (Math.abs(payoutAmount - orderAmount) < 1) {
               correctPayout = p;
               logger.info("🎯 Found matching payout by amount", {
@@ -451,7 +476,7 @@ export class ChatAutomationService extends EventEmitter {
             }
           }
         }
-        
+
         if (!correctPayout) {
           logger.error("❌ Could not find matching payout for order amount", {
             transactionId,
@@ -459,18 +484,18 @@ export class ChatAutomationService extends EventEmitter {
           });
           throw new Error("No matching payout found for this order");
         }
-        
+
         // Update transaction with correct payout
         await db.prisma.transaction.update({
           where: { id: transactionId },
           data: { payoutId: correctPayout.id },
         });
-        
+
         logger.info("✅ Updated transaction with correct payout", {
           transactionId,
           payoutId: correctPayout.id,
         });
-        
+
         // Continue with the correct payout
         payout = correctPayout;
       }
@@ -528,19 +553,19 @@ export class ChatAutomationService extends EventEmitter {
       const wallet = payout_?.wallet;
 
       // Get first available MailSlurp email
-      const { getMailSlurpService } = await import('./mailslurpService');
-      
-      let receiptEmail = '';
-      
+      const { getMailSlurpService } = await import("./mailslurpService");
+
+      let receiptEmail = "";
+
       try {
         const mailslurpService = await getMailSlurpService();
         const emails = mailslurpService.getEmailAddresses();
-        
+
         if (emails.length > 0) {
           receiptEmail = emails[0]; // Just take the first email
-          logger.info("Using first MailSlurp email", { 
+          logger.info("Using first MailSlurp email", {
             receiptEmail,
-            totalEmails: emails.length 
+            totalEmails: emails.length,
           });
         } else {
           logger.error("No MailSlurp emails available!");
@@ -550,7 +575,7 @@ export class ChatAutomationService extends EventEmitter {
         logger.error("Failed to get MailSlurp email", error);
         throw new Error("Failed to get receipt email");
       }
-      
+
       // Update payout meta with assigned email
       if (transaction.payoutId) {
         const currentMeta = payout.meta || {};
@@ -558,36 +583,30 @@ export class ChatAutomationService extends EventEmitter {
           where: { id: transaction.payoutId },
           data: {
             meta: {
-              ...(typeof currentMeta === 'object' ? currentMeta : {}),
-              receiptEmail
-            }
-          }
+              ...(typeof currentMeta === "object" ? currentMeta : {}),
+              receiptEmail,
+            },
+          },
         });
       }
-      
+
       logger.info("Assigned receipt email for transaction", {
         transactionId,
         receiptEmail,
         amount: finalAmount,
         wallet,
-        bankName
+        bankName,
       });
 
-      const paymentDetails = `Реквизиты для оплаты:
-Банк: ${bankName}
-Счет: ${wallet || ""}
+      // Split payment details into 5 separate messages
+      const bankMessage = `${bankName} ${wallet || ""}`;
+      const amountMessage = `Сумма: ${finalAmount} RUB`;
+      const emailMessage = `Почта ${receiptEmail}`;
+      const instructionsMessage = `⚠️ ФИО не спрашивать, реквизиты верные!
 
-Сумма: ${finalAmount} RUB
+После оплаты отправьте чек в формате PDF на указанный email с официальной почты банка. После отправки чека, не забудьте прожать кнопку что оплатили, иначе средства будут утерены.`;
 
-⚠️ ФИО не спрашивать, реквизиты верные!
-
-Email для чека: ${receiptEmail}
-
-После оплаты отправьте чек в формате PDF на указанный email с официальной почты банка.
-
-В течении двух минут проверю чек и отпущу средства.`;
-
-      logger.info("📤 Sending payment details", {
+      logger.info("📤 Sending payment details in 5 separate messages", {
         transactionId,
         bankName,
         wallet,
@@ -596,7 +615,11 @@ Email для чека: ${receiptEmail}
         paymentMethod: transaction.advertisement.paymentMethod,
       });
 
-      await this.sendMessage(transactionId, paymentDetails);
+      // Send each message separately
+      await this.sendMessage(transactionId, bankMessage);
+      await this.sendMessage(transactionId, amountMessage);
+      await this.sendMessage(transactionId, emailMessage);
+      await this.sendMessage(transactionId, instructionsMessage);
 
       logger.info("✅ Payment details sent successfully", { transactionId });
     } catch (error) {
@@ -651,10 +674,7 @@ Email для чека: ${receiptEmail}
   /**
    * Send message with proper parameters
    */
-  async sendMessage(
-    transactionId: string,
-    message: string,
-  ): Promise<void> {
+  async sendMessage(transactionId: string, message: string): Promise<void> {
     const transaction = await db.getTransactionWithDetails(transactionId);
     if (!transaction) {
       throw new Error("Transaction not found");
@@ -663,11 +683,14 @@ Email для чека: ${receiptEmail}
     // If no orderId yet, try to find it by advertisement
     let orderId = transaction.orderId;
     if (!orderId && transaction.advertisement) {
-      logger.info("No orderId in transaction, searching for order by advertisement", {
-        transactionId,
-        advertisementId: transaction.advertisement.id,
-        bybitAdId: transaction.advertisement.bybitAdId
-      });
+      logger.info(
+        "No orderId in transaction, searching for order by advertisement",
+        {
+          transactionId,
+          advertisementId: transaction.advertisement.id,
+          bybitAdId: transaction.advertisement.bybitAdId,
+        },
+      );
 
       // Get Bybit account
       const bybitAccount = (transaction.advertisement as any).bybitAccount;
@@ -679,7 +702,7 @@ Email для чека: ${receiptEmail}
             const ordersResult = await client.getOrdersSimplified({
               page: 1,
               size: 50,
-              status: 10 // Payment in processing
+              status: 10, // Payment in processing
             });
 
             if (ordersResult.items) {
@@ -689,7 +712,7 @@ Email для чека: ${receiptEmail}
                   logger.info("Found order by advertisement ID", {
                     orderId,
                     itemId: order.itemId,
-                    bybitAdId: transaction.advertisement.bybitAdId
+                    bybitAdId: transaction.advertisement.bybitAdId,
                   });
 
                   // Update transaction with found orderId

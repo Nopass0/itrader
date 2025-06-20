@@ -10,6 +10,8 @@ const logger = createLogger("PayoutAdvertising");
  * Ensures one-to-one relationship: payout -> advertisement -> transaction -> order
  */
 export class PayoutAdvertisingService {
+  private creatingAds = new Set<string>(); // Mutex to prevent duplicate ad creation
+
   constructor(private bybitManager: BybitP2PManagerService) {}
 
   /**
@@ -22,7 +24,16 @@ export class PayoutAdvertisingService {
   async createAdForPayout(payoutId: string) {
     logger.info("Creating advertisement for payout", { payoutId });
 
-    // 1. Check if transaction already exists for this payout
+    // Prevent concurrent creation for the same payout
+    if (this.creatingAds.has(payoutId)) {
+      logger.warn("Already creating ad for this payout, skipping", { payoutId });
+      return null;
+    }
+
+    this.creatingAds.add(payoutId);
+    
+    try {
+      // 1. Check if transaction already exists for this payout
     const existingTransaction = await db.prisma.transaction.findUnique({
       where: { payoutId },
       include: { 
@@ -38,6 +49,24 @@ export class PayoutAdvertisingService {
         advertisementId: existingTransaction.advertisementId
       });
       return existingTransaction;
+    }
+
+    // 1.5 Double-check if an active advertisement exists for this payout
+    const existingAd = await db.prisma.advertisement.findFirst({
+      where: {
+        transaction: {
+          payoutId: payoutId
+        },
+        isActive: true
+      }
+    });
+
+    if (existingAd) {
+      logger.warn("Active advertisement already exists for payout", {
+        payoutId,
+        advertisementId: existingAd.id
+      });
+      throw new Error(`Active advertisement already exists for payout ${payoutId}`);
     }
 
     // 2. Get payout details
@@ -126,6 +155,9 @@ export class PayoutAdvertisingService {
     } catch (error) {
       logger.error("Failed to create advertisement", error as Error, { payoutId });
       throw error;
+    }
+    } finally {
+      this.creatingAds.delete(payoutId);
     }
   }
 

@@ -1,11 +1,11 @@
-import { PrismaClient } from '../../generated/prisma';
-import { GateAccountManager } from '../gate/accountManager';
-import { createLogger } from '../logger';
-import * as path from 'path';
-import * as fs from 'fs';
+import { PrismaClient } from "../../generated/prisma";
+import { GateAccountManager } from "../gate/accountManager";
+import { createLogger } from "../logger";
+import * as path from "path";
+import * as fs from "fs";
 
 const prisma = new PrismaClient();
-const logger = createLogger('AssetReleaseService');
+const logger = createLogger("AssetReleaseService");
 
 export class AssetReleaseService {
   private manager: GateAccountManager | null = null;
@@ -28,27 +28,30 @@ export class AssetReleaseService {
     try {
       // Get active Gate account
       this.gateAccount = await prisma.gateAccount.findFirst({
-        where: { isActive: true }
+        where: { isActive: true },
       });
 
       if (!this.gateAccount || !this.gateAccount.accountId) {
-        logger.warn('No active Gate account found');
+        logger.warn("No active Gate account found");
         return false;
       }
 
       // Check if cookies exist
-      const cookiesPath = path.join('data/cookies', `${this.gateAccount.accountId}.json`);
+      const cookiesPath = path.join(
+        "data/cookies",
+        `${this.gateAccount.accountId}.json`,
+      );
       if (!fs.existsSync(cookiesPath)) {
-        logger.warn('No cookies for Gate account', {
-          accountId: this.gateAccount.accountId
+        logger.warn("No cookies for Gate account", {
+          accountId: this.gateAccount.accountId,
         });
         return false;
       }
 
       // Initialize manager
       this.manager = new GateAccountManager({
-        cookiesDir: './data/cookies',
-        autoSaveCookies: true
+        cookiesDir: "./data/cookies",
+        autoSaveCookies: true,
       });
 
       await this.manager.initialize();
@@ -56,28 +59,28 @@ export class AssetReleaseService {
       // Add account (it will load cookies automatically)
       const loginResult = await this.manager.addAccount(
         this.gateAccount.email,
-        '', // No password, will use cookies
+        "", // No password, will use cookies
         false, // Don't auto login
-        this.gateAccount.accountId
+        this.gateAccount.accountId,
       );
 
       if (!loginResult) {
-        logger.warn('Failed to load Gate account from cookies');
+        logger.warn("Failed to load Gate account from cookies");
         return false;
       }
 
       // Check authentication
       const isAuth = await this.manager.isAuthenticated(this.gateAccount.email);
       if (!isAuth) {
-        logger.warn('Gate session expired');
+        logger.warn("Gate session expired");
         return false;
       }
 
       this.isInitialized = true;
-      logger.info('AssetReleaseService initialized successfully');
+      logger.info("AssetReleaseService initialized successfully");
       return true;
     } catch (error) {
-      logger.error('Failed to initialize AssetReleaseService', error);
+      logger.error("Failed to initialize AssetReleaseService", error);
       return false;
     }
   }
@@ -85,39 +88,42 @@ export class AssetReleaseService {
   /**
    * Approve a single transaction with receipt
    */
-  async approveTransaction(gatePayoutId: number, receiptPath: string): Promise<boolean> {
+  async approveTransaction(
+    gatePayoutId: number,
+    receiptPath: string,
+  ): Promise<boolean> {
     try {
-      if (!await this.initialize()) {
+      if (!(await this.initialize())) {
         return false;
       }
 
-      logger.info('Approving transaction', {
+      logger.info("Approving transaction", {
         gatePayoutId,
-        receiptPath
+        receiptPath,
       });
 
       const result = await this.manager!.approveTransactionWithReceipt(
         this.gateAccount.email,
         gatePayoutId.toString(),
-        receiptPath
+        receiptPath,
       );
 
-      logger.info('✅ Transaction approved in Gate', {
+      logger.info("✅ Transaction approved in Gate", {
         gatePayoutId,
         status: result.status,
-        statusLabel: result.statusLabel
+        statusLabel: result.statusLabel,
       });
 
       return true;
     } catch (error: any) {
-      if (error.message?.includes('already')) {
-        logger.info('Transaction already approved', { gatePayoutId });
+      if (error.message?.includes("already")) {
+        logger.info("Transaction already approved", { gatePayoutId });
         return true;
       }
-      
-      logger.error('Failed to approve transaction', error, {
+
+      logger.error("Failed to approve transaction", error, {
         gatePayoutId,
-        message: error.message
+        message: error.message,
       });
       return false;
     }
@@ -128,30 +134,30 @@ export class AssetReleaseService {
    */
   async checkAndReleaseAssets(): Promise<void> {
     try {
-      logger.info('Starting asset release check...');
+      logger.info("Starting asset release check...");
 
       // Find transactions that need approval
       const transactions = await prisma.transaction.findMany({
         where: {
           status: {
-            in: ['payment_confirmed', 'receipt_received']
+            in: ["payment_confirmed", "receipt_received"],
           },
           receiptReceivedAt: {
-            not: null
+            not: null,
           },
           payout: {
             status: {
-              in: [5, 7] // Waiting confirmation or processing
+              in: [5, 7], // Waiting confirmation or processing
             },
             gatePayoutId: {
-              not: null
-            }
-          }
+              not: null,
+            },
+          },
         },
         include: {
           payout: true,
-          tinkoffReceipt: true
-        }
+          tinkoffReceipt: true,
+        },
       });
 
       logger.info(`Found ${transactions.length} transactions pending approval`);
@@ -160,8 +166,8 @@ export class AssetReleaseService {
         return;
       }
 
-      if (!await this.initialize()) {
-        logger.error('Failed to initialize Gate connection');
+      if (!(await this.initialize())) {
+        logger.error("Failed to initialize Gate connection");
         return;
       }
 
@@ -173,10 +179,10 @@ export class AssetReleaseService {
             continue;
           }
 
-          logger.info('Processing transaction', {
+          logger.info("Processing transaction", {
             transactionId: transaction.id,
             gatePayoutId: payout.gatePayoutId,
-            status: transaction.status
+            status: transaction.status,
           });
 
           // Find receipt file
@@ -186,19 +192,22 @@ export class AssetReleaseService {
           const receipt = await prisma.receipt.findFirst({
             where: {
               payoutId: payout.id,
-              filePath: { not: null }
-            }
+              filePath: { not: null },
+            },
           });
 
           if (receipt && receipt.filePath) {
             receiptPath = path.join(process.cwd(), receipt.filePath);
           } else if (transaction.tinkoffReceipt?.pdfPath) {
-            receiptPath = path.join(process.cwd(), transaction.tinkoffReceipt.pdfPath);
+            receiptPath = path.join(
+              process.cwd(),
+              transaction.tinkoffReceipt.pdfPath,
+            );
           }
 
           if (!receiptPath || !fs.existsSync(receiptPath)) {
-            logger.warn('No receipt file found for transaction', {
-              transactionId: transaction.id
+            logger.warn("No receipt file found for transaction", {
+              transactionId: transaction.id,
             });
             continue;
           }
@@ -206,7 +215,7 @@ export class AssetReleaseService {
           // Approve transaction
           const approved = await this.approveTransaction(
             payout.gatePayoutId,
-            receiptPath
+            receiptPath,
           );
 
           if (approved) {
@@ -214,9 +223,9 @@ export class AssetReleaseService {
             await prisma.transaction.update({
               where: { id: transaction.id },
               data: {
-                status: 'release_money',
-                approvedAt: new Date()
-              }
+                status: "release_money",
+                approvedAt: new Date(),
+              },
             });
 
             // Update payout status
@@ -224,30 +233,29 @@ export class AssetReleaseService {
               where: { id: payout.id },
               data: {
                 status: 7, // Approved
-                approvedAt: new Date()
-              }
+                approvedAt: new Date(),
+              },
             });
 
-            logger.info('✅ Transaction approved, waiting for money release', {
+            logger.info("✅ Transaction approved, waiting for money release", {
               transactionId: transaction.id,
               gatePayoutId: payout.gatePayoutId,
-              status: 'release_money'
+              status: "release_money",
             });
 
             // Send promotional message after successful approval
             await this.sendPromotionalMessage(transaction.id);
           }
-
         } catch (error) {
-          logger.error('Error processing transaction', error, {
-            transactionId: transaction.id
+          logger.error("Error processing transaction", error, {
+            transactionId: transaction.id,
           });
         }
       }
 
-      logger.info('Asset release check completed');
+      logger.info("Asset release check completed");
     } catch (error) {
-      logger.error('Error in checkAndReleaseAssets', error);
+      logger.error("Error in checkAndReleaseAssets", error);
     }
   }
 
@@ -257,23 +265,23 @@ export class AssetReleaseService {
   async approveTransactionWithReceipt(
     transactionId: string,
     payoutId: string,
-    receiptPath: string
+    receiptPath: string,
   ): Promise<boolean> {
     try {
       // Get payout details
       const payout = await prisma.payout.findUnique({
-        where: { id: payoutId }
+        where: { id: payoutId },
       });
 
       if (!payout || !payout.gatePayoutId) {
-        logger.warn('Payout not found or no Gate ID', { payoutId });
+        logger.warn("Payout not found or no Gate ID", { payoutId });
         return false;
       }
 
       // Approve in Gate
       const approved = await this.approveTransaction(
         payout.gatePayoutId,
-        receiptPath
+        receiptPath,
       );
 
       if (approved) {
@@ -281,9 +289,9 @@ export class AssetReleaseService {
         await prisma.transaction.update({
           where: { id: transactionId },
           data: {
-            status: 'release_money',
-            approvedAt: new Date()
-          }
+            status: "release_money",
+            approvedAt: new Date(),
+          },
         });
 
         // Update payout
@@ -291,14 +299,14 @@ export class AssetReleaseService {
           where: { id: payoutId },
           data: {
             status: 7,
-            approvedAt: new Date()
-          }
+            approvedAt: new Date(),
+          },
         });
 
-        logger.info('✅ Transaction approved, set to release_money', {
+        logger.info("✅ Transaction approved, set to release_money", {
           transactionId,
           gatePayoutId: payout.gatePayoutId,
-          status: 'release_money'
+          status: "release_money",
         });
 
         // Send promotional message after successful approval
@@ -309,9 +317,9 @@ export class AssetReleaseService {
 
       return false;
     } catch (error) {
-      logger.error('Error approving transaction with receipt', error, {
+      logger.error("Error approving transaction with receipt", error, {
         transactionId,
-        payoutId
+        payoutId,
       });
       return false;
     }
@@ -327,57 +335,56 @@ export class AssetReleaseService {
         where: { id: transactionId },
         include: {
           chatMessages: {
-            orderBy: { createdAt: 'desc' },
-            take: 1
-          }
-        }
+            orderBy: { createdAt: "desc" },
+            take: 1,
+          },
+        },
       });
 
       if (!transaction || !transaction.orderId) {
-        logger.warn('Transaction not found or no orderId', { transactionId });
+        logger.warn("Transaction not found or no orderId", { transactionId });
         return;
       }
 
       // Import necessary services
-      const { ChatAutomationService } = await import('./chatAutomation');
-      
+      const { ChatAutomationService } = await import("./chatAutomation");
+
       // Get active Bybit account
       const activeAccount = await prisma.bybitAccount.findFirst({
-        where: { isActive: true }
+        where: { isActive: true },
       });
 
       if (!activeAccount) {
-        logger.warn('No active Bybit account for sending message');
+        logger.warn("No active Bybit account for sending message");
         return;
       }
 
       // Use the shared bybitManager if available
       if (!this.bybitManager) {
-        logger.warn('No bybitManager provided, cannot send promotional message');
+        logger.warn(
+          "No bybitManager provided, cannot send promotional message",
+        );
         return;
       }
 
       const chatService = new ChatAutomationService(this.bybitManager);
 
       // Prepare promotional message
-      const promotionalMessage = `Переходи в закрытый чат https://t.me/+nIB6kP22KmhlMmQy
+      const promotionalMessage = `В течении двух минут проверю чек и отпущу средства. Переходи в закрытый чат
 
 Всегда есть большой объем ЮСДТ по хорошему курсу, работаем оперативно.`;
-
+      const chatLink = `https://t.me/+nIB6kP22KmhlMmQy`;
       // Send message
-      await chatService.sendMessage(
-        transactionId,
-        promotionalMessage
-      );
+      await chatService.sendMessage(transactionId, promotionalMessage);
+      await chatService.sendMessage(transactionId, chatLink);
 
-      logger.info('📢 Promotional message sent', {
+      logger.info("📢 Promotional message sent", {
         transactionId,
-        orderId: transaction.orderId
+        orderId: transaction.orderId,
       });
-
     } catch (error) {
-      logger.error('Error sending promotional message', error, {
-        transactionId
+      logger.error("Error sending promotional message", error, {
+        transactionId,
       });
     }
   }
@@ -386,7 +393,9 @@ export class AssetReleaseService {
 // Export singleton instance
 let assetReleaseService: AssetReleaseService | null = null;
 
-export function getAssetReleaseService(bybitManager?: any): AssetReleaseService {
+export function getAssetReleaseService(
+  bybitManager?: any,
+): AssetReleaseService {
   if (!assetReleaseService) {
     assetReleaseService = new AssetReleaseService(bybitManager);
   }
