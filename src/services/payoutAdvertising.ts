@@ -92,9 +92,42 @@ export class PayoutAdvertisingService {
       throw new Error(`Wallet ${payout.wallet} is blacklisted`);
     }
 
-    // 4. Determine payment method
-    const paymentMethod = Math.random() > 0.5 ? "SBP" : "Tinkoff";
-    logger.info("Selected payment method", { paymentMethod });
+    // 4. Determine payment method based on payout method and bank
+    let paymentMethod: string;
+    
+    // Check if it's SBP payment method (payment_method_id = 5)
+    if (payout.paymentMethodId === 5) {
+      paymentMethod = "SBP";
+    } else {
+      // Check bank information
+      const bank = payout.bank as any;
+      if (!bank || !bank.id) {
+        // Default to Tinkoff if no bank info
+        paymentMethod = "Tinkoff";
+        logger.warn("No bank information in payout, defaulting to Tinkoff", { payoutId });
+      } else {
+        // Map bank to payment method
+        switch (bank.id) {
+          case 37: // Sovcombank
+            paymentMethod = "Sovcombank";
+            break;
+          case 23: // Promsvyazbank
+            paymentMethod = "Promsvyazbank";
+            break;
+          default: // All other banks including Tinkoff
+            paymentMethod = "Tinkoff";
+            break;
+        }
+      }
+    }
+    
+    logger.info("Selected payment method based on payout", { 
+      paymentMethod,
+      paymentMethodId: payout.paymentMethodId,
+      bankId: (payout.bank as any)?.id,
+      bankName: (payout.bank as any)?.name,
+      bankLabel: (payout.bank as any)?.label
+    });
 
     try {
       // 5. Create advertisement on Bybit
