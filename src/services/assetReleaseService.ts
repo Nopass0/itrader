@@ -11,6 +11,11 @@ export class AssetReleaseService {
   private manager: GateAccountManager | null = null;
   private gateAccount: any = null;
   private isInitialized = false;
+  private bybitManager: any = null;
+
+  constructor(bybitManager?: any) {
+    this.bybitManager = bybitManager;
+  }
 
   /**
    * Initialize the service and Gate account manager
@@ -205,12 +210,12 @@ export class AssetReleaseService {
           );
 
           if (approved) {
-            // Update transaction status
+            // Update transaction status to release_money
             await prisma.transaction.update({
               where: { id: transaction.id },
               data: {
-                status: 'completed',
-                completedAt: new Date()
+                status: 'release_money',
+                approvedAt: new Date()
               }
             });
 
@@ -223,10 +228,14 @@ export class AssetReleaseService {
               }
             });
 
-            logger.info('✅ Transaction completed', {
+            logger.info('✅ Transaction approved, waiting for money release', {
               transactionId: transaction.id,
-              gatePayoutId: payout.gatePayoutId
+              gatePayoutId: payout.gatePayoutId,
+              status: 'release_money'
             });
+
+            // Send promotional message after successful approval
+            await this.sendPromotionalMessage(transaction.id);
           }
 
         } catch (error) {
@@ -268,12 +277,12 @@ export class AssetReleaseService {
       );
 
       if (approved) {
-        // Update transaction
+        // Update transaction to release_money status
         await prisma.transaction.update({
           where: { id: transactionId },
           data: {
-            status: 'completed',
-            completedAt: new Date()
+            status: 'release_money',
+            approvedAt: new Date()
           }
         });
 
@@ -286,10 +295,14 @@ export class AssetReleaseService {
           }
         });
 
-        logger.info('✅ Transaction approved and completed', {
+        logger.info('✅ Transaction approved, set to release_money', {
           transactionId,
-          gatePayoutId: payout.gatePayoutId
+          gatePayoutId: payout.gatePayoutId,
+          status: 'release_money'
         });
+
+        // Send promotional message after successful approval
+        await this.sendPromotionalMessage(transactionId);
 
         return true;
       }
@@ -303,14 +316,79 @@ export class AssetReleaseService {
       return false;
     }
   }
+
+  /**
+   * Send promotional message after successful approval
+   */
+  private async sendPromotionalMessage(transactionId: string): Promise<void> {
+    try {
+      // Get transaction with order details
+      const transaction = await prisma.transaction.findUnique({
+        where: { id: transactionId },
+        include: {
+          chatMessages: {
+            orderBy: { createdAt: 'desc' },
+            take: 1
+          }
+        }
+      });
+
+      if (!transaction || !transaction.orderId) {
+        logger.warn('Transaction not found or no orderId', { transactionId });
+        return;
+      }
+
+      // Import necessary services
+      const { ChatAutomationService } = await import('./chatAutomation');
+      
+      // Get active Bybit account
+      const activeAccount = await prisma.bybitAccount.findFirst({
+        where: { isActive: true }
+      });
+
+      if (!activeAccount) {
+        logger.warn('No active Bybit account for sending message');
+        return;
+      }
+
+      // Use the shared bybitManager if available
+      if (!this.bybitManager) {
+        logger.warn('No bybitManager provided, cannot send promotional message');
+        return;
+      }
+
+      const chatService = new ChatAutomationService(this.bybitManager);
+
+      // Prepare promotional message
+      const promotionalMessage = `Переходи в закрытый чат https://t.me/+nIB6kP22KmhlMmQy
+
+Всегда есть большой объем ЮСДТ по хорошему курсу, работаем оперативно.`;
+
+      // Send message
+      await chatService.sendMessage(
+        transactionId,
+        promotionalMessage
+      );
+
+      logger.info('📢 Promotional message sent', {
+        transactionId,
+        orderId: transaction.orderId
+      });
+
+    } catch (error) {
+      logger.error('Error sending promotional message', error, {
+        transactionId
+      });
+    }
+  }
 }
 
 // Export singleton instance
 let assetReleaseService: AssetReleaseService | null = null;
 
-export function getAssetReleaseService(): AssetReleaseService {
+export function getAssetReleaseService(bybitManager?: any): AssetReleaseService {
   if (!assetReleaseService) {
-    assetReleaseService = new AssetReleaseService();
+    assetReleaseService = new AssetReleaseService(bybitManager);
   }
   return assetReleaseService;
 }

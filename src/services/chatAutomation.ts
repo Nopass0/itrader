@@ -579,9 +579,13 @@ export class ChatAutomationService extends EventEmitter {
 
 Сумма: ${finalAmount} RUB
 
+⚠️ ФИО не спрашивать, реквизиты верные!
+
 Email для чека: ${receiptEmail}
 
-После оплаты отправьте чек в формате PDF на указанный email  с официальной почты банка.`;
+После оплаты отправьте чек в формате PDF на указанный email с официальной почты банка.
+
+В течении двух минут проверю чек и отпущу средства.`;
 
       logger.info("📤 Sending payment details", {
         transactionId,
@@ -647,7 +651,7 @@ Email для чека: ${receiptEmail}
   /**
    * Send message with proper parameters
    */
-  private async sendMessage(
+  async sendMessage(
     transactionId: string,
     message: string,
   ): Promise<void> {

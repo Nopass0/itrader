@@ -211,6 +211,51 @@ export class PayoutAdvertisingService {
       itemId
     });
 
+    // 5. Delete advertisement from Bybit after successful linking
+    try {
+      logger.info("Deleting advertisement from Bybit", {
+        itemId,
+        advertisementId: advertisement.id
+      });
+
+      // Get the bybit account for this advertisement
+      const bybitAccount = await db.prisma.bybitAccount.findUnique({
+        where: { id: advertisement.bybitAccountId }
+      });
+
+      if (!bybitAccount) {
+        logger.error("Bybit account not found for advertisement", {
+          bybitAccountId: advertisement.bybitAccountId
+        });
+      } else {
+        const client = this.bybitManager.getClient(bybitAccount.accountId);
+        if (client) {
+          await client.cancelAdvertisement(itemId);
+          logger.info("✅ Advertisement deleted from Bybit", { itemId });
+
+          // Update advertisement status in database
+          await db.prisma.advertisement.update({
+            where: { id: advertisement.id },
+            data: {
+              isActive: false,
+              updatedAt: new Date()
+            }
+          });
+          logger.info("Advertisement marked as inactive in database");
+        } else {
+          logger.error("No client found for bybit account", {
+            accountId: bybitAccount.accountId
+          });
+        }
+      }
+    } catch (error) {
+      logger.error("Failed to delete advertisement from Bybit", error, {
+        itemId,
+        orderId
+      });
+      // Don't throw error here - order linking was successful
+    }
+
     return updatedTransaction;
   }
 }

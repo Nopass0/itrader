@@ -204,6 +204,22 @@ async function main() {
       // Initialize Bybit accounts
       await context.bybitManager.initialize();
 
+      // Initialize and start MoneyReleaseService (after BybitManager is ready)
+      try {
+        logger.info("[Init] Starting MoneyReleaseService...");
+        console.log("[Init] Starting MoneyReleaseService...");
+        
+        const { getMoneyReleaseService } = await import("./services/moneyReleaseService");
+        const moneyReleaseService = getMoneyReleaseService(context.bybitManager);
+        await moneyReleaseService.start();
+        
+        logger.info("[Init] ✅ MoneyReleaseService started - monitoring transactions for asset release");
+        console.log("[Init] ✅ MoneyReleaseService started - monitoring transactions for asset release");
+      } catch (error) {
+        logger.error("Failed to start MoneyReleaseService", error as Error);
+        console.error("[Init] ❌ Failed to start MoneyReleaseService:", error);
+      }
+
       // Initialize MailSlurp (primary email service)
       logger.info("📧 Initializing MailSlurp...");
       console.log("[Init] 📧 Initializing MailSlurp...");
@@ -640,18 +656,22 @@ async function main() {
       // Initialize Asset Release Service
       console.log("[Init] 💸 Starting Asset Release Service...");
       try {
-        const { startAssetReleaseService } = await import("./services/assetReleaseService");
-        const releaseService = await startAssetReleaseService(10000); // Check every 10 seconds
+        const { getAssetReleaseService } = await import("./services/assetReleaseService");
+        const releaseService = getAssetReleaseService(context.bybitManager);
         context.assetReleaseService = releaseService;
+        
+        // Start periodic checking
+        setInterval(async () => {
+          await releaseService.checkAndReleaseAssets();
+        }, 10000); // Check every 10 seconds
         
         logger.info("✅ Asset Release Service started", {
           interval: "10s"
         });
         console.log("[Init] ✅ Asset Release Service started (checking every 10s)");
         
-        // Get initial stats
-        const releaseStats = await releaseService.getStats();
-        console.log(`[Init] Release stats: Pending: ${releaseStats.pendingRelease}, Ready: ${releaseStats.readyForRelease}, Completed: ${releaseStats.completed}`);
+        // Run first check immediately
+        await releaseService.checkAndReleaseAssets();
       } catch (error) {
         logger.error("Failed to start Asset Release Service", error as Error);
         console.error("[Init] Failed to start Asset Release Service:", error);

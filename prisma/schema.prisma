@@ -91,6 +91,7 @@ model Transaction {
   paymentSentAt    DateTime?
   checkReceivedAt  DateTime?
   receiptReceivedAt DateTime?
+  approvedAt       DateTime?
   completedAt      DateTime?
   failureReason    String?
   createdAt        DateTime         @default(now())

@@ -34,6 +34,7 @@ export class ReceiptPayoutLinkerService {
     logger.info("Starting receipt payout linker service", { 
       interval: `${intervalMs / 1000}s` 
     });
+    console.log(`[ReceiptPayoutLinker] ✅ Started - checking every ${intervalMs / 1000} seconds`);
 
     // Первый запуск сразу
     await this.linkUnlinkedReceipts();
@@ -86,6 +87,11 @@ export class ReceiptPayoutLinkerService {
       stats.total = receipts.length;
 
       if (receipts.length === 0) {
+        // Log periodically to show service is running
+        const now = new Date();
+        if (now.getSeconds() % 30 === 0) { // Log every 30 seconds
+          console.log(`[ReceiptPayoutLinker] No unlinked receipts found. Service is running...`);
+        }
         return stats;
       }
 
@@ -179,11 +185,11 @@ export class ReceiptPayoutLinkerService {
       return false;
     }
 
-    // Привязываем чек к payout
+    // Привязываем чек к payout (используем ID записи в БД, а не gatePayoutId)
     await prisma.receipt.update({
       where: { id: receipt.id },
       data: {
-        payoutId: payout.gatePayoutId?.toString(),
+        payoutId: payout.id, // ID записи payout в нашей БД
         isProcessed: true,
         updatedAt: new Date()
       }
@@ -208,143 +214,34 @@ export class ReceiptPayoutLinkerService {
         payoutId: payout.id
       });
 
-      // Апрувим payout в Gate.io с приложением чека
+      // Апрувим payout через AssetReleaseService
       try {
-        const { GateAccountManager } = await import("../gate");
-        const gateManager = new GateAccountManager({ cookiesDir: "./data/cookies" });
-        
-        // Загружаем аккаунт в менеджер если его нет
-        if (payout.gateAccount) {
-          try {
-            gateManager.getClient(payout.gateAccount);
-          } catch (error) {
-            console.log(`[ReceiptPayoutLinker] Loading account from DB: ${payout.gateAccount}`);
-            
-            // Получаем данные аккаунта из БД
-            const dbAccount = await prisma.gateAccount.findFirst({
-              where: { email: payout.gateAccount }
-            });
-            
-            if (dbAccount) {
-              // Добавляем аккаунт в менеджер
-              await gateManager.addAccount(
-                dbAccount.email,
-                dbAccount.password || '',
-                false, // не авто-логин
-                dbAccount.accountId
-              );
-              console.log(`[ReceiptPayoutLinker] Account loaded: ${payout.gateAccount}`);
-            }
-          }
-        }
-        
-        // Находим gateAccountId по email если не установлен
-        let accountId = null;
-        
-        // Если gateAccountId есть, получаем accountId по нему
-        if (payout.gateAccountId) {
-          const gateAccount = await prisma.gateAccount.findUnique({
-            where: { id: payout.gateAccountId }
-          });
-          if (gateAccount) {
-            accountId = gateAccount.accountId;
-          }
-        }
-        
-        // Если все еще нет accountId, ищем по email
-        if (!accountId && payout.gateAccount) {
-          console.log(`[ReceiptPayoutLinker] Looking up gateAccountId by email: ${payout.gateAccount}`);
-          const gateAccount = await prisma.gateAccount.findFirst({
-            where: { email: payout.gateAccount }
-          });
-          
-          if (gateAccount) {
-            // Для GateClient используем accountId, для связи в БД используем id
-            accountId = gateAccount.accountId;
-            console.log(`[ReceiptPayoutLinker] Found gateAccountId: ${accountId} (db id: ${gateAccount.id})`);
-            
-            // Обновляем payout с найденным id (для foreign key)
-            await prisma.payout.update({
-              where: { id: payout.id },
-              data: { gateAccountId: gateAccount.id }
-            });
-          } else {
-            console.log(`[ReceiptPayoutLinker] No gate account found for email: ${payout.gateAccount}`);
-          }
-        }
+        const { getAssetReleaseService } = await import('./assetReleaseService');
+        // Get the shared instance (it will already have bybitManager)
+        const assetReleaseService = getAssetReleaseService();
+        logger.info("Approving transaction through AssetReleaseService", {
+          transactionId: transaction.id,
+          payoutId: payout.id,
+          gatePayoutId: payout.gatePayoutId,
+          receiptPath: receipt.filePath
+        });
 
-        console.log(`[ReceiptPayoutLinker] Checking approval conditions: accountId=${accountId}, status=${payout.status}, hasAccountId=${!!accountId}, statusOk=${payout.status === 4 || payout.status === 5}`);
-        
-        if (accountId && (payout.status === 4 || payout.status === 5)) {
-          console.log(`[ReceiptPayoutLinker] Getting Gate client for email: ${payout.gateAccount}`);
-          const gateClient = gateManager.getClient(payout.gateAccount!);
-          console.log(`[ReceiptPayoutLinker] Gate client available: ${!!gateClient}`);
-          
-          if (gateClient) {
-            // Читаем файл чека для отправки
-            let receiptBuffer: Buffer | null = null;
-            
-            // Ищем файл чека через filePath в receipt  
-            if (receipt.filePath) {
-              const receiptPath = receipt.filePath;
-              try {
-                const fs = await import("fs/promises");
-                const path = await import("path");
-                
-                // Конвертируем относительный путь в абсолютный если нужно
-                const absolutePath = path.isAbsolute(receiptPath) 
-                  ? receiptPath 
-                  : path.join(process.cwd(), receiptPath);
-                
-                receiptBuffer = await fs.readFile(absolutePath);
-                logger.info("Read receipt file for approval", { receiptPath: absolutePath });
-              } catch (fileError) {
-                logger.error("Failed to read receipt file", fileError, { receiptPath });
-              }
-            }
+        // Апрувим через AssetReleaseService
+        const approved = await assetReleaseService.approveTransactionWithReceipt(
+          transaction.id,
+          payout.id,
+          receipt.filePath || ''
+        );
 
-            if (receiptBuffer) {
-              logger.info("Approving payout in Gate.io with receipt", {
-                payoutId: payout.gatePayoutId,
-                accountId: accountId,
-                receiptSize: receiptBuffer.length
-              });
-              
-              console.log(`[ReceiptPayoutLinker] Calling approvePayout: payoutId=${payout.gatePayoutId}, bufferSize=${receiptBuffer.length}`);
-              const approvalResult = await gateClient.approvePayout(payout.gatePayoutId!.toString(), receiptBuffer);
-              console.log(`[ReceiptPayoutLinker] ✅ Payout approved in Gate.io:`, approvalResult);
-              
-              logger.info("Payout approved in Gate.io with receipt", {
-                payoutId: payout.gatePayoutId,
-                result: approvalResult
-              });
-              
-              // Обновляем статус в БД после успешного апрува
-              await prisma.payout.update({
-                where: { id: payout.id },
-                data: { 
-                  status: 6, // approved status
-                  approvedAt: new Date(),
-                  updatedAt: new Date()
-                }
-              });
-            } else {
-              logger.warn("No receipt file found, approving without attachment", {
-                payoutId: payout.gatePayoutId,
-                receiptFilePath: receipt.filePath
-              });
-              
-              // Создаем пустой буфер как fallback (если метод требует buffer)
-              const emptyBuffer = Buffer.alloc(0);
-              console.log(`[ReceiptPayoutLinker] Calling approvePayout without receipt: payoutId=${payout.gatePayoutId}`);
-              const approvalResult = await gateClient.approvePayout(payout.gatePayoutId!.toString(), emptyBuffer);
-              console.log(`[ReceiptPayoutLinker] Approval result (no receipt):`, approvalResult);
-            }
-          } else {
-            console.log(`[ReceiptPayoutLinker] Gate client not available for account: ${accountId}`);
-          }
+        if (approved) {
+          logger.info("✅ Transaction approved through AssetReleaseService", {
+            transactionId: transaction.id,
+            gatePayoutId: payout.gatePayoutId
+          });
         } else {
-          console.log(`[ReceiptPayoutLinker] Approval conditions not met: accountId=${accountId}, status=${payout.status}`);
+          logger.warn("Failed to approve transaction through AssetReleaseService", {
+            transactionId: transaction.id
+          });
         }
       } catch (error) {
         logger.error("Error approving payout in Gate.io", error, {
@@ -364,10 +261,7 @@ export class ReceiptPayoutLinkerService {
         if (transaction.orderId && transaction.advertisement?.bybitAccount) {
           const client = bybitManager.getClient(transaction.advertisement.bybitAccount.accountId);
           if (client) {
-            // Получаем finalMessage из chatService
-            const finalMessage = `Переходи в закрытый чат https://t.me/+nIB6kP22KmhlMmQy\n\nВсегда есть большой объем ЮСДТ по хорошему курсу, работаем оперативно.`;
-            
-            const receiptMessage = `✅ Чек получен и подтвержден!\n\nСумма: ${receipt.amount} RUB\nОперация: ${receipt.operationId || 'N/A'}\n\n⏱️ Средства будут отпущены в течение 2 минут.\n\n${finalMessage}`;
+            const receiptMessage = `✅ Чек получен и подтвержден!\n\nСумма: ${receipt.amount} RUB\nОперация: ${receipt.operationId || 'N/A'}\n\n⏱️ В течении двух минут проверю чек и отпущу средства.\n\nПереходи в закрытый чат https://t.me/+nIB6kP22KmhlMmQy\n\nВсегда есть большой объем ЮСДТ по хорошему курсу, работаем оперативно.`;
             
             await chatService.sendMessageDirect(client, transaction.orderId, receiptMessage);
             
@@ -383,17 +277,15 @@ export class ReceiptPayoutLinkerService {
         });
       }
 
-      // Обновляем статус транзакции
-      await prisma.transaction.update({
-        where: { id: transaction.id },
-        data: {
-          status: "payment_confirmed",
-          updatedAt: new Date()
-        }
+      // Статус транзакции уже обновлен в AssetReleaseService до release_money
+      // Проверяем текущий статус
+      const updatedTransaction = await prisma.transaction.findUnique({
+        where: { id: transaction.id }
       });
 
-      logger.info("Transaction status updated to payment_confirmed", {
-        transactionId: transaction.id
+      logger.info("Transaction status after approval", {
+        transactionId: transaction.id,
+        status: updatedTransaction?.status
       });
 
       // Удаляем связанное объявление с Bybit после привязки к транзакции
@@ -401,8 +293,16 @@ export class ReceiptPayoutLinkerService {
         try {
           console.log(`[ReceiptPayoutLinker] Deleting Bybit advertisement: ${transaction.advertisement.bybitAdId}`);
           
-          const { BybitP2PManagerService } = await import("./bybitP2PManager");
-          const bybitManager = new BybitP2PManagerService();
+          // Get the shared BybitManager from global context
+          const globalContext = (global as any).appContext;
+          const bybitManager = globalContext?.bybitManager;
+          
+          if (!bybitManager) {
+            logger.warn('No shared BybitManager available');
+            console.log('[ReceiptPayoutLinker] ❌ No shared BybitManager available');
+            return;
+          }
+          
           const bybitClient = bybitManager.getClient(transaction.advertisement.bybitAccount.accountId);
           
           if (bybitClient) {
@@ -439,21 +339,12 @@ export class ReceiptPayoutLinkerService {
       }
     }
 
-    // Обновляем статус payout если нужно (статус 4,5 = pending, 7 = completed)
-    if (payout.status === 4 || payout.status === 5) {
-      await prisma.payout.update({
-        where: { id: payout.id },
-        data: {
-          status: 6, // approved, waiting for release
-          approvedAt: receipt.transactionDate || new Date(),
-          updatedAt: new Date()
-        }
-      });
-    }
+    // Статус payout обновляется в AssetReleaseService
 
     logger.info("Receipt linked to payout", {
       receiptId: receipt.id,
-      payoutId: payout.gatePayoutId,
+      payoutId: payout.id, // ID записи в БД
+      gatePayoutId: payout.gatePayoutId,
       amount: receipt.amount,
       recipientPhone: receipt.recipientPhone
     });
@@ -463,7 +354,8 @@ export class ReceiptPayoutLinkerService {
     if (io) {
       io.emit('receipt:linked', {
         receiptId: receipt.id,
-        payoutId: payout.gatePayoutId,
+        payoutId: payout.id, // ID записи в БД
+        gatePayoutId: payout.gatePayoutId,
         amount: receipt.amount,
         transactionId: transaction?.id
       });
@@ -633,7 +525,7 @@ export class ReceiptPayoutLinkerService {
       if (payout) {
         const existingReceipt = await prisma.receipt.findFirst({
           where: {
-            payoutId: payout.gatePayoutId?.toString(),
+            payoutId: payout.id, // ID записи в БД
             id: { not: receipt.id }
           }
         });

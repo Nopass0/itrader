@@ -311,6 +311,31 @@ export class OrderLinkingService {
                 itemId: orderDetails.itemId
               });
 
+              // Delete advertisement from Bybit after successful linking
+              try {
+                const client = this.bybitManager.getClient(account.accountId);
+                if (client) {
+                  await client.cancelAdvertisement(orderDetails.itemId);
+                  logger.info("✅ [OrderLinking] Advertisement deleted from Bybit", { 
+                    itemId: orderDetails.itemId 
+                  });
+
+                  // Update advertisement status in database
+                  await db.prisma.advertisement.update({
+                    where: { id: advertisement.id },
+                    data: {
+                      isActive: false,
+                      updatedAt: new Date()
+                    }
+                  });
+                  logger.info("[OrderLinking] Advertisement marked as inactive");
+                }
+              } catch (error) {
+                logger.error("[OrderLinking] Failed to delete advertisement", error, {
+                  itemId: orderDetails.itemId
+                });
+              }
+
               // Start chat automation for status 10
               if (orderDetails.status === 10) {
                 try {
@@ -502,6 +527,32 @@ export class OrderLinkingService {
                     status: order.status === 10 ? "chat_started" : order.status === 20 ? "waiting_payment" : "processing"
                   }
                 });
+
+                // Delete advertisement from Bybit after successful linking
+                try {
+                  const client = this.bybitManager.getClient(account.accountId);
+                  if (client) {
+                    await client.cancelAdvertisement(itemId);
+                    logger.info("✅ [OrderLinking] Advertisement deleted from Bybit", { 
+                      itemId,
+                      orderId: order.id 
+                    });
+
+                    // Update advertisement status in database
+                    await db.prisma.advertisement.update({
+                      where: { id: advertisement.id },
+                      data: {
+                        isActive: false,
+                        updatedAt: new Date()
+                      }
+                    });
+                  }
+                } catch (error) {
+                  logger.error("[OrderLinking] Failed to delete advertisement", error, {
+                    itemId,
+                    orderId: order.id
+                  });
+                }
 
                 logger.info("✅ [OrderLinking] Successfully linked order", {
                   orderId: order.id,

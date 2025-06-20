@@ -74,8 +74,10 @@ export class TinkoffReceiptParserV2 {
       rawText: text
     };
     
-    // Извлекаем поля в зависимости от структуры
-    if (structure === 'columnar') {
+    // Проверяем, не является ли это смешанным блочным форматом
+    if (this.isMixedBlockFormat(lines)) {
+      this.extractMixedBlockFields(lines, result);
+    } else if (structure === 'columnar') {
       this.extractColumnarFields(lines, result);
     } else {
       this.extractSequentialFields(lines, result);
@@ -90,25 +92,108 @@ export class TinkoffReceiptParserV2 {
   }
 
   /**
+   * Проверяет, является ли формат смешанным блочным
+   */
+  private isMixedBlockFormat(lines: string[]): boolean {
+    // Ищем первый блок лейблов
+    const firstBlockLabels = ['Комиссия', 'Отправитель', 'Телефон получателя', 'Получатель'];
+    const firstBlockStart = lines.indexOf('Комиссия');
+    
+    if (firstBlockStart === -1) return false;
+    
+    // Проверяем, идут ли первые 4 лейбла подряд
+    let allLabelsFound = true;
+    for (let i = 0; i < firstBlockLabels.length; i++) {
+      if (lines[firstBlockStart + i] !== firstBlockLabels[i]) {
+        allLabelsFound = false;
+        break;
+      }
+    }
+    
+    if (!allLabelsFound) return false;
+    
+    // Проверяем, есть ли значения сразу после лейблов
+    const valueStart = firstBlockStart + firstBlockLabels.length;
+    if (valueStart + 4 > lines.length) return false;
+    
+    // Проверяем типичные значения
+    const possibleCommission = lines[valueStart];
+    const possibleSender = lines[valueStart + 1];
+    const possiblePhone = lines[valueStart + 2];
+    
+    return (possibleCommission === 'Без комиссии' || /^\d+$/.test(possibleCommission)) &&
+           /^[А-ЯЁ][а-яё]+(?:\s+[А-ЯЁ][а-яё]+)*$/.test(possibleSender) &&
+           /^\+7/.test(possiblePhone);
+  }
+
+  /**
+   * Извлекает поля из смешанного блочного формата
+   */
+  private extractMixedBlockFields(lines: string[], result: TinkoffReceiptData): void {
+    // Первый блок
+    const firstBlockStart = lines.indexOf('Комиссия');
+    if (firstBlockStart !== -1) {
+      const valueStart = firstBlockStart + 4; // После 4 лейблов
+      
+      if (valueStart + 3 < lines.length) {
+        result.commission = lines[valueStart] === 'Без комиссии' ? 0 : parseInt(lines[valueStart]) || 0;
+        result.senderName = lines[valueStart + 1];
+        result.recipientPhone = lines[valueStart + 2];
+        result.recipientName = lines[valueStart + 3];
+      }
+    }
+    
+    // Второй блок
+    const secondBlockStart = lines.indexOf('Банк получателя');
+    if (secondBlockStart !== -1) {
+      const valueStart = secondBlockStart + 2; // После 2 лейблов
+      
+      if (valueStart + 1 < lines.length) {
+        result.recipientBank = lines[valueStart];
+        result.senderAccount = lines[valueStart + 1];
+      }
+    }
+  }
+
+  /**
    * Анализирует структуру чека
    */
   private analyzeStructure(lines: string[]): 'columnar' | 'sequential' {
     // Ищем блок лейблов
     const labels = ['Комиссия', 'Отправитель', 'Телефон получателя', 'Получатель', 'Банк получателя', 'Счет списания'];
-    const indices: number[] = [];
+    const labelPositions: { label: string; index: number }[] = [];
     
     labels.forEach(label => {
       const idx = lines.indexOf(label);
-      if (idx !== -1) indices.push(idx);
+      if (idx !== -1) {
+        labelPositions.push({ label, index: idx });
+      }
     });
     
-    if (indices.length < 4) return 'sequential';
+    if (labelPositions.length < 4) return 'sequential';
     
-    // Проверяем идут ли лейблы подряд
-    indices.sort((a, b) => a - b);
-    const isConsecutive = indices.every((val, i) => i === 0 || val === indices[i-1] + 1);
+    // Сортируем по позиции
+    labelPositions.sort((a, b) => a.index - b.index);
     
-    return isConsecutive ? 'columnar' : 'sequential';
+    // Проверяем структуру между первыми 4 лейблами
+    const firstFour = labelPositions.slice(0, 4);
+    
+    // Если между лейблами есть значения (не-лейблы), это смешанный формат
+    for (let i = 1; i < firstFour.length; i++) {
+      const prevIdx = firstFour[i-1].index;
+      const currIdx = firstFour[i].index;
+      
+      // Проверяем строки между лейблами
+      for (let j = prevIdx + 1; j < currIdx; j++) {
+        const line = lines[j];
+        // Если между лейблами есть значения (не другие лейблы), это смешанный формат
+        if (line && !labels.includes(line)) {
+          return 'sequential'; // На самом деле это смешанный формат
+        }
+      }
+    }
+    
+    return 'columnar';
   }
 
   /**
@@ -142,82 +227,99 @@ export class TinkoffReceiptParserV2 {
         this.assignValue(label, value, result);
       }
     });
+    
+    // Специальная обработка для имени получателя в конце документа
+    if (result.transferType === 'По номеру телефона' && !result.recipientName) {
+      // Ищем имя получателя в последних строках (после email поддержки)
+      for (let j = lines.length - 1; j >= Math.max(0, lines.length - 5); j--) {
+        const lastLine = lines[j];
+        // Проверяем что это имя (начинается с заглавной буквы, может содержать инициалы)
+        if (lastLine && lastLine.match(/^[А-ЯЁ][а-яё]+(?:\s+[А-ЯЁ]\.?)+$/)) {
+          result.recipientName = lastLine;
+          break;
+        }
+      }
+    }
   }
 
   /**
    * Извлекает поля из последовательной структуры
    */
   private extractSequentialFields(lines: string[], result: TinkoffReceiptData): void {
-    // В последовательной структуре лейблы и значения перемешаны
-    let i = 0;
-    while (i < lines.length) {
-      const line = lines[i];
-      
-      // Ищем лейблы и их значения
-      switch(line) {
-        case 'Комиссия':
-          // Комиссия на следующей строке после "Отправитель"
-          const afterSender = lines.indexOf('Отправитель');
-          if (afterSender !== -1 && afterSender + 1 < lines.length) {
-            const val = lines[afterSender + 1];
-            if (val === 'Без комиссии' || val.match(/^\d+$/)) {
-              result.commission = val === 'Без комиссии' ? 0 : parseInt(val);
-            }
-          }
-          break;
-          
-        case 'Отправитель':
-          // Отправитель через 2 строки после "Телефон получателя"
-          const phoneIdx = lines.indexOf('Телефон получателя');
-          if (phoneIdx !== -1 && phoneIdx + 2 < lines.length) {
-            const val = lines[phoneIdx + 2];
-            if (val && val.match(/^[А-ЯЁ][а-яё]+(?:\s+[А-ЯЁ][а-яё]+)*$/)) {
-              result.senderName = val;
-            }
-          }
-          break;
-          
-        case 'Телефон получателя':
-          // Телефон через 3 строки
-          if (i + 3 < lines.length) {
-            const val = lines[i + 3];
-            if (val && val.match(/^\+7/)) {
-              result.recipientPhone = val;
-            }
-          }
-          break;
-          
-        case 'Получатель':
-          // Получатель через 3 строки
-          if (i + 3 < lines.length) {
-            const val = lines[i + 3];
-            if (val && val.match(/^[А-ЯЁ][а-яё]+/)) {
-              result.recipientName = val;
-            }
-          }
-          break;
-          
-        case 'Банк получателя':
-          // Банк через 2 строки
-          if (i + 2 < lines.length) {
-            const val = lines[i + 2];
-            if (val && (val.includes('банк') || val.includes('Банк'))) {
-              result.recipientBank = val;
-            }
-          }
-          break;
-          
-        case 'Счет списания':
-          // Счет через 3 строки
-          if (i + 3 < lines.length) {
-            const val = lines[i + 3];
-            if (val && val.includes('****')) {
-              result.senderAccount = val;
-            }
-          }
-          break;
+    // В последовательной структуре значения идут сразу после блока лейблов
+    const labels = ['Комиссия', 'Отправитель', 'Телефон получателя', 'Получатель', 'Банк получателя', 'Счет списания'];
+    
+    // Находим все позиции лейблов
+    const labelPositions: { [key: string]: number } = {};
+    labels.forEach(label => {
+      const idx = lines.indexOf(label);
+      if (idx !== -1) {
+        labelPositions[label] = idx;
       }
-      i++;
+    });
+    
+    // Находим начало блока значений (после последнего лейбла)
+    const lastLabelIdx = Math.max(...Object.values(labelPositions));
+    let valueStartIdx = lastLabelIdx + 1;
+    
+    // Если следующая строка пустая, пропускаем её
+    if (valueStartIdx < lines.length && lines[valueStartIdx].trim() === '') {
+      valueStartIdx++;
+    }
+    
+    // Извлекаем значения в том же порядке, что и лейблы
+    const sortedLabels = Object.keys(labelPositions).sort((a, b) => labelPositions[a] - labelPositions[b]);
+    
+    sortedLabels.forEach((label, index) => {
+      const valueIdx = valueStartIdx + index;
+      if (valueIdx < lines.length) {
+        const value = lines[valueIdx];
+        
+        switch(label) {
+          case 'Комиссия':
+            result.commission = value === 'Без комиссии' ? 0 : parseInt(value) || 0;
+            break;
+          case 'Отправитель':
+            if (value && value.match(/^[А-ЯЁ][а-яё]+(?:\s+[А-ЯЁ][а-яё]+)*$/)) {
+              result.senderName = value;
+            }
+            break;
+          case 'Телефон получателя':
+            if (value && value.match(/^\+7/)) {
+              result.recipientPhone = value;
+            }
+            break;
+          case 'Получатель':
+            if (value && value.match(/^[А-ЯЁ][а-яё]+/) && !value.includes('@')) {
+              result.recipientName = value;
+            }
+            break;
+          case 'Банк получателя':
+            if (value && (value.includes('банк') || value.includes('Банк') || 
+                ['Сбербанк', 'ВТБ', 'Альфа-Банк', 'Тинькофф', 'Райффайзен'].includes(value))) {
+              result.recipientBank = value;
+            }
+            break;
+          case 'Счет списания':
+            if (value && value.includes('****')) {
+              result.senderAccount = value;
+            }
+            break;
+        }
+      }
+    });
+    
+    // Специальная обработка для имени получателя в конце документа (для некоторых форматов)
+    if (result.transferType === 'По номеру телефона' && !result.recipientName) {
+      // Ищем имя получателя в последних строках (после email поддержки)
+      for (let j = lines.length - 1; j >= Math.max(0, lines.length - 5); j--) {
+        const lastLine = lines[j];
+        // Проверяем что это имя (начинается с заглавной буквы, может содержать инициалы)
+        if (lastLine && lastLine.match(/^[А-ЯЁ][а-яё]+(?:\s+[А-ЯЁ]\.?)+$/)) {
+          result.recipientName = lastLine;
+          break;
+        }
+      }
     }
   }
 
