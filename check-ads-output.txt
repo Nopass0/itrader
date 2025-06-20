@@ -1,0 +1,192 @@
+[TimeSync] Not synchronized, using local time
+[TimeSync] Time synchronized. Offset: 2327ms
+[TimeSync] Local time: 2025-06-20T13:31:17.673Z
+[TimeSync] Server time: 2025-06-20T13:31:20.000Z
+[TimeSync] Time synchronized. Offset: 2309ms
+[TimeSync] Local time: 2025-06-20T13:31:17.691Z
+[TimeSync] Server time: 2025-06-20T13:31:20.000Z
+P2P Client connected successfully
+[BybitP2PManager] Started order polling for all accounts (20s interval)
+[BybitP2PManager] Initialization complete with 1 accounts
+
+
+=== SUMMARY ===
+Total advertisements in database: 11
+  - Active: 0
+  - Inactive: 11
+Total Bybit accounts with ads: 0
+
+All active Bybit accounts: 1
+  - david (No email) - 11 ads in DB
+
+--- Account Details ---
+
+--- Inactive Advertisements ---
+
+Ad ID: cmc4td4p408u2ikqy2rdnbmkv
+  Bybit Ad ID: 1936045473270624256
+  Account: cmc3cp34d0002ikydurtdvpz6
+  Status: ONLINE
+  Type: sell
+  Currency: USDT/RUB
+  Price: 78
+  Range: 4250 - 4250
+  Created: 6/20/2025, 3:56:24 PM
+  Updated: 6/20/2025, 4:22:23 PM
+[TimeSync] Time synchronized. Offset: 1916ms
+[TimeSync] Local time: 2025-06-20T13:31:21.084Z
+[TimeSync] Server time: 2025-06-20T13:31:23.000Z
+  ⚠️  Still exists on Bybit with status: 20
+
+Ad ID: cmc4rur6600z5iks200yirezo
+  Bybit Ad ID: 1936034832452206592
+  Account: cmc3cp34d0002ikydurtdvpz6
+  Status: ONLINE
+  Type: sell
+  Currency: USDT/RUB
+  Price: 78
+  Range: 2000 - 2000
+  Created: 6/20/2025, 3:14:07 PM
+  Updated: 6/20/2025, 3:56:20 PM
+[TimeSync] Time synchronized. Offset: 1098ms
+[TimeSync] Local time: 2025-06-20T13:31:21.902Z
+[TimeSync] Server time: 2025-06-20T13:31:23.000Z
+  ⚠️  Still exists on Bybit with status: 20
+
+Ad ID: cmc3wuudn0nhmikyuusy0acsn
+  Bybit Ad ID: 1935816453430755328
+  Account: cmc3cp34d0002ikydurtdvpz6
+  Status: ONLINE
+  Type: sell
+  Currency: USDT/RUB
+  Price: 77.89
+  Range: 2185 - 2185
+  Created: 6/20/2025, 12:46:23 AM
+  Updated: 6/20/2025, 3:03:39 PM
+[TimeSync] Time synchronized. Offset: 1309ms
+[TimeSync] Local time: 2025-06-20T13:31:22.691Z
+[TimeSync] Server time: 2025-06-20T13:31:24.000Z
+  ⚠️  Still exists on Bybit with status: 20
+
+Ad ID: cmc3vp9eq0d5vikyuf39pydx2
+  Bybit Ad ID: 1935808316145451008
+  Account: cmc3cp34d0002ikydurtdvpz6
+  Status: ONLINE
+  Type: sell
+  Currency: USDT/RUB
+  Price: 77.89
+  Range: 9600 - 9600
+  Created: 6/20/2025, 12:14:03 AM
+  Updated: 6/20/2025, 3:03:39 PM
+[TimeSync] Time synchronized. Offset: 1496ms
+[TimeSync] Local time: 2025-06-20T13:31:23.504Z
+[TimeSync] Server time: 2025-06-20T13:31:25.000Z
+  ⚠️  Still exists on Bybit with status: 20
+
+Ad ID: cmc3vp1k10d2uikyuh3girsgt
+  Bybit Ad ID: 1935808274042220544
+  Account: cmc3cp34d0002ikydurtdvpz6
+  Status: ONLINE
+  Type: sell
+  Currency: USDT/RUB
+  Price: 77.89
+  Range: 4500 - 4500
+  Created: 6/20/2025, 12:13:53 AM
+  Updated: 6/20/2025, 12:56:42 AM
+[TimeSync] Time synchronized. Offset: 1710ms
+[TimeSync] Local time: 2025-06-20T13:31:24.290Z
+[TimeSync] Server time: 2025-06-20T13:31:26.000Z
+  ⚠️  Still exists on Bybit with status: 20
+
+Ad ID: cmc3vcts5093iikyuim4gq8g9
+  Bybit Ad ID: 1935805883157602304
+  Account: cmc3cp34d0002ikydurtdvpz6
+  Status: ONLINE
+  Type: sell
+  Currency: USDT/RUB
+  Price: 78
+  Range: 4128 - 4128
+  Created: 6/20/2025, 12:04:23 AM
+  Updated: 6/20/2025, 12:56:42 AM
+[TimeSync] Time synchronized. Offset: 1916ms
+[TimeSync] Local time: 2025-06-20T13:31:25.084Z
+[TimeSync] Server time: 2025-06-20T13:31:27.000Z
+  ⚠️  Still exists on Bybit with status: 20
+
+Ad ID: cmc3uk1cr004mikyu52obo3uq
+  Bybit Ad ID: 1935800249152487424
+  Account: cmc3cp34d0002ikydurtdvpz6
+  Status: ONLINE
+  Type: sell
+  Currency: USDT/RUB
+  Price: 78
+  Range: 3226 - 3226
+  Created: 6/19/2025, 11:42:00 PM
+  Updated: 6/20/2025, 12:56:41 AM
+[TimeSync] Time synchronized. Offset: 1106ms
+[TimeSync] Local time: 2025-06-20T13:31:25.894Z
+[TimeSync] Server time: 2025-06-20T13:31:27.000Z
+  ✅ No longer exists on Bybit
+
+Ad ID: cmc3uk095003iikyu9pmw9fs7
+  Bybit Ad ID: 1935800243178766336
+  Account: cmc3cp34d0002ikydurtdvpz6
+  Status: ONLINE
+  Type: sell
+  Currency: USDT/RUB
+  Price: 78
+  Range: 2500 - 2500
+  Created: 6/19/2025, 11:41:58 PM
+  Updated: 6/20/2025, 12:56:41 AM
+[TimeSync] Time synchronized. Offset: 1461ms
+[TimeSync] Local time: 2025-06-20T13:31:26.539Z
+[TimeSync] Server time: 2025-06-20T13:31:28.000Z
+  ✅ No longer exists on Bybit
+
+Ad ID: cmc3t124t0hejikosx4n2tapd
+  Bybit Ad ID: 1935789490587553792
+  Account: cmc3cp34d0002ikydurtdvpz6
+  Status: ONLINE
+  Type: sell
+  Currency: USDT/RUB
+  Price: 78
+  Range: 2500 - 2500
+  Created: 6/19/2025, 10:59:14 PM
+  Updated: 6/20/2025, 12:56:41 AM
+[TimeSync] Time synchronized. Offset: 1674ms
+[TimeSync] Local time: 2025-06-20T13:31:27.326Z
+[TimeSync] Server time: 2025-06-20T13:31:29.000Z
+  ✅ No longer exists on Bybit
+
+Ad ID: cmc3rvfa7006yiktuof9oeob9
+  Bybit Ad ID: 1935781343127953408
+  Account: cmc3cp34d0002ikydurtdvpz6
+  Status: ONLINE
+  Type: sell
+  Currency: USDT/RUB
+  Price: 78
+  Range: 4000 - 4000
+  Created: 6/19/2025, 10:26:52 PM
+  Updated: 6/19/2025, 10:59:12 PM
+[TimeSync] Time synchronized. Offset: 1879ms
+[TimeSync] Local time: 2025-06-20T13:31:28.121Z
+[TimeSync] Server time: 2025-06-20T13:31:30.000Z
+  ✅ No longer exists on Bybit
+
+Ad ID: cmc3rvdz90062iktu359peb46
+  Bybit Ad ID: 1935781335920701440
+  Account: cmc3cp34d0002ikydurtdvpz6
+  Status: ONLINE
+  Type: sell
+  Currency: USDT/RUB
+  Price: 78
+  Range: 5000 - 5000
+  Created: 6/19/2025, 10:26:50 PM
+  Updated: 6/19/2025, 10:59:11 PM
+[TimeSync] Time synchronized. Offset: 1233ms
+[TimeSync] Local time: 2025-06-20T13:31:28.767Z
+[TimeSync] Server time: 2025-06-20T13:31:30.000Z
+  ✅ No longer exists on Bybit
+
+--- Method Verification ---
+✅ getActiveAdCountFromBybit() returns correct counts for all accounts
