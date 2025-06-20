@@ -246,66 +246,110 @@ export class TinkoffReceiptParserV2 {
    * Извлекает поля из последовательной структуры
    */
   private extractSequentialFields(lines: string[], result: TinkoffReceiptData): void {
-    // В последовательной структуре значения идут сразу после блока лейблов
+    // В последовательной структуре значения могут быть как после лейблов, так и между ними
     const labels = ['Комиссия', 'Отправитель', 'Телефон получателя', 'Получатель', 'Банк получателя', 'Счет списания'];
     
-    // Находим все позиции лейблов
-    const labelPositions: { [key: string]: number } = {};
+    // Находим индексы лейблов
+    const labelIndices: {[key: string]: number} = {};
     labels.forEach(label => {
       const idx = lines.indexOf(label);
-      if (idx !== -1) {
-        labelPositions[label] = idx;
-      }
+      if (idx !== -1) labelIndices[label] = idx;
     });
     
-    // Находим начало блока значений (после последнего лейбла)
-    const lastLabelIdx = Math.max(...Object.values(labelPositions));
-    let valueStartIdx = lastLabelIdx + 1;
-    
-    // Если следующая строка пустая, пропускаем её
-    if (valueStartIdx < lines.length && lines[valueStartIdx].trim() === '') {
-      valueStartIdx++;
-    }
-    
-    // Извлекаем значения в том же порядке, что и лейблы
-    const sortedLabels = Object.keys(labelPositions).sort((a, b) => labelPositions[a] - labelPositions[b]);
-    
-    sortedLabels.forEach((label, index) => {
-      const valueIdx = valueStartIdx + index;
-      if (valueIdx < lines.length) {
-        const value = lines[valueIdx];
+    // Для каждого лейбла ищем значение сразу после него
+    Object.entries(labelIndices).forEach(([label, idx]) => {
+      // Проверяем следующие строки после лейбла
+      for (let i = idx + 1; i < Math.min(idx + 5, lines.length); i++) {
+        const line = lines[i];
         
+        // Пропускаем другие лейблы
+        if (labels.includes(line)) continue;
+        
+        // Пропускаем служебные строки
+        if (line.startsWith('Идентификатор операции') || line === 'СБП' || line.startsWith('Квитанция')) {
+          break;
+        }
+        
+        // Проверяем и присваиваем значение в зависимости от лейбла
         switch(label) {
           case 'Комиссия':
-            result.commission = value === 'Без комиссии' ? 0 : parseInt(value) || 0;
-            break;
+            if (result.commission === undefined && (line === 'Без комиссии' || line.match(/^\d+$/))) {
+              result.commission = line === 'Без комиссии' ? 0 : parseInt(line);
+              break;
+            }
+            continue;
+            
           case 'Отправитель':
-            if (value && value.match(/^[А-ЯЁ][а-яё]+(?:\s+[А-ЯЁ][а-яё]+)*$/)) {
-              result.senderName = value;
+            if (!result.senderName && line.match(/^[А-ЯЁ][а-яё]+(?:\s+[А-ЯЁ][а-яё]+)*$/)) {
+              result.senderName = line;
+              break;
             }
-            break;
+            continue;
+            
           case 'Телефон получателя':
-            if (value && value.match(/^\+7/)) {
-              result.recipientPhone = value;
+            if (!result.recipientPhone && line.match(/^\+7/)) {
+              result.recipientPhone = line;
+              break;
             }
-            break;
+            continue;
+            
           case 'Получатель':
-            if (value && value.match(/^[А-ЯЁ][а-яё]+/) && !value.includes('@')) {
-              result.recipientName = value;
+            // Для блока из 3 лейблов подряд (Получатель, Банк получателя, Счет списания)
+            // значения идут после последнего лейбла в том же порядке
+            if (labelIndices['Банк получателя'] === idx + 1 && labelIndices['Счет списания'] === idx + 2) {
+              // Это блок из 3 лейблов подряд, ищем значения после последнего
+              const valuesStart = idx + 3;
+              if (valuesStart < lines.length && !result.recipientName) {
+                const recipientLine = lines[valuesStart];
+                if (recipientLine && recipientLine.match(/^[А-ЯЁ][а-яё]+/) && !recipientLine.includes('@')) {
+                  result.recipientName = recipientLine;
+                }
+              }
+              if (valuesStart + 1 < lines.length && !result.recipientBank) {
+                const bankLine = lines[valuesStart + 1];
+                if (bankLine && (bankLine.includes('банк') || bankLine.includes('Банк'))) {
+                  result.recipientBank = bankLine;
+                }
+              }
+              if (valuesStart + 2 < lines.length && !result.senderAccount) {
+                const accountLine = lines[valuesStart + 2];
+                if (accountLine && accountLine.includes('****')) {
+                  result.senderAccount = accountLine;
+                }
+              }
+              break;
+            } else if (!result.recipientName && line.match(/^[А-ЯЁ][а-яё]+/) && !line.includes('@')) {
+              // Обычный случай - значение сразу после лейбла
+              result.recipientName = line;
+              break;
             }
-            break;
+            continue;
+            
           case 'Банк получателя':
-            if (value && (value.includes('банк') || value.includes('Банк') || 
-                ['Сбербанк', 'ВТБ', 'Альфа-Банк', 'Тинькофф', 'Райффайзен'].includes(value))) {
-              result.recipientBank = value;
+            // Пропускаем если это часть блока из 3 лейблов (уже обработано выше)
+            if (labelIndices['Получатель'] === idx - 1 && labelIndices['Счет списания'] === idx + 1) {
+              break;
             }
-            break;
+            if (!result.recipientBank && (line.includes('банк') || line.includes('Банк'))) {
+              result.recipientBank = line;
+              break;
+            }
+            continue;
+            
           case 'Счет списания':
-            if (value && value.includes('****')) {
-              result.senderAccount = value;
+            // Пропускаем если это часть блока из 3 лейблов (уже обработано выше)
+            if (labelIndices['Получатель'] === idx - 2 && labelIndices['Банк получателя'] === idx - 1) {
+              break;
             }
-            break;
+            if (!result.senderAccount && line.includes('****')) {
+              result.senderAccount = line;
+              break;
+            }
+            continue;
         }
+        
+        // Если нашли значение, прерываем цикл для этого лейбла
+        break;
       }
     });
     

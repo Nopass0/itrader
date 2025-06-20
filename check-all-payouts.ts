@@ -1,70 +1,101 @@
-import { PrismaClient } from './generated/prisma';
+import { PrismaClient } from "./generated/prisma";
 
 const prisma = new PrismaClient();
 
 async function checkAllPayouts() {
   try {
-    // Check all recent payouts
-    const recentPayouts = await prisma.payout.findMany({
-      orderBy: { createdAt: 'desc' },
-      take: 20,
+    // Get ALL payouts
+    const allPayouts = await prisma.payout.findMany({
+      orderBy: { createdAt: "desc" },
       include: {
         transaction: true
       }
     });
-    
-    console.log(`\n💰 Recent payouts (last 20):`);
-    
-    for (const payout of recentPayouts) {
-      const amount = payout.amountTrader && typeof payout.amountTrader === 'object' 
-        ? (payout.amountTrader as any)['643'] || payout.amount
-        : payout.amount;
-        
-      console.log(`\n   Payout ${payout.gatePayoutId}:`);
-      console.log(`   - Amount: ${amount} RUB`);
-      console.log(`   - Status: ${payout.status}`);
-      console.log(`   - Wallet: ${payout.wallet}`);
-      console.log(`   - Has transaction: ${!!payout.transaction}`);
-      console.log(`   - Transaction status: ${payout.transaction?.status || 'N/A'}`);
-      console.log(`   - Created: ${payout.createdAt}`);
+
+    console.log(`
+📊 Total payouts: ${allPayouts.length}
+`);
+
+    // Group by status
+    const byStatus: Record<number, any[]> = {};
+    for (const p of allPayouts) {
+      if (!byStatus[p.status]) {
+        byStatus[p.status] = [];
+      }
+      byStatus[p.status].push(p);
     }
-    
-    // Check status distribution
-    const statusCounts = await prisma.payout.groupBy({
-      by: ['status'],
-      _count: true
-    });
-    
-    console.log('\n📊 Payout status distribution:');
-    for (const stat of statusCounts) {
-      console.log(`   Status ${stat.status}: ${stat._count} payouts`);
+
+    // Show stats
+    console.log("📈 Payouts by status:");
+    for (const [status, payouts] of Object.entries(byStatus)) {
+      console.log(`  Status ${status}: ${payouts.length} payouts`);
     }
+
+    // Show payouts with null amounts
+    const nullAmountPayouts = allPayouts.filter(p => p.amount === null);
+    console.log(`
+⚠️ Payouts with NULL amount: ${nullAmountPayouts.length}`);
     
-    // Check if ReceiptPayoutLinker is finding the right payouts
-    const matchablePayouts = await prisma.payout.findMany({
+    for (const p of nullAmountPayouts) {
+      console.log(`
+  Payout ${p.id} (Gate: ${p.gatePayoutId}):`);
+      console.log(`    Status: ${p.status}`);
+      console.log(`    Created: ${p.createdAt}`);
+      console.log(`    Wallet: ${p.wallet}`);
+      console.log(`    RecipientName: ${p.recipientName}`);
+      
+      // Check amountTrader field
+      if (p.amountTrader) {
+        console.log(`    AmountTrader: ${JSON.stringify(p.amountTrader)}`);
+      }
+      
+      // Check trader field
+      if (p.trader) {
+        const trader = p.trader as any;
+        console.log(`    Trader: ${JSON.stringify(trader)}`);
+      }
+      
+      if (p.transaction) {
+        console.log(`    Has transaction: ${p.transaction.id} (status: ${p.transaction.status})`);
+      }
+    }
+
+    // Show payouts with amounts that match our receipts
+    console.log("\n💰 Payouts with amounts 4500 or 4700:");
+    const matchingPayouts = allPayouts.filter(p => p.amount === 4500 || p.amount === 4700);
+    
+    for (const p of matchingPayouts) {
+      const trader = p.trader as any;
+      console.log(`
+  Payout ${p.id} (Gate: ${p.gatePayoutId}):`);
+      console.log(`    Amount: ${p.amount}`);
+      console.log(`    Status: ${p.status}`);
+      console.log(`    Name: ${p.recipientName}`);
+      console.log(`    Wallet: ${p.wallet}`);
+      if (trader?.phone) {
+        console.log(`    Trader phone: ${trader.phone}`);
+      }
+      console.log(`    Created: ${p.createdAt}`);
+      if (p.transaction) {
+        console.log(`    Transaction: ${p.transaction.id} (status: ${p.transaction.status})`);
+      }
+    }
+
+    // Check unlinked receipts again
+    console.log("\n\n📄 Unlinked receipts:");
+    const unlinkedReceipts = await prisma.receipt.findMany({
       where: {
-        OR: [
-          { amount: { in: [2000, 4500, 4700] } },
-          { 
-            amountTrader: {
-              path: '$.643',
-              in: [2000, 4500, 4700]
-            }
-          }
-        ]
+        payoutId: null,
+        isParsed: true
       }
     });
-    
-    console.log(`\n🔍 Payouts matching receipt amounts: ${matchablePayouts.length}`);
-    for (const payout of matchablePayouts) {
-      const amount = payout.amountTrader && typeof payout.amountTrader === 'object' 
-        ? (payout.amountTrader as any)['643'] || payout.amount
-        : payout.amount;
-      console.log(`   - ${payout.gatePayoutId}: ${amount} RUB, status=${payout.status}, wallet=${payout.wallet}`);
+
+    for (const r of unlinkedReceipts) {
+      console.log(`  - ${r.filename}: ${r.amount} RUB, ${r.recipientPhone}`);
     }
-    
+
   } catch (error) {
-    console.error('Error:', error);
+    console.error("Error:", error);
   } finally {
     await prisma.$disconnect();
   }
