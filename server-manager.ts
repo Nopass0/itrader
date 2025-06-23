@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-import { PrismaClient } from "./generated/prisma";
+import { PrismaClient } from "@prisma/client";
 import inquirer from "inquirer";
 import { spawn } from "child_process";
 import fs from "fs/promises";

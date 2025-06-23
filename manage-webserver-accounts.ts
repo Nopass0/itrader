@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-import { PrismaClient } from "./generated/prisma";
+import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import inquirer from "inquirer";
 import { createLogger } from "./src/logger";
