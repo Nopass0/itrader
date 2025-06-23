@@ -14,8 +14,12 @@ bun install
 # Run main application (includes WebSocket server)
 bun run src/app.ts
 
-# Or use the start script
+# Or use the server manager (recommended)
+./manage.sh
+
+# Legacy scripts (deprecated - use manage.sh instead)
 ./start.sh
+./server.sh
 ```
 
 ## WebSocket Server
