@@ -1,10 +1,30 @@
 #!/usr/bin/env bun
-import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import inquirer from "inquirer";
 import { createLogger } from "./src/logger";
+import { execSync } from "child_process";
 
-const prisma = new PrismaClient();
+// Try to import PrismaClient, generate if not available
+let PrismaClient: any;
+let prisma: any;
+
+try {
+  const prismaModule = await import("@prisma/client");
+  PrismaClient = prismaModule.PrismaClient;
+  prisma = new PrismaClient();
+} catch (error) {
+  console.log("Prisma client not found. Generating...\n");
+  try {
+    execSync("bunx prisma generate", { stdio: "inherit" });
+    const prismaModule = await import("@prisma/client");
+    PrismaClient = prismaModule.PrismaClient;
+    prisma = new PrismaClient();
+  } catch (genError) {
+    console.error("Failed to generate Prisma client. Please run 'bunx prisma generate' manually.");
+    process.exit(1);
+  }
+}
+
 const logger = createLogger("AccountManager");
 
 // ANSI color codes
