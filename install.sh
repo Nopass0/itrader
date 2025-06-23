@@ -63,10 +63,10 @@ print_info "Installing system dependencies..."
 if [ "$OS" == "linux" ]; then
     if command_exists apt-get; then
         # Debian/Ubuntu
-        sudo apt-get install -y curl wget git build-essential python3 python3-pip
+        sudo apt-get install -y curl wget git build-essential python3 python3-pip unzip
     elif command_exists yum; then
         # RedHat/CentOS
-        sudo yum install -y curl wget git gcc gcc-c++ make python3 python3-pip
+        sudo yum install -y curl wget git gcc gcc-c++ make python3 python3-pip unzip
     fi
 elif [ "$OS" == "macos" ]; then
     # Check if Homebrew is installed
@@ -74,7 +74,7 @@ elif [ "$OS" == "macos" ]; then
         print_info "Installing Homebrew..."
         /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
     fi
-    brew install curl wget git python3
+    brew install curl wget git python3 unzip
 fi
 
 # Install Node.js if not present (required for some dependencies)
@@ -98,6 +98,42 @@ if ! command_exists bun; then
     # Add Bun to PATH for current session
     export BUN_INSTALL="$HOME/.bun"
     export PATH="$BUN_INSTALL/bin:$PATH"
+    
+    # Add Bun to shell profiles for permanent access
+    print_info "Setting up Bun in shell profiles..."
+    
+    # For bash
+    if [ -f "$HOME/.bashrc" ]; then
+        if ! grep -q "BUN_INSTALL" "$HOME/.bashrc"; then
+            echo "" >> "$HOME/.bashrc"
+            echo "# Bun" >> "$HOME/.bashrc"
+            echo 'export BUN_INSTALL="$HOME/.bun"' >> "$HOME/.bashrc"
+            echo 'export PATH="$BUN_INSTALL/bin:$PATH"' >> "$HOME/.bashrc"
+            print_status "Added Bun to ~/.bashrc"
+        fi
+    fi
+    
+    # For zsh
+    if [ -f "$HOME/.zshrc" ]; then
+        if ! grep -q "BUN_INSTALL" "$HOME/.zshrc"; then
+            echo "" >> "$HOME/.zshrc"
+            echo "# Bun" >> "$HOME/.zshrc"
+            echo 'export BUN_INSTALL="$HOME/.bun"' >> "$HOME/.zshrc"
+            echo 'export PATH="$BUN_INSTALL/bin:$PATH"' >> "$HOME/.zshrc"
+            print_status "Added Bun to ~/.zshrc"
+        fi
+    fi
+    
+    # For general profile
+    if [ -f "$HOME/.profile" ]; then
+        if ! grep -q "BUN_INSTALL" "$HOME/.profile"; then
+            echo "" >> "$HOME/.profile"
+            echo "# Bun" >> "$HOME/.profile"
+            echo 'export BUN_INSTALL="$HOME/.bun"' >> "$HOME/.profile"
+            echo 'export PATH="$BUN_INSTALL/bin:$PATH"' >> "$HOME/.profile"
+            print_status "Added Bun to ~/.profile"
+        fi
+    fi
     
     # Verify installation
     if command_exists bun; then
@@ -191,6 +227,117 @@ EOL
     print_status "start.sh created"
 fi
 
+# Create manage-webserver-accounts.ts if it doesn't exist
+if [ ! -f manage-webserver-accounts.ts ]; then
+    print_info "Creating manage-webserver-accounts.ts..."
+    cat > manage-webserver-accounts.ts << 'EOL'
+#!/usr/bin/env bun
+import { PrismaClient } from "./generated/prisma";
+import bcrypt from "bcryptjs";
+import readline from "readline";
+
+const prisma = new PrismaClient();
+
+const rl = readline.createInterface({
+  input: process.stdin,
+  output: process.stdout,
+});
+
+const question = (prompt: string): Promise<string> => {
+  return new Promise((resolve) => {
+    rl.question(prompt, resolve);
+  });
+};
+
+async function main() {
+  const args = process.argv.slice(2);
+  const command = args[0];
+
+  switch (command) {
+    case "create":
+      const username = args[1];
+      const role = args[2] || "operator";
+      
+      if (!username) {
+        console.error("Usage: bun run manage-webserver-accounts.ts create <username> [role]");
+        process.exit(1);
+      }
+
+      const password = await question(`Enter password for ${username}: `);
+      const hashedPassword = await bcrypt.hash(password, 10);
+
+      try {
+        const user = await prisma.webServerUser.create({
+          data: {
+            username,
+            password: hashedPassword,
+            role,
+            isActive: true,
+          },
+        });
+        console.log(`User ${username} created successfully with role ${role}`);
+      } catch (error: any) {
+        if (error.code === 'P2002') {
+          console.error(`User ${username} already exists`);
+        } else {
+          console.error("Error creating user:", error.message);
+        }
+      }
+      break;
+
+    case "list":
+      const users = await prisma.webServerUser.findMany({
+        select: {
+          id: true,
+          username: true,
+          role: true,
+          isActive: true,
+          createdAt: true,
+          lastLogin: true,
+        },
+      });
+      console.table(users);
+      break;
+
+    case "reset":
+      const resetUsername = args[1];
+      if (!resetUsername) {
+        console.error("Usage: bun run manage-webserver-accounts.ts reset <username>");
+        process.exit(1);
+      }
+
+      const newPassword = await question(`Enter new password for ${resetUsername}: `);
+      const newHashedPassword = await bcrypt.hash(newPassword, 10);
+
+      try {
+        await prisma.webServerUser.update({
+          where: { username: resetUsername },
+          data: { password: newHashedPassword },
+        });
+        console.log(`Password reset successfully for ${resetUsername}`);
+      } catch (error) {
+        console.error(`User ${resetUsername} not found`);
+      }
+      break;
+
+    default:
+      console.log("Usage:");
+      console.log("  bun run manage-webserver-accounts.ts create <username> [role]");
+      console.log("  bun run manage-webserver-accounts.ts list");
+      console.log("  bun run manage-webserver-accounts.ts reset <username>");
+      console.log("\nRoles: admin, operator, viewer");
+  }
+
+  rl.close();
+  await prisma.$disconnect();
+}
+
+main().catch(console.error);
+EOL
+    chmod +x manage-webserver-accounts.ts
+    print_status "manage-webserver-accounts.ts created"
+fi
+
 # Summary
 echo ""
 echo "====================================="
@@ -211,3 +358,5 @@ echo "  Username: admin"
 echo "  Password: admin"
 echo ""
 print_info "Please change the default admin password after first login!"
+echo ""
+print_info "To use Bun in current session, run: source ~/.bashrc (or restart terminal)"
