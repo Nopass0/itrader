@@ -5,7 +5,9 @@
   "scripts": {
     "dev": "bun run --watch src/index.ts",
     "build": "bun build src/index.ts --target=bun --outdir=dist",
-    "start": "bun run src/index.ts",
+    "start": "bun run src/app.ts",
+    "manage": "bun run server-manager.ts",
+    "accounts": "bun run manage-webserver-accounts.ts",
     "cli": "bun run src/index.ts --cli",
     "app": "bun run src/app.ts",
     "setup": "bun run db:generate && bun run db:push",
@@ -27,9 +29,11 @@
   "dependencies": {
     "@prisma/client": "^6.9.0",
     "@types/bcrypt": "^5.0.2",
+    "@types/bcryptjs": "^2.4.6",
     "@types/jsonwebtoken": "^9.0.9",
     "@types/pdf-parse": "^1.1.5",
     "axios": "^1.9.0",
+    "bcryptjs": "^2.4.3",
     "better-sqlite3": "^11.10.0",
     "bybit-api": "^4.1.9",
     "dayjs": "^1.11.13",

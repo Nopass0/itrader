@@ -211,9 +211,13 @@ EOL
     print_info "gmail-credentials.json template created. Please update with your OAuth credentials."
 fi
 
+# Install bcryptjs for password hashing
+print_info "Installing bcryptjs..."
+bun add bcryptjs @types/bcryptjs
+
 # Create default admin account
 print_info "Creating default admin account..."
-bun run manage-webserver-accounts.ts create admin admin 2>/dev/null || print_info "Admin account may already exist"
+echo -e "admin\nadmin" | bun run manage-webserver-accounts.ts create admin admin 2>/dev/null || print_info "Admin account may already exist"
 
 # Create start script if it doesn't exist
 if [ ! -f start.sh ]; then
