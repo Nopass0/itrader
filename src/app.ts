@@ -9,6 +9,7 @@ import { ReceiptProcessorService } from "./services/receiptProcessor";
 import { ActiveOrdersMonitorService } from "./services/activeOrdersMonitor";
 import { InstantOrderMonitorService } from "./services/instantOrderMonitor";
 import { TinkoffReceiptService } from "./services/tinkoffReceiptService";
+import { CancelledOrdersService } from "./services/cancelledOrdersService";
 import { GmailClient, GmailManager } from "./gmail";
 import { WebSocketServer } from "./webserver";
 import { loadConfig } from "./utils/config";
@@ -32,6 +33,7 @@ interface AppContext {
   activeOrdersMonitor: ActiveOrdersMonitorService | null;
   instantOrderMonitor: InstantOrderMonitorService | null;
   tinkoffReceiptService: TinkoffReceiptService | null;
+  cancelledOrdersService: CancelledOrdersService | null;
   isManualMode: boolean;
   webSocketServer?: WebSocketServer;
   mailslurpService?: any;
@@ -115,6 +117,7 @@ async function main() {
     let activeOrdersMonitor: any = null;
     let instantOrderMonitor: any = null;
     let tinkoffReceiptService: any = null;
+    let cancelledOrdersService: any = null;
 
     const checkService = new CheckVerificationService(
       null as any, // Will be set after Gmail initialization
@@ -138,6 +141,7 @@ async function main() {
       activeOrdersMonitor,
       instantOrderMonitor,
       tinkoffReceiptService,
+      cancelledOrdersService,
       isManualMode: false,
     };
 
@@ -148,6 +152,9 @@ async function main() {
     
     // Set global context for exports
     globalContext = context;
+    
+    // Also set in global for WebSocket server access
+    (global as any).appContext = context;
 
     // One-time initialization
     orchestrator.addOneTime("init", async (taskContext: any) => {
@@ -675,6 +682,22 @@ async function main() {
       } catch (error) {
         logger.error("Failed to start Asset Release Service", error as Error);
         console.error("[Init] Failed to start Asset Release Service:", error);
+      }
+      
+      // Initialize Cancelled Orders Service
+      console.log("[Init] 🔍 Starting Cancelled Orders Service...");
+      try {
+        const cancelledOrdersService = new CancelledOrdersService(context.bybitManager);
+        context.cancelledOrdersService = cancelledOrdersService;
+        await cancelledOrdersService.start();
+        
+        logger.info("✅ Cancelled Orders Service started", {
+          checkInterval: "20s"
+        });
+        console.log("[Init] ✅ Cancelled Orders Service started (checking every 20 seconds)");
+      } catch (error) {
+        logger.error("Failed to start Cancelled Orders Service", error as Error);
+        console.error("[Init] Failed to start Cancelled Orders Service:", error);
       }
       
       // Initialize ReceiptProcessorService after email service is ready
@@ -2047,6 +2070,11 @@ export default main;
 let globalContext: AppContext | null = null;
 export function getReceiptProcessor(): ReceiptProcessorService | null {
   return globalContext?.receiptProcessor || null;
+}
+
+// Export helper to get BybitP2PManager
+export function getBybitP2PManager(): BybitP2PManagerService | null {
+  return globalContext?.bybitManager || null;
 }
 
 // Check if running directly

@@ -186,7 +186,7 @@ export class ReceiptProcessorService extends EventEmitter {
     
     try {
       // Try MailSlurp first
-      const mailslurpAccount = await prisma.mailslurpAccount.findFirst({
+      const mailslurpAccount = await prisma.mailSlurpAccount.findFirst({
         where: { isActive: true }
       });
 

@@ -225,6 +225,81 @@ export class GateAccountManager {
   }
 
   /**
+   * Обеспечивает, что аккаунт авторизован перед возвратом клиента
+   * Автоматически авторизуется, если cookies отсутствуют или невалидны
+   * @param email - Email аккаунта
+   * @returns Авторизованный клиент или undefined
+   */
+  async getAuthenticatedClient(email: string): Promise<GateClient | undefined> {
+    const account = this.accounts.get(email);
+    let client = this.clients.get(email);
+
+    if (!account) {
+      console.warn(`[GateAccountManager] Аккаунт ${email} не найден`);
+      return undefined;
+    }
+
+    // Если нет клиента, создаем новый
+    if (!client) {
+      client = new GateClient(this.rateLimiter, this.clientOptions);
+      this.clients.set(email, client);
+    }
+
+    // Проверяем наличие cookies
+    const cookies = client.getCookies();
+    const cookiesPath = this.getCookiesPath(email);
+    let hasCookies = cookies && cookies.length > 0;
+
+    // Если нет cookies в клиенте, пытаемся загрузить из файла
+    if (!hasCookies) {
+      try {
+        const loadedCookies = await loadCookiesFromFile(cookiesPath);
+        if (loadedCookies.length > 0) {
+          client.setCookies(loadedCookies);
+          hasCookies = true;
+          console.log(`[GateAccountManager] Загружены cookies из файла для ${email}`);
+        }
+      } catch (error) {
+        console.log(`[GateAccountManager] Не найдены cookies в файле для ${email}`);
+      }
+    }
+
+    // Если есть cookies, проверяем их валидность
+    if (hasCookies) {
+      try {
+        const isAuth = await client.isAuthenticated();
+        if (isAuth) {
+          console.log(`[GateAccountManager] Аккаунт ${email} уже авторизован`);
+          return client;
+        }
+        console.log(`[GateAccountManager] Cookies невалидны для ${email}, требуется повторная авторизация`);
+      } catch (error) {
+        console.log(`[GateAccountManager] Ошибка проверки авторизации для ${email}:`, error);
+      }
+    }
+
+    // Если нет валидных cookies и есть пароль, выполняем авторизацию
+    if (account.password) {
+      console.log(`[GateAccountManager] Выполняем авторизацию для ${email}`);
+      try {
+        const loginResponse = await client.login(email, account.password);
+        console.log(`[GateAccountManager] Успешная авторизация для ${email}`);
+        
+        // Сохраняем новые cookies
+        await this.saveCookiesForAccount(email);
+        
+        return client;
+      } catch (error) {
+        console.error(`[GateAccountManager] Ошибка авторизации для ${email}:`, error);
+        return undefined;
+      }
+    } else {
+      console.error(`[GateAccountManager] Нет пароля для аккаунта ${email}, невозможно авторизоваться`);
+      return undefined;
+    }
+  }
+
+  /**
    * Получает баланс аккаунта
    * @param email - Email аккаунта
    * @param currency - Валюта (по умолчанию RUB)
@@ -474,6 +549,15 @@ export class GateAccountManager {
   }
 
   /**
+   * Проверяет, существует ли аккаунт
+   * @param email - Email аккаунта
+   * @returns true если аккаунт существует
+   */
+  hasAccount(email: string): boolean {
+    return this.accounts.has(email);
+  }
+
+  /**
    * Получает список всех аккаунтов
    * @returns Массив с информацией об аккаунтах
    */
@@ -491,6 +575,29 @@ export class GateAccountManager {
       lastUsed: account.lastUsed,
       hasCookies: (account.cookies?.length || 0) > 0,
     }));
+  }
+
+  /**
+   * Получает клиент по accountId (для совместимости)
+   * Ищет аккаунт по accountId в загруженных cookies
+   * @param accountId - ID аккаунта
+   * @returns Клиент или undefined
+   */
+  getClientByAccountId(accountId: string): GateClient | undefined {
+    // Пытаемся найти аккаунт по accountId в названии файла cookies
+    for (const [email, account] of this.accounts.entries()) {
+      const cookiesPath = path.join(this.cookiesDir, `${accountId}.json`);
+      try {
+        // Проверяем, существует ли файл с таким accountId
+        const fs = require('fs');
+        if (fs.existsSync(cookiesPath)) {
+          return this.clients.get(email);
+        }
+      } catch (error) {
+        // Игнорируем ошибки
+      }
+    }
+    return undefined;
   }
 
   /**

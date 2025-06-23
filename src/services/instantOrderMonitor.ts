@@ -430,6 +430,36 @@ export class InstantOrderMonitorService {
           payout: true,
         },
       });
+
+      // Delete advertisement from Bybit immediately after linking order
+      try {
+        logger.info("Deleting advertisement from Bybit after order creation", { 
+          itemId: orderDetails.itemId,
+          orderId: order.id 
+        });
+        
+        await client.cancelAdvertisement(orderDetails.itemId);
+        
+        logger.info("✅ Advertisement deleted from Bybit", { 
+          itemId: orderDetails.itemId 
+        });
+
+        // Update advertisement status in database
+        await db.prisma.advertisement.update({
+          where: { id: advertisement.id },
+          data: {
+            isActive: false,
+            updatedAt: new Date()
+          }
+        });
+        
+        logger.info("✅ Advertisement marked as inactive in database");
+      } catch (error) {
+        logger.error("Failed to delete advertisement from Bybit", error, {
+          itemId: orderDetails.itemId,
+          orderId: order.id
+        });
+      }
     } else {
       // Create new transaction only if none exists
       logger.warn("Creating transaction without payout - this may cause issues!", { 
@@ -451,6 +481,36 @@ export class InstantOrderMonitorService {
           chatStep: 0,
         },
       });
+
+      // Delete advertisement from Bybit immediately after linking order (for new transaction)
+      try {
+        logger.info("Deleting advertisement from Bybit after order creation (new transaction)", { 
+          itemId: orderDetails.itemId,
+          orderId: order.id 
+        });
+        
+        await client.cancelAdvertisement(orderDetails.itemId);
+        
+        logger.info("✅ Advertisement deleted from Bybit", { 
+          itemId: orderDetails.itemId 
+        });
+
+        // Update advertisement status in database
+        await db.prisma.advertisement.update({
+          where: { id: advertisement.id },
+          data: {
+            isActive: false,
+            updatedAt: new Date()
+          }
+        });
+        
+        logger.info("✅ Advertisement marked as inactive in database");
+      } catch (error) {
+        logger.error("Failed to delete advertisement from Bybit", error, {
+          itemId: orderDetails.itemId,
+          orderId: order.id
+        });
+      }
     }
 
     logger.info("Transaction ready for order", { 

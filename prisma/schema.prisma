@@ -165,13 +165,12 @@ model GmailAccount {
   updatedAt    DateTime  @updatedAt
 }
 
-model MailslurpAccount {
+model MailSlurpAccount {
   id        String    @id @default(cuid())
   email     String    @unique
   inboxId   String    @unique
-  apiKey    String
-  isActive  Boolean   @default(true)
-  lastSync  DateTime?
+  isActive  Boolean   @default(false)
+  lastUsed  DateTime?
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 }

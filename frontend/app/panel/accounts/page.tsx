@@ -15,7 +15,10 @@ import {
   Shield,
   MoreHorizontal,
   Eye,
-  EyeOff
+  EyeOff,
+  TrendingUp,
+  Wallet,
+  Mail
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { 
@@ -37,6 +40,10 @@ import { AddAccountDialog } from "@/components/panel/AddAccountDialog";
 import { useGateAccounts, useBybitAccounts, GateAccount, BybitAccount } from "@/hooks/useAccounts";
 import { useGateDashboardStats, useGateAccountData } from '@/hooks/useGateAccount';
 import { useGmailAccounts } from '@/hooks/useGmailAccounts';
+import { useMailSlurpAccounts } from '@/hooks/useMailSlurpAccounts';
+import { SystemAccountsTab } from '@/components/panel/SystemAccountsTab';
+import { MailSlurpAccountCard } from '@/components/panel/MailSlurpAccountCard';
+import { MailSlurpAccountForm } from '@/components/panel/MailSlurpAccountForm';
 
 // Status badge component
 const StatusBadge: React.FC<{ status: string; errorMessage?: string }> = ({ status, errorMessage }) => {
@@ -280,24 +287,24 @@ const GateAccountCard: React.FC<{
       exit={{ opacity: 0, y: -20 }}
       className="group"
     >
-      <Card className="glassmorphism hover:shadow-lg transition-all duration-300 border-primary/10">
+      <Card className="glassmorphism hover:shadow-lg transition-all duration-300 border-0 shadow-xl hover:shadow-2xl">
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-full bg-blue-500/10">
-                <RobotEmoji size={20} />
+              <div className="p-3 rounded-xl bg-gradient-to-br from-blue-500/20 to-blue-600/20 backdrop-blur-sm">
+                <RobotEmoji size={24} />
               </div>
               <div>
                 <CardTitle className="text-lg flex items-center gap-2">
                   Gate.cx
-                  <Badge variant="outline" className="text-xs">ID: {account.id}</Badge>
+                  <Badge variant="secondary" className="text-xs px-2 py-0">{account.accountId || `ID: ${account.id}`}</Badge>
                 </CardTitle>
-                <CardDescription className="flex items-center gap-2">
+                <CardDescription className="flex items-center gap-2 mt-1">
                   {showDetails ? account.email : account.email.replace(/(.{3}).*(@.*)/, "$1***$2")}
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-4 w-4"
+                    className="h-4 w-4 hover:bg-transparent"
                     onClick={() => setShowDetails(!showDetails)}
                   >
                     {showDetails ? <EyeOff size={12} /> : <Eye size={12} />}
@@ -315,10 +322,13 @@ const GateAccountCard: React.FC<{
 
         <CardContent className="space-y-4">
           {/* Mini Chart */}
-          <div className="space-y-2">
+          <div className="space-y-2 p-3 rounded-lg bg-muted/30 backdrop-blur-sm">
             <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Оборот (7 дней)</span>
-              <span className="font-medium">${totalTurnoverUSDT.toFixed(2)}</span>
+              <span className="text-muted-foreground flex items-center gap-1">
+                <TrendingUp size={14} />
+                Оборот (7 дней)
+              </span>
+              <span className="font-semibold text-lg">${totalTurnoverUSDT.toFixed(2)}</span>
             </div>
             <MiniChart data={stats?.graph || []} />
           </div>
@@ -372,18 +382,18 @@ const GateAccountCard: React.FC<{
           )}
         </CardContent>
 
-        <CardFooter className="flex justify-between pt-0">
+        <CardFooter className="flex justify-between pt-3 pb-3 border-t border-border/50">
           <div className="text-xs text-muted-foreground">
             {account.lastCheckAt 
-              ? `Проверен: ${new Date(account.lastCheckAt).toLocaleTimeString()}`
-              : `Создан: ${new Date(account.createdAt).toLocaleTimeString()}`
+              ? `Проверен: ${new Date(account.lastCheckAt).toLocaleTimeString('ru-RU')}`
+              : `Создан: ${new Date(account.createdAt).toLocaleTimeString('ru-RU')}`
             }
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-1">
             <Button
-              variant={account.isActive ? "ghost" : "outline"}
+              variant={account.isActive ? "ghost" : "secondary"}
               size="icon"
-              className="h-8 w-8"
+              className="h-8 w-8 hover:bg-secondary"
               onClick={handleToggleActive}
               disabled={isToggling}
               title={account.isActive ? "Отключить аккаунт" : "Включить аккаунт"}
@@ -393,7 +403,7 @@ const GateAccountCard: React.FC<{
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8"
+              className="h-8 w-8 hover:bg-secondary"
               onClick={handleSync}
               disabled={isSyncing || !account.isActive}
             >
@@ -538,23 +548,24 @@ const BybitAccountCard: React.FC<{
       exit={{ opacity: 0, y: -20 }}
       className="group"
     >
-      <Card className="glassmorphism hover:shadow-lg transition-all duration-300 border-primary/10">
+      <Card className="glassmorphism hover:shadow-lg transition-all duration-300 border-0 shadow-xl hover:shadow-2xl">
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-full bg-orange-500/10">
-                <MoneyBagEmoji size={20} />
+              <div className="p-3 rounded-xl bg-gradient-to-br from-orange-500/20 to-orange-600/20 backdrop-blur-sm">
+                <MoneyBagEmoji size={24} />
               </div>
               <div className="flex-1 min-w-0">
                 <CardTitle className="text-lg flex items-center gap-2">
-                  <span className="truncate min-w-0">{displayEmail}</span>
+                  Bybit
+                  <Badge variant="secondary" className="text-xs px-2 py-0">{account.accountId || `ID: ${account.id}`}</Badge>
                   {activeAds > 0 && (
                     <Badge variant="default" className="text-xs whitespace-nowrap flex-shrink-0">
                       {activeAds} активн.
                     </Badge>
                   )}
                 </CardTitle>
-                <CardDescription className="flex items-center gap-2">
+                <CardDescription className="flex items-center gap-2 mt-1">
                   {uid ? (
                     <>UID: {uid}</>
                   ) : (
@@ -563,7 +574,7 @@ const BybitAccountCard: React.FC<{
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-4 w-4"
+                    className="h-4 w-4 hover:bg-transparent"
                     onClick={() => setShowDetails(!showDetails)}
                   >
                     {showDetails ? <EyeOff size={12} /> : <Eye size={12} />}
@@ -577,30 +588,50 @@ const BybitAccountCard: React.FC<{
 
         <CardContent className="space-y-3">
           {account.status === 'active' && accountInfo && (
-            <div className="space-y-2">
-              <div className="grid grid-cols-2 gap-2 text-sm">
-                <div>
-                  <div className="text-xs text-muted-foreground">Тип аккаунта</div>
-                  <div className="font-medium">{accountInfo?.accountInfo?.accountType || accountInfo?.accountType || 'UNIFIED'}</div>
+            <div className="space-y-3">
+              {/* Account Stats */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <Shield size={12} />
+                    <span>KYC уровень</span>
+                  </div>
+                  <div className="font-medium text-sm">{accountInfo?.accountInfo?.kycLevel || accountInfo?.kycLevel || 'Не указан'}</div>
                 </div>
-                <div>
-                  <div className="text-xs text-muted-foreground">KYC</div>
-                  <div className="font-medium">{accountInfo?.accountInfo?.kycLevel || accountInfo?.kycLevel || 'Не указан'}</div>
-                </div>
-              </div>
-              
-              {accountInfo.walletBalance && (
-                <div>
-                  <div className="text-xs text-muted-foreground mb-1">Общий баланс</div>
-                  <div className="font-medium text-lg">
-                    ${parseFloat(accountInfo.walletBalance.totalEquityInUSD || '0').toFixed(2)}
+                
+                <div className="space-y-1">
+                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <Wallet size={12} />
+                    <span>Баланс</span>
+                  </div>
+                  <div className="font-medium text-sm">
+                    ${parseFloat(accountInfo?.walletBalance?.totalEquityInUSD || '0').toFixed(2)}
                   </div>
                 </div>
-              )}
+              </div>
 
-              {p2pAds.length > 0 && (
-                <div className="text-xs text-muted-foreground">
-                  Активных объявлений: {activeAds} из {p2pAds.length} (макс. 2)
+              {/* P2P Trading Stats */}
+              <div className="space-y-2">
+                <div className="text-xs text-muted-foreground">P2P статистика</div>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div className="text-center p-2 rounded bg-muted/50">
+                    <div className="font-medium">{activeAds}/{p2pAds.length}</div>
+                    <div className="text-xs text-muted-foreground">Объявлений</div>
+                  </div>
+                  <div className="text-center p-2 rounded bg-muted/50">
+                    <div className="font-medium">{account.orders || 0}</div>
+                    <div className="text-xs text-muted-foreground">Ордеров</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Recent Activity */}
+              {account.lastSync && (
+                <div className="space-y-1">
+                  <div className="text-xs text-muted-foreground">Последняя синхронизация</div>
+                  <div className="text-xs">
+                    {new Date(account.lastSync).toLocaleString('ru-RU')}
+                  </div>
                 </div>
               )}
             </div>
@@ -621,18 +652,18 @@ const BybitAccountCard: React.FC<{
           )}
         </CardContent>
 
-        <CardFooter className="flex justify-between pt-0">
+        <CardFooter className="flex justify-between pt-3 pb-3 border-t border-border/50">
           <div className="text-xs text-muted-foreground">
             {account.lastCheckAt 
-              ? `Проверен: ${new Date(account.lastCheckAt).toLocaleTimeString()}`
-              : `Создан: ${new Date(account.createdAt).toLocaleTimeString()}`
+              ? `Проверен: ${new Date(account.lastCheckAt).toLocaleTimeString('ru-RU')}`
+              : `Создан: ${new Date(account.createdAt).toLocaleTimeString('ru-RU')}`
             }
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-1">
             <Button
-              variant={account.isActive ? "ghost" : "outline"}
+              variant={account.isActive ? "ghost" : "secondary"}
               size="icon"
-              className="h-8 w-8"
+              className="h-8 w-8 hover:bg-secondary"
               onClick={handleToggleActive}
               disabled={isToggling}
               title={account.isActive ? "Отключить аккаунт" : "Включить аккаунт"}
@@ -642,7 +673,7 @@ const BybitAccountCard: React.FC<{
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8"
+              className="h-8 w-8 hover:bg-secondary"
               onClick={() => {
                 loadAccountInfo();
                 onRefresh();
@@ -676,8 +707,9 @@ const BybitAccountCard: React.FC<{
 
 export default function AccountsPage() {
   const { resolvedTheme } = useTheme();
-  const { isMockMode } = useAuthStore();
+  const { isMockMode, user } = useAuthStore();
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const isAdmin = user?.role === 'admin';
   
   const { 
     accounts: gateAccounts, 
@@ -696,22 +728,24 @@ export default function AccountsPage() {
   } = useBybitAccounts();
   
   const {
-    accounts: gmailAccounts,
-    loading: gmailLoading,
-    refresh: refreshGmail,
-    deleteAccount: deleteGmailAccount
-  } = useGmailAccounts();
+    accounts: mailSlurpAccounts,
+    loading: mailSlurpLoading,
+    refresh: refreshMailSlurp,
+    createAccount: createMailSlurpAccount,
+    deleteAccount: deleteMailSlurpAccount,
+    setActiveAccount: setActiveMailSlurpAccount
+  } = useMailSlurpAccounts();
 
   const handleRefreshAll = () => {
     refetchGate();
     refetchBybit();
-    refreshGmail();
+    refreshMailSlurp();
   };
 
   const handleAccountAdded = () => {
     refetchGate();
     refetchBybit();
-    refreshGmail();
+    refreshMailSlurp();
   };
 
   return (
@@ -772,10 +806,16 @@ export default function AccountsPage() {
               <MoneyBagEmoji size={16} />
               Bybit ({bybitAccounts.length})
             </TabsTrigger>
-            <TabsTrigger value="gmail" className="flex items-center gap-2">
-              📧
-              Gmail ({gmailAccounts.length})
+            <TabsTrigger value="mailslurp" className="flex items-center gap-2">
+              <Mail size={16} />
+              MailSlurp ({mailSlurpAccounts.length})
             </TabsTrigger>
+            {isAdmin && (
+              <TabsTrigger value="system" className="flex items-center gap-2">
+                <Shield size={16} />
+                Системные аккаунты
+              </TabsTrigger>
+            )}
           </TabsList>
 
           {/* Gate.cx Accounts */}
@@ -916,105 +956,77 @@ export default function AccountsPage() {
             </motion.div>
           </TabsContent>
 
-          {/* Gmail Accounts */}
-          <TabsContent value="gmail">
+          {/* MailSlurp Accounts */}
+          <TabsContent value="mailslurp">
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              transition={{ duration: 0.3 }}
-              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+              className="space-y-4"
             >
-              {gmailLoading ? (
-                <div className="col-span-full text-center py-8">
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-                  <p className="mt-4 text-muted-foreground">Загрузка Gmail аккаунтов...</p>
+              {/* Add new account section */}
+              <Card className="glassmorphism">
+                <CardHeader>
+                  <CardTitle>Добавить MailSlurp аккаунт</CardTitle>
+                  <CardDescription>
+                    Введите данные вашего MailSlurp inbox для получения чеков
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <MailSlurpAccountForm onSuccess={refreshMailSlurp} />
+                </CardContent>
+              </Card>
+
+              {/* Accounts list */}
+              {mailSlurpLoading ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {[...Array(2)].map((_, i) => (
+                    <Card key={i} className="glassmorphism animate-pulse">
+                      <CardHeader>
+                        <div className="h-4 bg-primary/20 rounded w-3/4"></div>
+                        <div className="h-3 bg-primary/10 rounded w-1/2"></div>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-2">
+                          <div className="h-3 bg-primary/20 rounded"></div>
+                          <div className="h-3 bg-primary/10 rounded w-3/4"></div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
                 </div>
-              ) : gmailAccounts.length === 0 ? (
-                <Card className="col-span-full glassmorphism">
+              ) : mailSlurpAccounts.length === 0 ? (
+                <Card className="glassmorphism">
                   <CardContent className="text-center py-16">
-                    <div className="w-20 h-20 rounded-full bg-muted/20 flex items-center justify-center mx-auto mb-4">
-                      <span className="text-4xl">📧</span>
-                    </div>
-                    <h3 className="text-lg font-medium mb-2">Нет Gmail аккаунтов</h3>
-                    <p className="text-muted-foreground mb-6">
-                      Добавьте Gmail аккаунт для получения чеков и уведомлений
+                    <Mail size={48} className="mx-auto mb-4 text-muted-foreground" />
+                    <h3 className="text-lg font-medium mb-2">Нет MailSlurp аккаунтов</h3>
+                    <p className="text-muted-foreground">
+                      Добавьте MailSlurp аккаунт для автоматического получения чеков
                     </p>
-                    <Button onClick={() => setIsAddDialogOpen(true)}>
-                      <PlusCircle size={16} className="mr-2" />
-                      Добавить Gmail
-                    </Button>
                   </CardContent>
                 </Card>
               ) : (
-                gmailAccounts.map((account, index) => (
-                  <motion.div
-                    key={account.id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.1 }}
-                  >
-                    <Card className="glassmorphism hover:glow-card group">
-                      <CardHeader>
-                        <div className="flex items-start justify-between">
-                          <div>
-                            <CardTitle className="text-lg flex items-center gap-2">
-                              <span className="text-xl">📧</span>
-                              Gmail
-                            </CardTitle>
-                            <CardDescription className="mt-1">
-                              {account.email}
-                            </CardDescription>
-                          </div>
-                          <Badge variant={account.isActive ? "default" : "secondary"}>
-                            {account.isActive ? "Активен" : "Неактивен"}
-                          </Badge>
-                        </div>
-                      </CardHeader>
-                      
-                      <CardContent className="space-y-4">
-                        <div className="space-y-2">
-                          <div className="flex justify-between items-center">
-                            <span className="text-sm text-muted-foreground">Статус токена:</span>
-                            <Badge variant={account.hasRefreshToken ? "outline" : "destructive"}>
-                              {account.hasRefreshToken ? "Авторизован" : "Требуется авторизация"}
-                            </Badge>
-                          </div>
-                          
-                          {account.lastSync && (
-                            <div className="flex justify-between items-center">
-                              <span className="text-sm text-muted-foreground">Последняя синхронизация:</span>
-                              <span className="text-sm">
-                                {new Date(account.lastSync).toLocaleString('ru-RU')}
-                              </span>
-                            </div>
-                          )}
-                          
-                          <div className="flex justify-between items-center">
-                            <span className="text-sm text-muted-foreground">Добавлен:</span>
-                            <span className="text-sm">
-                              {new Date(account.createdAt).toLocaleDateString('ru-RU')}
-                            </span>
-                          </div>
-                        </div>
-                      </CardContent>
-                      
-                      <CardFooter className="gap-2">
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={() => deleteGmailAccount(account.id)}
-                          className="flex-1"
-                        >
-                          <Trash size={14} className="mr-1" />
-                          Удалить
-                        </Button>
-                      </CardFooter>
-                    </Card>
-                  </motion.div>
-                ))
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <AnimatePresence>
+                    {mailSlurpAccounts.map((account) => (
+                      <MailSlurpAccountCard
+                        key={account.id}
+                        account={account}
+                        onDelete={deleteMailSlurpAccount}
+                        onSetActive={setActiveMailSlurpAccount}
+                      />
+                    ))}
+                  </AnimatePresence>
+                </div>
               )}
             </motion.div>
           </TabsContent>
+
+          {/* System Accounts Tab - Admin Only */}
+          {isAdmin && (
+            <TabsContent value="system">
+              <SystemAccountsTab />
+            </TabsContent>
+          )}
         </Tabs>
       </div>
 

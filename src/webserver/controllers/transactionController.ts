@@ -6,8 +6,11 @@ import type { AuthenticatedSocket } from '../types';
 import { handleError, handleSuccess } from '../middleware/auth';
 import { validatePaginationParams, paginatePrisma } from '../utils/pagination';
 import { PrismaClient } from '../../../generated/prisma';
+import { CancelledOrdersService } from '../../services/cancelledOrdersService';
+import { createLogger } from '../../logger';
 
 const prisma = new PrismaClient();
+const logger = createLogger('TransactionController');
 
 export class TransactionController {
   /**
@@ -51,7 +54,11 @@ export class TransactionController {
         },
         {
           payout: true,
-          advertisement: true,
+          advertisement: {
+            include: {
+              bybitAccount: true
+            }
+          },
           chatMessages: {
             orderBy: { createdAt: 'desc' },
             take: 5 // Последние 5 сообщений
@@ -133,9 +140,11 @@ export class TransactionController {
         'waiting_payment',
         'payment_received',
         'check_received',
+        'receipt_received',
         'completed',
         'failed',
-        'cancelled'
+        'cancelled',
+        'cancelled_by_counterparty'
       ];
 
       // Также проверяем кастомные статусы
@@ -156,7 +165,11 @@ export class TransactionController {
         },
         include: {
           payout: true,
-          advertisement: true
+          advertisement: {
+            include: {
+              bybitAccount: true
+            }
+          }
         }
       });
 
@@ -280,9 +293,11 @@ export class TransactionController {
         { code: 'waiting_payment', name: 'Waiting Payment', color: '#FFD700' },
         { code: 'payment_received', name: 'Payment Received', color: '#32CD32' },
         { code: 'check_received', name: 'Check Received', color: '#00FF00' },
+        { code: 'receipt_received', name: 'Receipt Received', color: '#4B0082' },
         { code: 'completed', name: 'Completed', color: '#008000', isFinal: true },
         { code: 'failed', name: 'Failed', color: '#FF0000', isFinal: true },
-        { code: 'cancelled', name: 'Cancelled', color: '#808080', isFinal: true }
+        { code: 'cancelled', name: 'Cancelled', color: '#808080', isFinal: true },
+        { code: 'cancelled_by_counterparty', name: 'Cancelled by Counterparty', color: '#FF8C00', isFinal: true }
       ];
 
       const customStatuses = await prisma.customStatus.findMany({
@@ -365,6 +380,79 @@ export class TransactionController {
         undefined,
         callback
       );
+    } catch (error) {
+      handleError(error, callback);
+    }
+  }
+
+  /**
+   * Пересоздание объявления для отмененной транзакции
+   */
+  static async recreateAdvertisement(
+    socket: AuthenticatedSocket,
+    data: { transactionId: string },
+    callback: Function
+  ) {
+    try {
+      // Проверяем права (только admin и operator)
+      if (socket.role === 'viewer') {
+        throw new Error('Viewers cannot recreate advertisements');
+      }
+
+      logger.info('Recreating advertisement for transaction', { 
+        transactionId: data.transactionId,
+        userId: socket.accountId 
+      });
+
+      // Получаем BybitP2PManager из глобального контекста
+      const { getBybitP2PManager } = require('../../app');
+      const bybitManager = getBybitP2PManager();
+      
+      if (!bybitManager) {
+        throw new Error('BybitP2PManager not initialized');
+      }
+
+      // Используем сервис для пересоздания объявления
+      const cancelledOrdersService = new CancelledOrdersService(bybitManager);
+      await cancelledOrdersService.recreateAdvertisement(data.transactionId);
+
+      handleSuccess(null, 'Advertisement recreated successfully', callback);
+    } catch (error) {
+      handleError(error, callback);
+    }
+  }
+
+  /**
+   * Получение списка транзакций с отмененными ордерами
+   */
+  static async getCancelledTransactions(
+    socket: AuthenticatedSocket,
+    data: any,
+    callback: Function
+  ) {
+    try {
+      const params = validatePaginationParams(data);
+      
+      const response = await paginatePrisma(
+        prisma.transaction,
+        {
+          ...params,
+          where: {
+            status: 'cancelled_by_counterparty'
+          },
+          sortBy: 'updatedAt'
+        },
+        {
+          payout: true,
+          advertisement: {
+            include: {
+              bybitAccount: true
+            }
+          }
+        }
+      );
+
+      handleSuccess(response, undefined, callback);
     } catch (error) {
       handleError(error, callback);
     }

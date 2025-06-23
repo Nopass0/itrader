@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Progress } from '@/components/ui/progress';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   Copy,
   ExternalLink,
@@ -49,6 +50,17 @@ interface DetailsDialogProps {
 
 export function TransactionDetailsDialog({ item, isOpen, onClose, onOpenChat }: DetailsDialogProps) {
   const { toast } = useToast();
+  const [isUpdatingStatus, setIsUpdatingStatus] = React.useState(false);
+  const [currentUser, setCurrentUser] = React.useState<any>(null);
+  
+  // Get current user role from localStorage
+  React.useEffect(() => {
+    const userStr = localStorage.getItem('systemAccount');
+    if (userStr) {
+      const user = JSON.parse(userStr);
+      setCurrentUser(user);
+    }
+  }, []);
   
   if (!item) return null;
 
@@ -86,8 +98,13 @@ export function TransactionDetailsDialog({ item, isOpen, onClose, onOpenChat }: 
       'success': CheckCircle,
       'failed': XCircle,
       'cancelled': XCircle,
+      'cancelled_by_counterparty': AlertCircle,
       'pending': Clock,
       'processing': Clock,
+      'chat_started': MessageSquare,
+      'waiting_payment': Clock,
+      'payment_received': DollarSign,
+      'check_received': CheckCircle,
       'active': Zap,
       '5': CheckCircle, // Payout completed
       '4': XCircle, // Payout rejected
@@ -96,6 +113,72 @@ export function TransactionDetailsDialog({ item, isOpen, onClose, onOpenChat }: 
       '1': Clock, // Payout created
     };
     return statusMap[status?.toString()] || Info;
+  };
+
+  // Transaction statuses in Russian
+  const transactionStatuses = [
+    { value: 'pending', label: 'Ожидание', icon: Clock },
+    { value: 'chat_started', label: 'Чат начат', icon: MessageSquare },
+    { value: 'waiting_payment', label: 'Ожидание оплаты', icon: Clock },
+    { value: 'payment_received', label: 'Оплата получена', icon: DollarSign },
+    { value: 'check_received', label: 'Чек получен', icon: CheckCircle },
+    { value: 'completed', label: 'Завершено', icon: CheckCircle },
+    { value: 'failed', label: 'Ошибка', icon: XCircle },
+    { value: 'cancelled', label: 'Отменено', icon: XCircle },
+    { value: 'cancelled_by_counterparty', label: 'Отменено контрагентом', icon: AlertCircle },
+  ];
+
+  const getStatusLabel = (status: string) => {
+    const statusObj = transactionStatuses.find(s => s.value === status);
+    return statusObj?.label || status;
+  };
+
+  const handleStatusChange = async (newStatus: string) => {
+    if (!currentUser || currentUser.role !== 'admin') {
+      toast({
+        title: "Ошибка",
+        description: "Только администраторы могут изменять статус",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsUpdatingStatus(true);
+    try {
+      const socket = (window as any).socket;
+      if (!socket) {
+        throw new Error("Нет подключения к серверу");
+      }
+
+      await new Promise((resolve, reject) => {
+        socket.emit('transactions:updateStatus', {
+          id: item.id,
+          status: newStatus
+        }, (response: any) => {
+          if (response.error) {
+            reject(new Error(response.error));
+          } else {
+            resolve(response.data);
+          }
+        });
+      });
+
+      toast({
+        title: "Успешно",
+        description: "Статус транзакции обновлен",
+      });
+
+      // Update local item
+      item.status = newStatus;
+    } catch (error: any) {
+      toast({
+        title: "Ошибка",
+        description: error.message || "Не удалось обновить статус",
+        variant: "destructive",
+      });
+    } finally {
+      setIsUpdatingStatus(false);
+    }
   };
 
   const getItemType = () => {
@@ -130,20 +213,51 @@ export function TransactionDetailsDialog({ item, isOpen, onClose, onOpenChat }: 
                 {itemType === 'advertisement' && 'Объявление'}
                 {itemType === 'payout' && 'Выплата'}
               </Badge>
-              {item.status && (
+              {item.status && itemType === 'transaction' && currentUser?.role === 'admin' ? (
+                <Select
+                  value={item.status}
+                  onValueChange={handleStatusChange}
+                  disabled={isUpdatingStatus}
+                >
+                  <SelectTrigger className="w-[220px] h-8">
+                    <SelectValue>
+                      <div className="flex items-center gap-2">
+                        {React.createElement(getStatusIcon(item.status), { size: 12 })}
+                        <span className="text-xs">{getStatusLabel(item.status)}</span>
+                      </div>
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {transactionStatuses.map((status) => (
+                      <SelectItem key={status.value} value={status.value}>
+                        <div className="flex items-center gap-2">
+                          {React.createElement(status.icon, { size: 12 })}
+                          <span>{status.label}</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : item.status ? (
                 <Badge 
                   variant="outline" 
                   className={cn(
                     "text-xs",
                     item.status === 'completed' && "text-green-500 border-green-500/50",
                     item.status === 'failed' && "text-red-500 border-red-500/50",
-                    item.status === 'pending' && "text-yellow-500 border-yellow-500/50"
+                    item.status === 'cancelled' && "text-gray-500 border-gray-500/50",
+                    item.status === 'cancelled_by_counterparty' && "text-orange-500 border-orange-500/50",
+                    item.status === 'pending' && "text-yellow-500 border-yellow-500/50",
+                    item.status === 'chat_started' && "text-blue-500 border-blue-500/50",
+                    item.status === 'waiting_payment' && "text-orange-500 border-orange-500/50",
+                    item.status === 'payment_received' && "text-purple-500 border-purple-500/50",
+                    item.status === 'check_received' && "text-green-500 border-green-500/50"
                   )}
                 >
                   {React.createElement(getStatusIcon(item.status), { size: 12, className: "mr-1" })}
-                  {item.status}
+                  {itemType === 'transaction' ? getStatusLabel(item.status) : item.status}
                 </Badge>
-              )}
+              ) : null}
             </div>
           </div>
         </DialogHeader>
@@ -229,6 +343,66 @@ export function TransactionDetailsDialog({ item, isOpen, onClose, onOpenChat }: 
                   )}
                 </CardContent>
               </Card>
+
+              {/* Status Information */}
+              {item.status && itemType === 'transaction' && (
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      <Shield size={16} />
+                      Статус транзакции
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-2">Текущий статус</p>
+                      {currentUser?.role === 'admin' ? (
+                        <Select
+                          value={item.status}
+                          onValueChange={handleStatusChange}
+                          disabled={isUpdatingStatus}
+                        >
+                          <SelectTrigger className="w-full">
+                            <SelectValue>
+                              <div className="flex items-center gap-2">
+                                {React.createElement(getStatusIcon(item.status), { size: 16 })}
+                                <span>{getStatusLabel(item.status)}</span>
+                              </div>
+                            </SelectValue>
+                          </SelectTrigger>
+                          <SelectContent>
+                            {transactionStatuses.map((status) => (
+                              <SelectItem key={status.value} value={status.value}>
+                                <div className="flex items-center gap-2">
+                                  {React.createElement(status.icon, { size: 16 })}
+                                  <span>{status.label}</span>
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          {React.createElement(getStatusIcon(item.status), { size: 16 })}
+                          <span className="font-medium">{getStatusLabel(item.status)}</span>
+                        </div>
+                      )}
+                    </div>
+                    {item.failureReason && (
+                      <div>
+                        <p className="text-xs text-muted-foreground">Причина</p>
+                        <p className="text-sm text-red-500">{item.failureReason}</p>
+                      </div>
+                    )}
+                    {item.chatStep !== undefined && item.chatStep > 0 && (
+                      <div>
+                        <p className="text-xs text-muted-foreground">Шаг чата</p>
+                        <p className="text-sm">{item.chatStep}</p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
 
               {/* Financial Information */}
               <Card>

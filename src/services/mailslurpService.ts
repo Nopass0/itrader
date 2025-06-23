@@ -43,7 +43,7 @@ export class MailSlurpService extends EventEmitter {
       logger.info('Initializing MailSlurp service');
 
       // Load ALL existing inboxes from database
-      const existingAccounts = await db.prisma.mailslurpAccount.findMany({
+      const existingAccounts = await db.prisma.mailSlurpAccount.findMany({
         where: { isActive: true }
       });
 
@@ -64,7 +64,7 @@ export class MailSlurpService extends EventEmitter {
             email: account.email 
           });
           // Mark as inactive if inbox doesn't exist
-          await db.prisma.mailslurpAccount.update({
+          await db.prisma.mailSlurpAccount.update({
             where: { id: account.id },
             data: { isActive: false }
           });
@@ -88,7 +88,7 @@ export class MailSlurpService extends EventEmitter {
         });
 
         // Save to database
-        await db.prisma.mailslurpAccount.create({
+        await db.prisma.mailSlurpAccount.create({
           data: {
             email: newInbox.emailAddress!,
             inboxId: newInbox.id!,
@@ -153,7 +153,7 @@ export class MailSlurpService extends EventEmitter {
       });
 
       // Save to database
-      await db.prisma.mailslurpAccount.create({
+      await db.prisma.mailSlurpAccount.create({
         data: {
           email: newInbox.emailAddress!,
           inboxId: newInbox.id!,

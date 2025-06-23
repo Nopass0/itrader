@@ -173,7 +173,7 @@ export class BybitP2PManagerService {
           transactionId: transaction.id,
           messageId: message.messageId,
           sender: sender,
-          content: message.content,
+          message: message.content,  // Fixed: use message field instead of content
           messageType: message.type || "TEXT",
         };
 
@@ -817,7 +817,7 @@ export class BybitP2PManagerService {
       transactionId: transaction.id,
       messageId: `sent_${Date.now()}`,
       sender: "us",
-      content: message,
+      message: message,  // Fixed: use message field instead of content
       messageType: "TEXT",
     });
   }

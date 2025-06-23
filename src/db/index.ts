@@ -7,7 +7,7 @@ import {
   type GateAccount,
   type BybitAccount,
   type GmailAccount,
-  type MailslurpAccount,
+  type MailSlurpAccount,
   type BlacklistedTransaction,
   type Settings,
 } from "../../generated/prisma";
@@ -462,18 +462,18 @@ class DatabaseClient {
     transactionId: string;
     messageId?: string;
     sender: string;
-    content: string;
+    message: string;  // Changed from content to message
     messageType: string;
     sentAt?: Date;
     isProcessed?: boolean;
   }): Promise<ChatMessage> {
     return await this.executeWithRetry(async () => {
-      const { content, ...rest } = data;
+      const { message, ...rest } = data;
       return await this.prisma.chatMessage.create({
         data: {
           ...rest,
-          message: content,
-          content: content,
+          message: message,
+          content: message,  // Also set content for backward compatibility
         },
       });
     }, "Create chat message");
@@ -521,7 +521,9 @@ class DatabaseClient {
     messageType: string;
     isProcessed?: boolean;
   }): Promise<ChatMessage> {
-    return await this.createChatMessage(data);
+    // Map content to message for createChatMessage
+    const { content, ...rest } = data;
+    return await this.createChatMessage({ ...rest, message: content });
   }
 
   async getChatMessages(transactionId: string): Promise<ChatMessage[]> {
@@ -657,9 +659,9 @@ class DatabaseClient {
     }, "Upsert MailSlurp account");
   }
 
-  async getActiveMailslurpAccount(): Promise<MailslurpAccount | null> {
+  async getActiveMailslurpAccount(): Promise<MailSlurpAccount | null> {
     return await this.executeWithRetry(async () => {
-      return await this.prisma.mailslurpAccount.findFirst({
+      return await this.prisma.mailSlurpAccount.findFirst({
         where: { isActive: true },
       });
     }, "Get active MailSlurp account");

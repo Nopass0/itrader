@@ -20,7 +20,9 @@ import { TemplateController } from './controllers/templateController';
 import { OrchestratorController } from './controllers/orchestratorController';
 import { PlatformAccountController } from './controllers/platformAccountController';
 import { ReceiptController } from './controllers/receiptController';
+import { BybitChatController } from './controllers/bybitChatController';
 import { initLogsController } from './controllers/logsController';
+import { MailSlurpController } from './controllers/mailSlurpController';
 import { setGlobalIO } from './global';
 
 const logger = createLogger('WebSocketServer');
@@ -231,6 +233,8 @@ export class WebSocketServer {
       socket.on('transactions:deleteCustomStatus', withAuthAndLogging(TransactionController.deleteCustomStatus, 'deleteCustomStatus', 'transactions:deleteCustomStatus', (data) => ({ statusId: data?.id })));
       socket.on('transactions:listStatuses', withAuthAndLogging(TransactionController.listStatuses, 'listStatuses', 'transactions:listStatuses', () => ({})));
       socket.on('transactions:getStatistics', withAuthAndLogging(TransactionController.getStatistics, 'getTransactionStatistics', 'transactions:getStatistics', () => ({})));
+      socket.on('transactions:recreateAdvertisement', withAuthAndLogging(TransactionController.recreateAdvertisement, 'recreateAdvertisement', 'transactions:recreateAdvertisement', (data) => ({ transactionId: data?.transactionId })));
+      socket.on('transactions:getCancelled', withAuthAndLogging(TransactionController.getCancelledTransactions, 'getCancelledTransactions', 'transactions:getCancelled', (data) => ({ page: data?.page, limit: data?.limit })));
 
       // Управление выплатами
       socket.on('payouts:list', withAuth(PayoutController.list));
@@ -273,6 +277,18 @@ export class WebSocketServer {
       socket.on('chats:getStatistics', withAuth(ChatController.getChatStatistics));
       socket.on('chats:export', withAuth(ChatController.exportChat));
 
+      // Управление чатами Bybit (прямое API)
+      socket.on('bybit:getChatMessages', withAuthAndLogging(BybitChatController.getChatMessages, 'getBybitChatMessages', 'bybit:getChatMessages', (data) => ({ orderId: data?.orderId })));
+      socket.on('bybit:sendChatMessage', withAuthAndLogging(BybitChatController.sendChatMessage, 'sendBybitChatMessage', 'bybit:sendChatMessage', (data) => ({ orderId: data?.orderId, messageLength: data?.message?.length })));
+      socket.on('bybit:sendChatImage', withAuthAndLogging(BybitChatController.sendChatImage, 'sendBybitChatImage', 'bybit:sendChatImage', (data) => ({ orderId: data?.orderId, hasCaption: !!data?.caption })));
+
+      // Управление MailSlurp
+      socket.on('mailslurp:listAccounts', withAuth(MailSlurpController.listAccounts));
+      socket.on('mailslurp:createAccount', withAuth(MailSlurpController.createAccount));
+      socket.on('mailslurp:deleteAccount', withAuth(MailSlurpController.deleteAccount));
+      socket.on('mailslurp:setActive', withAuth(MailSlurpController.setActive));
+      socket.on('mailslurp:syncInboxes', withAuth(MailSlurpController.syncInboxes));
+
       // Управление шаблонами
       socket.on('templates:list', withAuth(TemplateController.list));
       socket.on('templates:get', withAuth(TemplateController.get));
@@ -309,6 +325,7 @@ export class WebSocketServer {
       // Управление чеками
       socket.on('receipts:list', withAuth(ReceiptController.listReceipts));
       socket.on('receipts:get', withAuth(ReceiptController.getReceipt));
+      socket.on('receipts:getByPayoutId', withAuth(ReceiptController.getByPayoutId));
       socket.on('receipts:getPDF', withAuth(ReceiptController.getReceiptPDF));
       socket.on('receipts:delete', withAuth(ReceiptController.deleteReceipt));
       socket.on('receipts:getStats', withAuth(ReceiptController.getReceiptStats));

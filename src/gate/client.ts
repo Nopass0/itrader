@@ -47,6 +47,8 @@ export class GateClient {
   private cookies: Cookie[] = [];
   private rateLimiter: RateLimiter;
   private email?: string;
+  private password?: string;
+  private isReauthorizing: boolean = false;
 
   /**
    * Создает новый экземпляр GateClient
@@ -113,6 +115,7 @@ export class GateClient {
   async login(email: string, password: string): Promise<LoginResponse> {
     console.log(`[GateClient] Авторизация для ${email}`);
     this.email = email;
+    this.password = password;
 
     const response = await this.client.post(
       `${this.baseUrl}/auth/basic/login`,
@@ -184,36 +187,38 @@ export class GateClient {
    * @throws {SessionExpiredError} При истечении сессии
    */
   async getBalance(currency: string): Promise<BalanceResponse> {
-    const response = await this.client.get(
-      `${this.baseUrl}/auth/me`,
-      this.getRequestConfig(),
-    );
+    return await this.executeWithRetry(async () => {
+      const response = await this.client.get(
+        `${this.baseUrl}/auth/me`,
+        this.getRequestConfig(),
+      );
 
-    this.checkResponse(response);
+      this.checkResponse(response);
 
-    const data = response.data as GateResponse<AuthMeResponse>;
-    if (!data.success) {
-      throw new GateApiError(data.error || "Ошибка получения баланса");
-    }
+      const data = response.data as GateResponse<AuthMeResponse>;
+      if (!data.success) {
+        throw new GateApiError(data.error || "Ошибка получения баланса");
+      }
 
-    const authResponse = data.response!;
-    const wallet = authResponse.user.wallets.find(
-      (w) =>
-        w.currency.code.toUpperCase() === currency.toUpperCase() ||
-        (w.currency.code === "643" && currency.toUpperCase() === "RUB"),
-    );
+      const authResponse = data.response!;
+      const wallet = authResponse.user.wallets.find(
+        (w) =>
+          w.currency.code.toUpperCase() === currency.toUpperCase() ||
+          (w.currency.code === "643" && currency.toUpperCase() === "RUB"),
+      );
 
-    if (!wallet) {
-      throw new GateApiError(`Кошелек для валюты ${currency} не найден`);
-    }
+      if (!wallet) {
+        throw new GateApiError(`Кошелек для валюты ${currency} не найден`);
+      }
 
-    const balance = new Decimal(wallet.balance);
-    return {
-      currency,
-      balance,
-      available: balance,
-      locked: new Decimal(0),
-    };
+      const balance = new Decimal(wallet.balance);
+      return {
+        currency,
+        balance,
+        available: balance,
+        locked: new Decimal(0),
+      };
+    });
   }
 
   /**
@@ -221,21 +226,23 @@ export class GateClient {
    * @returns Массив транзакций
    */
   async getAvailableTransactions(): Promise<Payout[]> {
-    const url = `${this.baseUrl}/payments/payouts?filters%5Bstatus%5D%5B%5D=4&filters%5Bstatus%5D%5B%5D=5&page=1`;
+    return await this.executeWithRetry(async () => {
+      const url = `${this.baseUrl}/payments/payouts?filters%5Bstatus%5D%5B%5D=4&filters%5Bstatus%5D%5B%5D=5&page=1`;
 
-    const response = await this.client.get(url, this.getRequestConfig());
-    this.checkResponse(response);
+      const response = await this.client.get(url, this.getRequestConfig());
+      this.checkResponse(response);
 
-    const data = response.data as GateResponse<PayoutsResponse>;
-    if (!data.success) {
-      throw new GateApiError(data.error || "Ошибка получения транзакций");
-    }
+      const data = response.data as GateResponse<PayoutsResponse>;
+      if (!data.success) {
+        throw new GateApiError(data.error || "Ошибка получения транзакций");
+      }
 
-    const transactions = data.response!.payouts.data;
-    console.log(
-      `[GateClient] Найдено ${transactions.length} доступных транзакций`,
-    );
-    return transactions;
+      const transactions = data.response!.payouts.data;
+      console.log(
+        `[GateClient] Найдено ${transactions.length} доступных транзакций`,
+      );
+      return transactions;
+    });
   }
 
   /**
@@ -246,27 +253,29 @@ export class GateClient {
   async getTransactionsWithFilter(
     filter: TransactionFilter,
   ): Promise<GateTransaction[]> {
-    const params = new URLSearchParams();
-    if (filter.page) params.append("page", filter.page.toString());
-    if (filter.limit) params.append("per_page", filter.limit.toString());
-    else params.append("per_page", "30");
+    return await this.executeWithRetry(async () => {
+      const params = new URLSearchParams();
+      if (filter.page) params.append("page", filter.page.toString());
+      if (filter.limit) params.append("per_page", filter.limit.toString());
+      else params.append("per_page", "30");
 
-    const response = await this.client.get(
-      `${this.baseUrl}/payments/payouts?${params}`,
-      this.getRequestConfig(),
-    );
+      const response = await this.client.get(
+        `${this.baseUrl}/payments/payouts?${params}`,
+        this.getRequestConfig(),
+      );
 
-    this.checkResponse(response);
+      this.checkResponse(response);
 
-    const data = response.data as GateResponse<PayoutsResponse>;
-    if (!data.success) {
-      throw new GateApiError(data.error || "Ошибка получения транзакций");
-    }
+      const data = response.data as GateResponse<PayoutsResponse>;
+      if (!data.success) {
+        throw new GateApiError(data.error || "Ошибка получения транзакций");
+      }
 
-    const payouts = data.response!.payouts.data;
-    return payouts
-      .filter((payout) => payout.amount.trader["643"] !== undefined)
-      .map((payout) => this.payoutToTransaction(payout));
+      const payouts = data.response!.payouts.data;
+      return payouts
+        .filter((payout) => payout.amount.trader["643"] !== undefined)
+        .map((payout) => this.payoutToTransaction(payout));
+    });
   }
 
   /**
@@ -283,33 +292,35 @@ export class GateClient {
    * @throws {GateApiError} При ошибке
    */
   async acceptTransaction(transactionId: string): Promise<void> {
-    console.log(`[GateClient] Принятие транзакции ${transactionId}`);
+    return await this.executeWithRetry(async () => {
+      console.log(`[GateClient] Принятие транзакции ${transactionId}`);
 
-    const response = await this.client.post(
-      `${this.baseUrl}/payments/payouts/${transactionId}/show`,
-      {},
-      this.getRequestConfig(),
-    );
+      const response = await this.client.post(
+        `${this.baseUrl}/payments/payouts/${transactionId}/show`,
+        {},
+        this.getRequestConfig(),
+      );
 
-    // Проверяем различные статусы ответа
-    if (
-      response.status === 409 ||
-      response.status === 422 ||
-      response.status === 400
-    ) {
-      const data = response.data;
+      // Проверяем различные статусы ответа
       if (
-        data?.response?.error_description?.includes("incorrect_status") ||
-        data?.message?.includes("already") ||
-        data?.message?.includes("processing")
+        response.status === 409 ||
+        response.status === 422 ||
+        response.status === 400
       ) {
-        console.warn(`[GateClient] Транзакция ${transactionId} уже обработана`);
-        return;
+        const data = response.data;
+        if (
+          data?.response?.error_description?.includes("incorrect_status") ||
+          data?.message?.includes("already") ||
+          data?.message?.includes("processing")
+        ) {
+          console.warn(`[GateClient] Транзакция ${transactionId} уже обработана`);
+          return;
+        }
       }
-    }
 
-    this.checkResponse(response);
-    console.log(`[GateClient] Транзакция ${transactionId} успешно принята`);
+      this.checkResponse(response);
+      console.log(`[GateClient] Транзакция ${transactionId} успешно принята`);
+    });
   }
 
   /**
@@ -485,33 +496,31 @@ export class GateClient {
    * @returns Установленная сумма
    */
   async setBalance(amount: number): Promise<number> {
-    const response = await this.client.post(
-      `${this.baseUrl}/payments/payouts/balance`,
-      { amount: amount.toString() },
-      this.getRequestConfig(),
-    );
-
-    const status = response.status;
-    const responseText = response.data;
-
-    console.log(
-      `[GateClient] Set balance response (status ${status}):`,
-      responseText,
-    );
-
-    if (!response.status || response.status >= 400) {
-      throw new GateApiError(
-        `Не удалось установить баланс: HTTP ${status} - ${JSON.stringify(responseText)}`,
+    return await this.executeWithRetry(async () => {
+      const response = await this.client.post(
+        `${this.baseUrl}/payments/payouts/balance`,
+        { amount: amount.toString() },
+        this.getRequestConfig(),
       );
-    }
 
-    const data = response.data as GateResponse<any>;
-    if (!data.success) {
-      throw new GateApiError(data.error || "Ошибка установки баланса");
-    }
+      this.checkResponse(response);
 
-    console.log(`[GateClient] Баланс успешно установлен: ${amount}`);
-    return amount;
+      const status = response.status;
+      const responseText = response.data;
+
+      console.log(
+        `[GateClient] Set balance response (status ${status}):`,
+        responseText,
+      );
+
+      const data = response.data as GateResponse<any>;
+      if (!data.success) {
+        throw new GateApiError(data.error || "Ошибка установки баланса");
+      }
+
+      console.log(`[GateClient] Баланс успешно установлен: ${amount}`);
+      return amount;
+    });
   }
 
   /**
@@ -519,39 +528,41 @@ export class GateClient {
    * @returns Массив транзакций в ожидании
    */
   async getPendingTransactions(): Promise<Payout[]> {
-    const url = `${this.baseUrl}/payments/payouts?filters%5Bstatus%5D%5B%5D=4&page=1`;
-    console.log(`[GateClient] Fetching pending transactions from: ${url}`);
+    return await this.executeWithRetry(async () => {
+      const url = `${this.baseUrl}/payments/payouts?filters%5Bstatus%5D%5B%5D=4&page=1`;
+      console.log(`[GateClient] Fetching pending transactions from: ${url}`);
 
-    const response = await this.client.get(url, this.getRequestConfig());
-    console.log(`[GateClient] Response status: ${response.status}`);
-    console.log(`[GateClient] Response data:`, JSON.stringify(response.data, null, 2));
-    
-    this.checkResponse(response);
+      const response = await this.client.get(url, this.getRequestConfig());
+      console.log(`[GateClient] Response status: ${response.status}`);
+      console.log(`[GateClient] Response data:`, JSON.stringify(response.data, null, 2));
+      
+      this.checkResponse(response);
 
-    const data = response.data as GateResponse<PayoutsResponse>;
-    if (!data.success) {
-      console.error(`[GateClient] API returned success=false:`, data);
-      throw new GateApiError(
-        data.error || "Ошибка получения ожидающих транзакций",
+      const data = response.data as GateResponse<PayoutsResponse>;
+      if (!data.success) {
+        console.error(`[GateClient] API returned success=false:`, data);
+        throw new GateApiError(
+          data.error || "Ошибка получения ожидающих транзакций",
+        );
+      }
+
+      if (!data.response || !data.response.payouts || !data.response.payouts.data) {
+        console.error(`[GateClient] Unexpected response structure:`, data);
+        throw new GateApiError("Неожиданная структура ответа от API");
+      }
+
+      const transactions = data.response.payouts.data;
+      console.log(
+        `[GateClient] Найдено ${transactions.length} транзакций в ожидании (статус 4)`,
       );
-    }
-
-    if (!data.response || !data.response.payouts || !data.response.payouts.data) {
-      console.error(`[GateClient] Unexpected response structure:`, data);
-      throw new GateApiError("Неожиданная структура ответа от API");
-    }
-
-    const transactions = data.response.payouts.data;
-    console.log(
-      `[GateClient] Найдено ${transactions.length} транзакций в ожидании (статус 4)`,
-    );
-    
-    // Log first transaction for debugging
-    if (transactions.length > 0) {
-      console.log(`[GateClient] First transaction:`, JSON.stringify(transactions[0], null, 2));
-    }
-    
-    return transactions;
+      
+      // Log first transaction for debugging
+      if (transactions.length > 0) {
+        console.log(`[GateClient] First transaction:`, JSON.stringify(transactions[0], null, 2));
+      }
+      
+      return transactions;
+    });
   }
 
   /**
@@ -741,6 +752,54 @@ export class GateClient {
         DNT: "1",
       },
     };
+  }
+
+  /**
+   * Автоматически переавторизуется при истечении сессии
+   * @returns true если переавторизация успешна
+   */
+  private async reauthorize(): Promise<boolean> {
+    if (this.isReauthorizing || !this.email || !this.password) {
+      return false;
+    }
+
+    this.isReauthorizing = true;
+    console.log(`[GateClient] Attempting reauthorization for ${this.email}`);
+    
+    try {
+      await this.login(this.email, this.password);
+      console.log(`[GateClient] Reauthorization successful for ${this.email}`);
+      this.isReauthorizing = false;
+      return true;
+    } catch (error) {
+      console.error(`[GateClient] Reauthorization failed for ${this.email}:`, error);
+      this.isReauthorizing = false;
+      return false;
+    }
+  }
+
+  /**
+   * Выполняет запрос с автоматической переавторизацией при 401 ошибке
+   */
+  private async executeWithRetry<T>(requestFn: () => Promise<T>): Promise<T> {
+    try {
+      return await requestFn();
+    } catch (error: any) {
+      // Если получили 401 и можем переавторизоваться
+      if (error instanceof SessionExpiredError && !this.isReauthorizing) {
+        console.log(`[GateClient] Session expired, attempting reauthorization`);
+        const reauthorized = await this.reauthorize();
+        
+        if (reauthorized) {
+          // Повторяем запрос после успешной переавторизации
+          console.log(`[GateClient] Retrying request after reauthorization`);
+          return await requestFn();
+        }
+      }
+      
+      // Если не можем переавторизоваться или это другая ошибка - пробрасываем
+      throw error;
+    }
   }
 
   /**

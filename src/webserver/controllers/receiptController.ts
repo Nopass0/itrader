@@ -192,6 +192,30 @@ export class ReceiptController {
   }
 
   /**
+   * Получить чек по payoutId
+   */
+  static async getByPayoutId(
+    socket: AuthenticatedSocket,
+    data: { payoutId: string },
+    callback: Function
+  ) {
+    try {
+      const receipt = await prisma.receipt.findFirst({
+        where: { payoutId: data.payoutId }
+      });
+
+      if (!receipt) {
+        handleSuccess(null, 'No receipt found', callback);
+        return;
+      }
+
+      handleSuccess(receipt, undefined, callback);
+    } catch (error) {
+      handleError(error, callback);
+    }
+  }
+
+  /**
    * Получить PDF файл чека
    */
   static async getReceiptPDF(

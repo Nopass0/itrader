@@ -31,8 +31,11 @@ export interface Transaction {
     bybitAccountId?: string;
     bybitAccount?: {
       id: string;
-      name: string;
-      status: string;
+      accountId: string;
+      accountName?: string;
+      name?: string;
+      status?: string;
+      isActive?: boolean;
     };
   };
   payout?: {
