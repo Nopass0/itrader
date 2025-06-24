@@ -488,9 +488,10 @@ export class TransactionController {
         throw new Error('Transaction not found');
       }
 
-      // Проверяем статус - только cancelled или stupid
-      if (transaction.status !== 'cancelled' && transaction.status !== 'stupid') {
-        throw new Error('Can only reissue cancelled or stupid transactions');
+      // Проверяем статус - только cancelled, cancelled_by_counterparty или stupid
+      const allowedStatuses = ['cancelled', 'cancelled_by_counterparty', 'stupid'];
+      if (!allowedStatuses.includes(transaction.status)) {
+        throw new Error('Can only reissue cancelled, cancelled_by_counterparty or stupid transactions');
       }
 
       // Получаем BybitP2PManager из глобального контекста

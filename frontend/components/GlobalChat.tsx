@@ -107,7 +107,12 @@ export function GlobalChat({ className }: GlobalChatProps) {
     try {
       const response = await api.emit('chats:list', {});
       if (response.success && response.data) {
-        const chatsData = Array.isArray(response.data) ? response.data : response.data.data;
+        const chatsData = Array.isArray(response.data) ? response.data : (response.data.data || []);
+        if (!Array.isArray(chatsData)) {
+          console.error('Unexpected chats data format:', response.data);
+          setChatRooms([]);
+          return;
+        }
         const rooms: ChatRoom[] = chatsData.map((chat: any) => ({
           orderId: chat.orderId,
           counterpartyName: chat.counterparty || chat.counterpartyName || 'Unknown',
