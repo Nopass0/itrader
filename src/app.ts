@@ -746,24 +746,24 @@ async function main() {
         console.error("[Init] Failed to start Cancelled Orders Service:", error);
       }
       
-      // Initialize Cancelled Order Detector Service
-      console.log("[Init] 🚫 Starting Cancelled Order Detector Service...");
-      try {
-        const { CancelledOrderDetectorService } = await import("./services/cancelledOrderDetector");
-        const cancelledOrderDetector = new CancelledOrderDetectorService(context.bybitManager);
-        await cancelledOrderDetector.start(5000); // Check every 5 seconds
-        
-        logger.info("✅ Cancelled Order Detector Service started", {
-          checkInterval: "5s"
-        });
-        console.log("[Init] ✅ Cancelled Order Detector Service started (checking every 5 seconds)");
-        
-        // Store in context for cleanup
-        (context as any).cancelledOrderDetector = cancelledOrderDetector;
-      } catch (error) {
-        logger.error("Failed to start Cancelled Order Detector Service", error as Error);
-        console.error("[Init] Failed to start Cancelled Order Detector Service:", error);
-      }
+      // Initialize Cancelled Order Detector Service - DISABLED
+      // console.log("[Init] 🚫 Starting Cancelled Order Detector Service...");
+      // try {
+      //   const { CancelledOrderDetectorService } = await import("./services/cancelledOrderDetector");
+      //   const cancelledOrderDetector = new CancelledOrderDetectorService(context.bybitManager);
+      //   await cancelledOrderDetector.start(5000); // Check every 5 seconds
+      //   
+      //   logger.info("✅ Cancelled Order Detector Service started", {
+      //     checkInterval: "5s"
+      //   });
+      //   console.log("[Init] ✅ Cancelled Order Detector Service started (checking every 5 seconds)");
+      //   
+      //   // Store in context for cleanup
+      //   (context as any).cancelledOrderDetector = cancelledOrderDetector;
+      // } catch (error) {
+      //   logger.error("Failed to start Cancelled Order Detector Service", error as Error);
+      //   console.error("[Init] Failed to start Cancelled Order Detector Service:", error);
+      // }
       
       // Initialize ReceiptProcessorService after email service is ready
       const hasEmailService = context.gmailManager || (await context.db.getActiveMailslurpAccount());
@@ -2074,10 +2074,10 @@ async function main() {
           orchestrator.context.instantOrderMonitor.stop();
         }
         
-        // Stop cancelled order detector
-        if ((orchestrator.context as any).cancelledOrderDetector) {
-          (orchestrator.context as any).cancelledOrderDetector.stop();
-        }
+        // Stop cancelled order detector - DISABLED
+        // if ((orchestrator.context as any).cancelledOrderDetector) {
+        //   (orchestrator.context as any).cancelledOrderDetector.stop();
+        // }
 
         // Stop WebSocket server
         await webSocketServer.stop();

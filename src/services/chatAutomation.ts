@@ -305,8 +305,8 @@ export class ChatAutomationService extends EventEmitter {
           response: answer,
         });
 
-        // Delete advertisement after marking as stupid
-        await this.deleteAdvertisementAndReleaseAssets(transaction.id);
+        // Delete advertisement after marking as stupid (WITHOUT releasing assets)
+        await this.deleteAdvertisement(transaction.id);
       }
       // Any other answer - repeat the question
       else {
@@ -858,9 +858,66 @@ export class ChatAutomationService extends EventEmitter {
   }
 
   /**
-   * Delete advertisement and release assets
+   * Delete advertisement only (without releasing assets)
+   * Used when buyer refuses or transaction is marked as stupid
    */
-  private async deleteAdvertisementAndReleaseAssets(
+  private async deleteAdvertisement(
+    transactionId: string,
+  ): Promise<void> {
+    try {
+      const transaction = await db.getTransactionWithDetails(transactionId);
+      if (!transaction || !transaction.advertisement) return;
+
+      const advertisement = transaction.advertisement as any;
+      const bybitAdId = advertisement.bybitAdId;
+
+      // Skip if it's a temporary advertisement
+      if (bybitAdId?.startsWith("temp_")) {
+        logger.info("Skipping deletion for temporary advertisement", {
+          bybitAdId,
+        });
+        return;
+      }
+
+      // Get Bybit client
+      const bybitAccount = advertisement.bybitAccount;
+      if (!bybitAccount) {
+        logger.error("No Bybit account found for advertisement");
+        return;
+      }
+
+      const client = this.bybitManager.getClient(bybitAccount.accountId);
+      if (!client) {
+        logger.error("No client found for account", {
+          accountId: bybitAccount.accountId,
+        });
+        return;
+      }
+
+      try {
+        // Delete advertisement from Bybit
+        logger.info("Deleting advertisement...", { bybitAdId });
+        await client.deleteAdvertisement(bybitAdId);
+        logger.info("✅ Advertisement deleted from Bybit", { bybitAdId });
+
+        // Mark advertisement as inactive in database
+        await db.updateAdvertisement(advertisement.id, {
+          isActive: false,
+        });
+        logger.info("✅ Advertisement marked as inactive in database");
+      } catch (error) {
+        logger.error("Error deleting advertisement", error);
+      }
+    } catch (error) {
+      logger.error("Error in deleteAdvertisement", error);
+    }
+  }
+
+  /**
+   * Release assets and delete advertisement
+   * Used only after proper Gate approval and receipt verification
+   */
+  private async releaseAssetsAndDeleteAdvertisement(
     transactionId: string,
   ): Promise<void> {
     try {
@@ -916,10 +973,10 @@ export class ChatAutomationService extends EventEmitter {
         });
         logger.info("✅ Advertisement marked as inactive in database");
       } catch (error) {
-        logger.error("Error deleting advertisement", error);
+        logger.error("Error in releaseAssetsAndDeleteAdvertisement", error);
       }
     } catch (error) {
-      logger.error("Error in deleteAdvertisementAndReleaseAssets", error);
+      logger.error("Error in releaseAssetsAndDeleteAdvertisement", error);
     }
   }
 }
