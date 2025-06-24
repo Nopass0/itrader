@@ -5,7 +5,12 @@ A P2P trading automation system with WebSocket API for remote control and monito
 ## Installation
 
 ```bash
+# Install Node.js dependencies
 bun install
+
+# Install system dependencies (required for PDF receipt processing)
+./scripts/install-dependencies.sh
+# Or manually: apt-get install poppler-utils
 ```
 
 ## Running the Application
