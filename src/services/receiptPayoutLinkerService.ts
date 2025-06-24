@@ -7,7 +7,7 @@ import { PrismaClient } from "../../generated/prisma";
 import { createLogger } from "../logger";
 import dayjs from "dayjs";
 
-const logger = createLogger('ReceiptPayoutLinker');
+const logger = createLogger("ReceiptPayoutLinker");
 const prisma = new PrismaClient();
 
 interface LinkingStats {
@@ -31,10 +31,12 @@ export class ReceiptPayoutLinkerService {
     }
 
     this.isRunning = true;
-    logger.info("Starting receipt payout linker service", { 
-      interval: `${intervalMs / 1000}s` 
+    logger.info("Starting receipt payout linker service", {
+      interval: `${intervalMs / 1000}s`,
     });
-    console.log(`[ReceiptPayoutLinker] ✅ Started - checking every ${intervalMs / 1000} seconds`);
+    console.log(
+      `[ReceiptPayoutLinker] ✅ Started - checking every ${intervalMs / 1000} seconds`,
+    );
 
     // Первый запуск сразу
     await this.linkUnlinkedReceipts();
@@ -69,7 +71,7 @@ export class ReceiptPayoutLinkerService {
       total: 0,
       linked: 0,
       failed: 0,
-      skipped: 0
+      skipped: 0,
     };
 
     try {
@@ -79,9 +81,9 @@ export class ReceiptPayoutLinkerService {
           isParsed: true,
           payoutId: null,
           amount: { not: null },
-          parseError: null
+          parseError: null,
         },
-        orderBy: { createdAt: 'desc' }
+        orderBy: { createdAt: "desc" },
       });
 
       stats.total = receipts.length;
@@ -89,28 +91,42 @@ export class ReceiptPayoutLinkerService {
       if (receipts.length === 0) {
         // Log periodically to show service is running
         const now = new Date();
-        if (now.getSeconds() % 30 === 0) { // Log every 30 seconds
-          console.log(`[ReceiptPayoutLinker] No unlinked receipts found. Service is running...`);
+        if (now.getSeconds() % 30 === 0) {
+          // Log every 30 seconds
+          console.log(
+            `[ReceiptPayoutLinker] No unlinked receipts found. Service is running...`,
+          );
         }
         return stats;
       }
 
       logger.info(`Found ${receipts.length} receipts to link`);
-      console.log(`[ReceiptPayoutLinker] Found ${receipts.length} receipts to link`);
+      console.log(
+        `[ReceiptPayoutLinker] Found ${receipts.length} receipts to link`,
+      );
 
       for (const receipt of receipts) {
         try {
-          console.log(`[ReceiptPayoutLinker] Processing receipt ${receipt.id}...`);
+          console.log(
+            `[ReceiptPayoutLinker] Processing receipt ${receipt.id}...`,
+          );
           const linked = await this.linkReceiptToPayout(receipt);
-          console.log(`[ReceiptPayoutLinker] Receipt ${receipt.id} linked: ${linked}`);
+          console.log(
+            `[ReceiptPayoutLinker] Receipt ${receipt.id} linked: ${linked}`,
+          );
           if (linked) {
             stats.linked++;
           } else {
             stats.skipped++;
           }
         } catch (error) {
-          console.error(`[ReceiptPayoutLinker] Error linking receipt ${receipt.id}:`, error);
-          logger.error("Failed to link receipt", error, { receiptId: receipt.id });
+          console.error(
+            `[ReceiptPayoutLinker] Error linking receipt ${receipt.id}:`,
+            error,
+          );
+          logger.error("Failed to link receipt", error, {
+            receiptId: receipt.id,
+          });
           stats.failed++;
         }
       }
@@ -118,7 +134,6 @@ export class ReceiptPayoutLinkerService {
       if (stats.linked > 0) {
         logger.info("Receipt linking completed", stats);
       }
-
     } catch (error) {
       logger.error("Error in linkUnlinkedReceipts", error);
     }
@@ -131,17 +146,22 @@ export class ReceiptPayoutLinkerService {
    */
   private async linkReceiptToPayout(receipt: any): Promise<boolean> {
     // Проверяем обязательные поля - требуется сумма и либо телефон, либо карта
-    if (!receipt.amount || (!receipt.recipientPhone && !receipt.recipientCard)) {
+    if (
+      !receipt.amount ||
+      (!receipt.recipientPhone && !receipt.recipientCard)
+    ) {
       logger.debug("Receipt missing required fields", {
         receiptId: receipt.id,
         amount: receipt.amount,
         recipientPhone: receipt.recipientPhone,
-        recipientCard: receipt.recipientCard
+        recipientCard: receipt.recipientCard,
       });
       return false;
     }
 
-    console.log(`[ReceiptPayoutLinker] Linking receipt ${receipt.id}: amount=${receipt.amount}, phone=${receipt.recipientPhone}, card=${receipt.recipientCard}`);
+    console.log(
+      `[ReceiptPayoutLinker] Linking receipt ${receipt.id}: amount=${receipt.amount}, phone=${receipt.recipientPhone}, card=${receipt.recipientCard}`,
+    );
 
     let payout = null;
 
@@ -149,7 +169,10 @@ export class ReceiptPayoutLinkerService {
     if (receipt.recipientCard) {
       console.log(`[ReceiptPayoutLinker] Searching payout by card...`);
       payout = await this.findPayoutByCard(receipt);
-      console.log(`[ReceiptPayoutLinker] Payout by card:`, payout ? payout.gatePayoutId : 'not found');
+      console.log(
+        `[ReceiptPayoutLinker] Payout by card:`,
+        payout ? payout.gatePayoutId : "not found",
+      );
     }
 
     // 2. Если не нашли по карте и есть телефон, ищем по телефону
@@ -157,21 +180,38 @@ export class ReceiptPayoutLinkerService {
       console.log(`[ReceiptPayoutLinker] Searching payout by phone...`);
       const normalizedPhone = this.normalizePhone(receipt.recipientPhone);
       payout = await this.findPayoutByPhone(receipt, normalizedPhone);
-      console.log(`[ReceiptPayoutLinker] Payout by phone:`, payout ? payout.gatePayoutId : 'not found');
+      console.log(
+        `[ReceiptPayoutLinker] Payout by phone:`,
+        payout ? payout.gatePayoutId : "not found",
+      );
     }
 
     // 3. Если не нашли по карте/телефону, пробуем по имени получателя
-    if (!payout && receipt.recipientName && receipt.recipientName !== 'Card Transfer') {
-      console.log(`[ReceiptPayoutLinker] Searching payout by recipient name...`);
+    if (
+      !payout &&
+      receipt.recipientName &&
+      receipt.recipientName !== "Card Transfer"
+    ) {
+      console.log(
+        `[ReceiptPayoutLinker] Searching payout by recipient name...`,
+      );
       payout = await this.findPayoutByName(receipt);
-      console.log(`[ReceiptPayoutLinker] Payout by name:`, payout ? payout.gatePayoutId : 'not found');
+      console.log(
+        `[ReceiptPayoutLinker] Payout by name:`,
+        payout ? payout.gatePayoutId : "not found",
+      );
     }
 
     // 4. Если все еще не нашли, пробуем найти только по сумме и времени (без телефона/карты)
     if (!payout) {
-      console.log(`[ReceiptPayoutLinker] Searching payout by amount and time only...`);
+      console.log(
+        `[ReceiptPayoutLinker] Searching payout by amount and time only...`,
+      );
       payout = await this.findPayoutByAmountAndTime(receipt);
-      console.log(`[ReceiptPayoutLinker] Payout by amount/time:`, payout ? payout.gatePayoutId : 'not found');
+      console.log(
+        `[ReceiptPayoutLinker] Payout by amount/time:`,
+        payout ? payout.gatePayoutId : "not found",
+      );
     }
 
     if (!payout) {
@@ -179,9 +219,11 @@ export class ReceiptPayoutLinkerService {
         receiptId: receipt.id,
         amount: receipt.amount,
         recipientPhone: receipt.recipientPhone,
-        recipientName: receipt.recipientName
+        recipientName: receipt.recipientName,
       });
-      console.log(`[ReceiptPayoutLinker] No matching payout found for receipt ${receipt.id}`);
+      console.log(
+        `[ReceiptPayoutLinker] No matching payout found for receipt ${receipt.id}`,
+      );
       return false;
     }
 
@@ -191,8 +233,8 @@ export class ReceiptPayoutLinkerService {
       data: {
         payoutId: payout.id, // ID записи payout в нашей БД
         isProcessed: true,
-        updatedAt: new Date()
-      }
+        updatedAt: new Date(),
+      },
     });
 
     // Находим транзакцию связанную с этим payout
@@ -201,51 +243,57 @@ export class ReceiptPayoutLinkerService {
       include: {
         advertisement: {
           include: {
-            bybitAccount: true
-          }
-        }
-      }
+            bybitAccount: true,
+          },
+        },
+      },
     });
 
     if (transaction) {
       logger.info("Found transaction for payout", {
         transactionId: transaction.id,
         orderId: transaction.orderId,
-        payoutId: payout.id
+        payoutId: payout.id,
       });
 
       // Апрувим payout через AssetReleaseService
       try {
-        const { getAssetReleaseService } = await import('./assetReleaseService');
+        const { getAssetReleaseService } = await import(
+          "./assetReleaseService"
+        );
         // Get the shared instance (it will already have bybitManager)
         const assetReleaseService = getAssetReleaseService();
         logger.info("Approving transaction through AssetReleaseService", {
           transactionId: transaction.id,
           payoutId: payout.id,
           gatePayoutId: payout.gatePayoutId,
-          receiptPath: receipt.filePath
+          receiptPath: receipt.filePath,
         });
 
         // Апрувим через AssetReleaseService
-        const approved = await assetReleaseService.approveTransactionWithReceipt(
-          transaction.id,
-          payout.id,
-          receipt.filePath || ''
-        );
+        const approved =
+          await assetReleaseService.approveTransactionWithReceipt(
+            transaction.id,
+            payout.id,
+            receipt.filePath || "",
+          );
 
         if (approved) {
           logger.info("✅ Transaction approved through AssetReleaseService", {
             transactionId: transaction.id,
-            gatePayoutId: payout.gatePayoutId
+            gatePayoutId: payout.gatePayoutId,
           });
         } else {
-          logger.warn("Failed to approve transaction through AssetReleaseService", {
-            transactionId: transaction.id
-          });
+          logger.warn(
+            "Failed to approve transaction through AssetReleaseService",
+            {
+              transactionId: transaction.id,
+            },
+          );
         }
       } catch (error) {
         logger.error("Error approving payout in Gate.io", error, {
-          payoutId: payout.gatePayoutId
+          payoutId: payout.gatePayoutId,
         });
         console.error(`[ReceiptPayoutLinker] Gate approval error:`, error);
       }
@@ -254,65 +302,84 @@ export class ReceiptPayoutLinkerService {
       try {
         const { ChatAutomationService } = await import("./chatAutomation");
         const { BybitP2PManagerService } = await import("./bybitP2PManager");
-        
+
         const bybitManager = new BybitP2PManagerService();
         const chatService = new ChatAutomationService(bybitManager);
-        
+
         if (transaction.orderId && transaction.advertisement?.bybitAccount) {
-          const client = bybitManager.getClient(transaction.advertisement.bybitAccount.accountId);
+          const client = bybitManager.getClient(
+            transaction.advertisement.bybitAccount.accountId,
+          );
           if (client) {
-            const receiptMessage = `✅ Чек получен и подтвержден!\n\nСумма: ${receipt.amount} RUB\nОперация: ${receipt.operationId || 'N/A'}\n\n⏱️ В течении двух минут проверю чек и отпущу средства.\n\nПереходи в закрытый чат https://t.me/+nIB6kP22KmhlMmQy\n\nВсегда есть большой объем ЮСДТ по хорошему курсу, работаем оперативно.`;
-            
-            await chatService.sendMessageDirect(client, transaction.orderId, receiptMessage);
-            
+            const receiptMessage = `✅ Чек получен и подтвержден!\n\nСумма: ${receipt.amount} RUB\nОперация: ${receipt.operationId || "N/A"}\n\n⏱️ В течении двух минут проверю чек и отпущу средства.\n\nПереходи в закрытый чат https://t.me/+8LzQMBnsrAphOGMy\n\nВсегда есть большой объем ЮСДТ по хорошему курсу, работаем оперативно.`;
+
+            await chatService.sendMessageDirect(
+              client,
+              transaction.orderId,
+              receiptMessage,
+            );
+
             logger.info("Sent receipt confirmation message", {
               transactionId: transaction.id,
-              orderId: transaction.orderId
+              orderId: transaction.orderId,
             });
           }
         }
       } catch (error) {
         logger.error("Error sending chat message", error, {
-          transactionId: transaction.id
+          transactionId: transaction.id,
         });
       }
 
       // Статус транзакции уже обновлен в AssetReleaseService до release_money
       // Проверяем текущий статус
       const updatedTransaction = await prisma.transaction.findUnique({
-        where: { id: transaction.id }
+        where: { id: transaction.id },
       });
 
       logger.info("Transaction status after approval", {
         transactionId: transaction.id,
-        status: updatedTransaction?.status
+        status: updatedTransaction?.status,
       });
 
       // Удаляем связанное объявление с Bybit после привязки к транзакции
-      if (transaction.advertisement?.bybitAdId && transaction.advertisement?.bybitAccount) {
+      if (
+        transaction.advertisement?.bybitAdId &&
+        transaction.advertisement?.bybitAccount
+      ) {
         try {
-          console.log(`[ReceiptPayoutLinker] Deleting Bybit advertisement: ${transaction.advertisement.bybitAdId}`);
-          
+          console.log(
+            `[ReceiptPayoutLinker] Deleting Bybit advertisement: ${transaction.advertisement.bybitAdId}`,
+          );
+
           // Get the shared BybitManager from global context
           const globalContext = (global as any).appContext;
           const bybitManager = globalContext?.bybitManager;
-          
+
           if (!bybitManager) {
-            logger.warn('No shared BybitManager available');
-            console.log('[ReceiptPayoutLinker] ❌ No shared BybitManager available');
+            logger.warn("No shared BybitManager available");
+            console.log(
+              "[ReceiptPayoutLinker] ❌ No shared BybitManager available",
+            );
             return;
           }
-          
-          const bybitClient = bybitManager.getClient(transaction.advertisement.bybitAccount.accountId);
-          
+
+          const bybitClient = bybitManager.getClient(
+            transaction.advertisement.bybitAccount.accountId,
+          );
+
           if (bybitClient) {
-            await bybitClient.cancelAdvertisement(transaction.advertisement.bybitAdId);
-            
-            console.log(`[ReceiptPayoutLinker] ✅ Advertisement deleted successfully: ${transaction.advertisement.bybitAdId}`);
+            await bybitClient.cancelAdvertisement(
+              transaction.advertisement.bybitAdId,
+            );
+
+            console.log(
+              `[ReceiptPayoutLinker] ✅ Advertisement deleted successfully: ${transaction.advertisement.bybitAdId}`,
+            );
             logger.info("Advertisement deleted after transaction linking", {
               transactionId: transaction.id,
               advertisementId: transaction.advertisement.id,
-              bybitAdId: transaction.advertisement.bybitAdId
+              bybitAdId: transaction.advertisement.bybitAdId,
             });
 
             // Обновляем статус объявления в БД
@@ -320,22 +387,28 @@ export class ReceiptPayoutLinkerService {
               where: { id: transaction.advertisement.id },
               data: {
                 isActive: false,
-                updatedAt: new Date()
-              }
+                updatedAt: new Date(),
+              },
             });
           } else {
-            console.log(`[ReceiptPayoutLinker] ❌ Bybit client not found for account: ${transaction.advertisement.bybitAccount.accountId}`);
+            console.log(
+              `[ReceiptPayoutLinker] ❌ Bybit client not found for account: ${transaction.advertisement.bybitAccount.accountId}`,
+            );
           }
         } catch (error) {
           logger.error("Error deleting Bybit advertisement", error, {
             transactionId: transaction.id,
             advertisementId: transaction.advertisement?.id,
-            bybitAdId: transaction.advertisement?.bybitAdId
+            bybitAdId: transaction.advertisement?.bybitAdId,
           });
-          console.error(`[ReceiptPayoutLinker] Error deleting advertisement: ${error}`);
+          console.error(
+            `[ReceiptPayoutLinker] Error deleting advertisement: ${error}`,
+          );
         }
       } else {
-        console.log(`[ReceiptPayoutLinker] No advertisement to delete - bybitAdId: ${transaction.advertisement?.bybitAdId}, account: ${!!transaction.advertisement?.bybitAccount}`);
+        console.log(
+          `[ReceiptPayoutLinker] No advertisement to delete - bybitAdId: ${transaction.advertisement?.bybitAdId}, account: ${!!transaction.advertisement?.bybitAccount}`,
+        );
       }
     }
 
@@ -346,18 +419,18 @@ export class ReceiptPayoutLinkerService {
       payoutId: payout.id, // ID записи в БД
       gatePayoutId: payout.gatePayoutId,
       amount: receipt.amount,
-      recipientPhone: receipt.recipientPhone
+      recipientPhone: receipt.recipientPhone,
     });
 
     // Emit event for real-time updates
     const io = (global as any).io;
     if (io) {
-      io.emit('receipt:linked', {
+      io.emit("receipt:linked", {
         receiptId: receipt.id,
         payoutId: payout.id, // ID записи в БД
         gatePayoutId: payout.gatePayoutId,
         amount: receipt.amount,
-        transactionId: transaction?.id
+        transactionId: transaction?.id,
       });
     }
 
@@ -371,14 +444,16 @@ export class ReceiptPayoutLinkerService {
     if (!receipt.recipientCard) return null;
 
     const cardNumber = receipt.recipientCard;
-    
+
     // Извлекаем начальные 6 цифр и последние 4 цифры из замаскированной карты
     // Формат: 220040******6401
-    const cardPattern = cardNumber.replace(/\*/g, '');
+    const cardPattern = cardNumber.replace(/\*/g, "");
     const firstSix = cardPattern.substring(0, 6);
     const lastFour = cardPattern.substring(cardPattern.length - 4);
 
-    console.log(`[ReceiptPayoutLinker] Card pattern: first6=${firstSix}, last4=${lastFour}`);
+    console.log(
+      `[ReceiptPayoutLinker] Card pattern: first6=${firstSix}, last4=${lastFour}`,
+    );
 
     try {
       // Ищем payout где wallet начинается с первых 6 цифр и заканчивается последними 4
@@ -386,23 +461,25 @@ export class ReceiptPayoutLinkerService {
         where: {
           OR: [
             { amount: receipt.amount },
-            { 
+            {
               amountTrader: {
-                path: ['643'],
-                equals: receipt.amount
-              }
-            }
+                path: ["643"],
+                equals: receipt.amount,
+              },
+            },
           ],
           AND: [
             { wallet: { startsWith: firstSix } },
-            { wallet: { endsWith: lastFour } }
+            { wallet: { endsWith: lastFour } },
           ],
-          createdAt: receipt.transactionDate ? {
-            gte: dayjs(receipt.transactionDate).subtract(1, 'day').toDate(),
-            lte: dayjs(receipt.transactionDate).add(1, 'day').toDate()
-          } : undefined
+          createdAt: receipt.transactionDate
+            ? {
+                gte: dayjs(receipt.transactionDate).subtract(1, "day").toDate(),
+                lte: dayjs(receipt.transactionDate).add(1, "day").toDate(),
+              }
+            : undefined,
         },
-        orderBy: { createdAt: 'desc' }
+        orderBy: { createdAt: "desc" },
       });
 
       return payout;
@@ -415,7 +492,10 @@ export class ReceiptPayoutLinkerService {
   /**
    * Ищет payout по телефону
    */
-  private async findPayoutByPhone(receipt: any, normalizedPhone: string): Promise<any> {
+  private async findPayoutByPhone(
+    receipt: any,
+    normalizedPhone: string,
+  ): Promise<any> {
     try {
       const payout = await Promise.race([
         prisma.payout.findFirst({
@@ -424,25 +504,31 @@ export class ReceiptPayoutLinkerService {
               // Ищем по amount если оно заполнено
               { amount: receipt.amount },
               // Или по amountTrader['643'] для RUB
-              { 
+              {
                 amountTrader: {
-                  path: ['643'],
-                  equals: receipt.amount
-                }
-              }
+                  path: ["643"],
+                  equals: receipt.amount,
+                },
+              },
             ],
             wallet: { contains: normalizedPhone },
             // Payout должен быть создан примерно в то же время (±1 день)
-            createdAt: receipt.transactionDate ? {
-              gte: dayjs(receipt.transactionDate).subtract(1, 'day').toDate(),
-              lte: dayjs(receipt.transactionDate).add(1, 'day').toDate()
-            } : undefined
+            createdAt: receipt.transactionDate
+              ? {
+                  gte: dayjs(receipt.transactionDate)
+                    .subtract(1, "day")
+                    .toDate(),
+                  lte: dayjs(receipt.transactionDate).add(1, "day").toDate(),
+                }
+              : undefined,
           },
-          orderBy: { createdAt: 'desc' }
+          orderBy: { createdAt: "desc" },
         }),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('Query timeout')), 5000))
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("Query timeout")), 5000),
+        ),
       ]);
-      
+
       return payout;
     } catch (error) {
       console.error(`[ReceiptPayoutLinker] Error searching by phone:`, error);
@@ -461,33 +547,35 @@ export class ReceiptPayoutLinkerService {
             {
               OR: [
                 { amount: receipt.amount },
-                { 
+                {
                   amountTrader: {
-                    path: ['643'],
-                    equals: receipt.amount
-                  }
-                }
-              ]
+                    path: ["643"],
+                    equals: receipt.amount,
+                  },
+                },
+              ],
             },
             {
               OR: [
                 { recipientName: { contains: receipt.recipientName } },
                 { wallet: { contains: receipt.recipientName } },
-                { 
+                {
                   meta: {
-                    path: ['name'],
-                    string_contains: receipt.recipientName
-                  }
-                }
-              ]
-            }
+                    path: ["name"],
+                    string_contains: receipt.recipientName,
+                  },
+                },
+              ],
+            },
           ],
-          createdAt: receipt.transactionDate ? {
-            gte: dayjs(receipt.transactionDate).subtract(1, 'day').toDate(),
-            lte: dayjs(receipt.transactionDate).add(1, 'day').toDate()
-          } : undefined
+          createdAt: receipt.transactionDate
+            ? {
+                gte: dayjs(receipt.transactionDate).subtract(1, "day").toDate(),
+                lte: dayjs(receipt.transactionDate).add(1, "day").toDate(),
+              }
+            : undefined,
         },
-        orderBy: { createdAt: 'desc' }
+        orderBy: { createdAt: "desc" },
       });
 
       return payout;
@@ -506,19 +594,23 @@ export class ReceiptPayoutLinkerService {
         where: {
           OR: [
             { amount: receipt.amount },
-            { 
+            {
               amountTrader: {
-                path: ['643'],
-                equals: receipt.amount
-              }
-            }
+                path: ["643"],
+                equals: receipt.amount,
+              },
+            },
           ],
-          createdAt: receipt.transactionDate ? {
-            gte: dayjs(receipt.transactionDate).subtract(30, 'minutes').toDate(),
-            lte: dayjs(receipt.transactionDate).add(30, 'minutes').toDate()
-          } : undefined
+          createdAt: receipt.transactionDate
+            ? {
+                gte: dayjs(receipt.transactionDate)
+                  .subtract(30, "minutes")
+                  .toDate(),
+                lte: dayjs(receipt.transactionDate).add(30, "minutes").toDate(),
+              }
+            : undefined,
         },
-        orderBy: { createdAt: 'desc' }
+        orderBy: { createdAt: "desc" },
       });
 
       // Проверяем, что payout не привязан к другому чеку
@@ -526,14 +618,14 @@ export class ReceiptPayoutLinkerService {
         const existingReceipt = await prisma.receipt.findFirst({
           where: {
             payoutId: payout.id, // ID записи в БД
-            id: { not: receipt.id }
-          }
+            id: { not: receipt.id },
+          },
         });
 
         if (existingReceipt) {
           logger.debug("Payout already linked to another receipt", {
             payoutId: payout.gatePayoutId,
-            existingReceiptId: existingReceipt.id
+            existingReceiptId: existingReceipt.id,
           });
           return null;
         }
@@ -541,7 +633,10 @@ export class ReceiptPayoutLinkerService {
 
       return payout;
     } catch (error) {
-      console.error(`[ReceiptPayoutLinker] Error searching by amount/time:`, error);
+      console.error(
+        `[ReceiptPayoutLinker] Error searching by amount/time:`,
+        error,
+      );
       return null;
     }
   }
@@ -551,18 +646,18 @@ export class ReceiptPayoutLinkerService {
    */
   private normalizePhone(phone: string): string {
     // Убираем все кроме цифр
-    const digits = phone.replace(/\D/g, '');
-    
+    const digits = phone.replace(/\D/g, "");
+
     // Если начинается с 7, убираем ее
-    if (digits.startsWith('7') && digits.length === 11) {
+    if (digits.startsWith("7") && digits.length === 11) {
       return digits.substring(1);
     }
-    
+
     // Если начинается с 8, заменяем на 7 и убираем
-    if (digits.startsWith('8') && digits.length === 11) {
+    if (digits.startsWith("8") && digits.length === 11) {
       return digits.substring(1);
     }
-    
+
     return digits;
   }
 
@@ -576,21 +671,17 @@ export class ReceiptPayoutLinkerService {
     totalPayouts: number;
     receiptsWithPayouts: number;
   }> {
-    const [
-      totalReceipts,
-      linkedReceipts,
-      totalPayouts
-    ] = await Promise.all([
+    const [totalReceipts, linkedReceipts, totalPayouts] = await Promise.all([
       prisma.receipt.count({ where: { isParsed: true } }),
       prisma.receipt.count({ where: { payoutId: { not: null } } }),
-      prisma.payout.count()
+      prisma.payout.count(),
     ]);
 
     // Считаем уникальные payoutId в чеках
     const receiptsWithPayouts = await prisma.receipt.groupBy({
-      by: ['payoutId'],
+      by: ["payoutId"],
       where: { payoutId: { not: null } },
-      _count: true
+      _count: true,
     });
 
     return {
@@ -598,7 +689,7 @@ export class ReceiptPayoutLinkerService {
       linkedReceipts,
       unlinkedReceipts: totalReceipts - linkedReceipts,
       totalPayouts,
-      receiptsWithPayouts: receiptsWithPayouts.length
+      receiptsWithPayouts: receiptsWithPayouts.length,
     };
   }
 
@@ -607,7 +698,7 @@ export class ReceiptPayoutLinkerService {
    */
   async linkSpecificReceipt(receiptId: string): Promise<boolean> {
     const receipt = await prisma.receipt.findUnique({
-      where: { id: receiptId }
+      where: { id: receiptId },
     });
 
     if (!receipt) {
@@ -616,9 +707,9 @@ export class ReceiptPayoutLinkerService {
     }
 
     if (receipt.payoutId) {
-      logger.info("Receipt already linked", { 
-        receiptId, 
-        payoutId: receipt.payoutId 
+      logger.info("Receipt already linked", {
+        receiptId,
+        payoutId: receipt.payoutId,
       });
       return true;
     }
@@ -638,7 +729,9 @@ export function getReceiptPayoutLinker(): ReceiptPayoutLinkerService {
 }
 
 // Функция для запуска сервиса
-export async function startReceiptPayoutLinker(intervalMs: number = 5000): Promise<ReceiptPayoutLinkerService> {
+export async function startReceiptPayoutLinker(
+  intervalMs: number = 5000,
+): Promise<ReceiptPayoutLinkerService> {
   const service = getReceiptPayoutLinker();
   await service.start(intervalMs);
   return service;

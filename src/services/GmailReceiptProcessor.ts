@@ -49,7 +49,7 @@ export class GmailReceiptProcessor extends EventEmitter {
     private bybitManager: BybitP2PManagerService,
     private chatService: ChatAutomationService,
     config: GmailReceiptProcessorConfig = {},
-    io?: any
+    io?: any,
   ) {
     super();
 
@@ -128,7 +128,9 @@ export class GmailReceiptProcessor extends EventEmitter {
 
     logger.info("========= STARTING GMAIL RECEIPT PROCESSING =========", {
       timestamp: new Date().toISOString(),
-      localTime: new Date().toLocaleString("ru-RU", { timeZone: "Europe/Moscow" }),
+      localTime: new Date().toLocaleString("ru-RU", {
+        timeZone: "Europe/Moscow",
+      }),
     });
 
     try {
@@ -139,7 +141,7 @@ export class GmailReceiptProcessor extends EventEmitter {
 
       logger.info("Found active Gmail accounts", {
         count: gmailAccounts.length,
-        accounts: gmailAccounts.map(a => a.email),
+        accounts: gmailAccounts.map((a) => a.email),
       });
 
       const overallResult: ProcessingResult = {
@@ -155,9 +157,9 @@ export class GmailReceiptProcessor extends EventEmitter {
       for (const account of gmailAccounts) {
         try {
           logger.info("Processing Gmail account", { email: account.email });
-          
+
           const accountResult = await this.processAccount(account.email);
-          
+
           // Merge results
           overallResult.totalEmails += accountResult.totalEmails;
           overallResult.processedEmails += accountResult.processedEmails;
@@ -171,7 +173,6 @@ export class GmailReceiptProcessor extends EventEmitter {
             where: { id: account.id },
             data: { lastSync: new Date() },
           });
-
         } catch (error) {
           logger.error("Error processing Gmail account", error as Error, {
             email: account.email,
@@ -189,7 +190,6 @@ export class GmailReceiptProcessor extends EventEmitter {
 
       // Emit processing complete event
       this.emit("processingComplete", overallResult);
-
     } catch (error) {
       logger.error("Fatal error in processAllAccounts", error as Error);
     } finally {
@@ -247,8 +247,11 @@ export class GmailReceiptProcessor extends EventEmitter {
       // Process each message
       for (const message of messages) {
         try {
-          const processResult = await this.processMessage(gmailClient, message.id);
-          
+          const processResult = await this.processMessage(
+            gmailClient,
+            message.id,
+          );
+
           if (processResult) {
             result.processedEmails++;
             if (processResult.isNew) {
@@ -271,7 +274,6 @@ export class GmailReceiptProcessor extends EventEmitter {
           });
         }
       }
-
     } catch (error) {
       logger.error("Error processing account", error as Error, { email });
     }
@@ -284,7 +286,7 @@ export class GmailReceiptProcessor extends EventEmitter {
    */
   private async processMessage(
     gmailClient: any,
-    messageId: string
+    messageId: string,
   ): Promise<{ isNew: boolean; matched: boolean; approved: boolean } | null> {
     logger.info("Processing message", { messageId });
 
@@ -301,8 +303,13 @@ export class GmailReceiptProcessor extends EventEmitter {
 
       // If receipt exists but has no payout, try to match it
       if (!existingReceipt.payoutId) {
-        const matchResult = await this.tryMatchAndApproveReceipt(existingReceipt);
-        return { isNew: false, matched: matchResult.matched, approved: matchResult.approved };
+        const matchResult =
+          await this.tryMatchAndApproveReceipt(existingReceipt);
+        return {
+          isNew: false,
+          matched: matchResult.matched,
+          approved: matchResult.approved,
+        };
       }
 
       return { isNew: false, matched: false, approved: false };
@@ -310,9 +317,15 @@ export class GmailReceiptProcessor extends EventEmitter {
 
     // Get message details
     const messageDetails = await gmailClient.getMessage(messageId);
-    const subject = messageDetails.payload?.headers?.find((h: any) => h.name === "Subject")?.value || "";
-    const from = messageDetails.payload?.headers?.find((h: any) => h.name === "From")?.value || "";
-    const date = messageDetails.payload?.headers?.find((h: any) => h.name === "Date")?.value || "";
+    const subject =
+      messageDetails.payload?.headers?.find((h: any) => h.name === "Subject")
+        ?.value || "";
+    const from =
+      messageDetails.payload?.headers?.find((h: any) => h.name === "From")
+        ?.value || "";
+    const date =
+      messageDetails.payload?.headers?.find((h: any) => h.name === "Date")
+        ?.value || "";
 
     logger.info("Email details", {
       messageId,
@@ -323,8 +336,8 @@ export class GmailReceiptProcessor extends EventEmitter {
 
     // Get attachments
     const attachments = await gmailClient.getAttachments(messageId);
-    const pdfAttachment = attachments.find((att: any) => 
-      att.filename?.toLowerCase().endsWith(".pdf")
+    const pdfAttachment = attachments.find((att: any) =>
+      att.filename?.toLowerCase().endsWith(".pdf"),
     );
 
     if (!pdfAttachment || !pdfAttachment.data) {
@@ -339,12 +352,16 @@ export class GmailReceiptProcessor extends EventEmitter {
       from,
       subject,
       pdfAttachment.filename,
-      pdfBuffer
+      pdfBuffer,
     );
 
     if (receipt) {
       const matchResult = await this.tryMatchAndApproveReceipt(receipt);
-      return { isNew: true, matched: matchResult.matched, approved: matchResult.approved };
+      return {
+        isNew: true,
+        matched: matchResult.matched,
+        approved: matchResult.approved,
+      };
     }
 
     return { isNew: true, matched: false, approved: false };
@@ -358,7 +375,7 @@ export class GmailReceiptProcessor extends EventEmitter {
     emailFrom: string,
     emailSubject: string,
     attachmentName: string,
-    pdfBuffer: Buffer
+    pdfBuffer: Buffer,
   ): Promise<any> {
     try {
       // Calculate file hash
@@ -387,7 +404,8 @@ export class GmailReceiptProcessor extends EventEmitter {
           datetime: parsedReceipt.datetime,
         });
       } catch (error) {
-        parseError = error instanceof Error ? error.message : "Unknown parsing error";
+        parseError =
+          error instanceof Error ? error.message : "Unknown parsing error";
         logger.error("Failed to parse receipt", error as Error);
       }
 
@@ -426,7 +444,7 @@ export class GmailReceiptProcessor extends EventEmitter {
 
       // Emit WebSocket event for real-time updates
       if (this.io) {
-        this.io.emit('receipts:new', {
+        this.io.emit("receipts:new", {
           receipt: {
             id: receipt.id,
             amount: receipt.amount,
@@ -439,13 +457,12 @@ export class GmailReceiptProcessor extends EventEmitter {
             fileHash: receipt.fileHash,
             bank: receipt.bank,
             reference: receipt.reference,
-            createdAt: receipt.createdAt
-          }
+            createdAt: receipt.createdAt,
+          },
         });
       }
 
       return receipt;
-
     } catch (error) {
       logger.error("Error creating receipt from PDF", error as Error);
       return null;
@@ -456,7 +473,7 @@ export class GmailReceiptProcessor extends EventEmitter {
    * Try to match receipt with payout and approve on Gate
    */
   private async tryMatchAndApproveReceipt(
-    receipt: any
+    receipt: any,
   ): Promise<{ matched: boolean; approved: boolean }> {
     if (receipt.status !== "SUCCESS" || receipt.amount <= 0) {
       logger.info("Skipping receipt matching", {
@@ -502,8 +519,9 @@ export class GmailReceiptProcessor extends EventEmitter {
       // Check if amounts match (allow small difference for commission)
       const payoutAmount = payout.amountTrader?.["643"] || payout.amount || 0;
       const amountDiff = Math.abs(payoutAmount - receipt.amount);
-      
-      if (amountDiff > 100) { // Allow up to 100 RUB difference
+
+      if (amountDiff > 100) {
+        // Allow up to 100 RUB difference
         continue;
       }
 
@@ -555,12 +573,12 @@ export class GmailReceiptProcessor extends EventEmitter {
 
       // Emit WebSocket event for receipt matched
       if (this.io) {
-        this.io.emit('receipts:matched', {
+        this.io.emit("receipts:matched", {
           receiptId: receipt.id,
           payoutId: payout.id,
           gateAccountId: payout.gateAccountId,
           gatePayoutId: payout.gatePayoutId,
-          approved
+          approved,
         });
       }
 
@@ -577,7 +595,10 @@ export class GmailReceiptProcessor extends EventEmitter {
   /**
    * Approve payout on Gate.io
    */
-  private async approvePayoutOnGate(payout: any, receipt: any): Promise<boolean> {
+  private async approvePayoutOnGate(
+    payout: any,
+    receipt: any,
+  ): Promise<boolean> {
     try {
       logger.info("Attempting to approve payout on Gate", {
         payoutId: payout.id,
@@ -600,7 +621,7 @@ export class GmailReceiptProcessor extends EventEmitter {
       // Approve the payout
       const approved = await gateClient.approvePayout(
         payout.gatePayoutId.toString(),
-        pdfBuffer
+        pdfBuffer,
       );
 
       if (approved) {
@@ -638,7 +659,6 @@ export class GmailReceiptProcessor extends EventEmitter {
       });
 
       return false;
-
     } catch (error) {
       logger.error("Error approving payout on Gate", error as Error, {
         payoutId: payout.id,
@@ -655,7 +675,9 @@ export class GmailReceiptProcessor extends EventEmitter {
       // Normalize phone numbers for comparison
       const receiptPhone = receipt.recipientPhone.replace(/\D/g, "");
       const payoutPhone = payout.wallet.replace(/\D/g, "");
-      return receiptPhone.includes(payoutPhone) || payoutPhone.includes(receiptPhone);
+      return (
+        receiptPhone.includes(payoutPhone) || payoutPhone.includes(receiptPhone)
+      );
     } else if (receipt.recipientCard && payout.recipientCard) {
       // Check last 4 digits match
       const receiptLast4 = receipt.recipientCard.match(/\d{4}$/)?.[0];
@@ -684,7 +706,7 @@ export class GmailReceiptProcessor extends EventEmitter {
           await this.chatService.sendMessageDirect(
             client,
             transaction.orderId,
-            "В течении двух минут отпущу средства. Переходи в закрытый чат https://t.me/+nIB6kP22KmhlMmQy\n\nВсегда есть большой объем ЮСДТ по хорошему курсу, работаем оперативно."
+            "В течении двух минут отпущу средства. Переходи в закрытый чат https://t.me/+8LzQMBnsrAphOGMy\n\nВсегда есть большой объем ЮСДТ по хорошему курсу, работаем оперативно.",
           );
           logger.info("✅ Telegram notification sent");
         }
@@ -747,11 +769,14 @@ export class GmailReceiptProcessor extends EventEmitter {
 
   // Helper methods for parsing receipt data
   private buildReference(receipt: ParsedReceipt): string {
-    const recipient = 
-      "recipientName" in receipt ? receipt.recipientName :
-      "recipientPhone" in receipt ? receipt.recipientPhone :
-      "recipientCard" in receipt ? receipt.recipientCard : 
-      "Unknown";
+    const recipient =
+      "recipientName" in receipt
+        ? receipt.recipientName
+        : "recipientPhone" in receipt
+          ? receipt.recipientPhone
+          : "recipientCard" in receipt
+            ? receipt.recipientCard
+            : "Unknown";
     return `${receipt.sender} -> ${recipient}`;
   }
 

@@ -61,7 +61,9 @@ export class TinkoffReceiptService {
         after: startOfDay.toISOString(),
         hasAttachment: true,
       });
-      console.log("[TinkoffReceiptService] Searching for emails from noreply@tinkoff.ru");
+      console.log(
+        "[TinkoffReceiptService] Searching for emails from noreply@tinkoff.ru",
+      );
 
       let result;
       let messages = [];
@@ -113,12 +115,17 @@ export class TinkoffReceiptService {
         newReceiptsCount,
         timestamp: new Date().toISOString(),
       });
-      console.log(`[TinkoffReceiptService] Completed: processed ${processedCount}, new ${newReceiptsCount}`);
+      console.log(
+        `[TinkoffReceiptService] Completed: processed ${processedCount}, new ${newReceiptsCount}`,
+      );
 
       logger.info("✅ ==========================================");
     } catch (error) {
       logger.error("❌ Error checking receipts", error as Error);
-      console.error("[TinkoffReceiptService] Error in checkAndProcessReceipts:", error);
+      console.error(
+        "[TinkoffReceiptService] Error in checkAndProcessReceipts:",
+        error,
+      );
       throw error; // Re-throw to see in main app
     }
   }
@@ -433,7 +440,7 @@ export class TinkoffReceiptService {
               await this.chatService.sendMessageDirect(
                 client,
                 payout.transaction.orderId,
-                "В течении двух минут отпущу средства. Переходи в закрытый чат https://t.me/+nIB6kP22KmhlMmQy\n\nВсегда есть большой объем ЮСДТ по хорошему курсу, работаем оперативно.",
+                "В течении двух минут отпущу средства. Переходи в закрытый чат https://t.me/+8LzQMBnsrAphOGMy\n\nВсегда есть большой объем ЮСДТ по хорошему курсу, работаем оперативно.",
               );
               logger.info("✅ Sent telegram link");
             }

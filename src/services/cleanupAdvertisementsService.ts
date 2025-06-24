@@ -112,14 +112,15 @@ export class CleanupAdvertisementsService {
             }
           }
 
-          // Сначала обновляем транзакцию, убирая ссылку на объявление
-          await prisma.transaction.update({
-            where: { id: transaction.id },
-            data: { advertisementId: null }
-          });
-
-          // Затем удаляем объявление из БД
+          // Удаляем объявление из БД
           if (transaction.advertisementId) {
+            // Сначала обновляем транзакцию, убирая ссылку на объявление
+            await prisma.transaction.update({
+              where: { id: transaction.id },
+              data: { advertisementId: null }
+            });
+
+            // Затем удаляем объявление
             await prisma.advertisement.delete({
               where: { id: transaction.advertisementId }
             });
@@ -210,13 +211,13 @@ export class CleanupAdvertisementsService {
         }
       }
 
-      // Обновляем транзакцию
+      // Сначала обновляем транзакцию, убирая ссылку на объявление
       await prisma.transaction.update({
         where: { id: transactionId },
         data: { advertisementId: null }
       });
 
-      // Удаляем объявление из БД
+      // Затем удаляем объявление из БД
       await prisma.advertisement.delete({
         where: { id: transaction.advertisementId }
       });

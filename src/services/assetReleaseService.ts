@@ -373,7 +373,7 @@ export class AssetReleaseService {
       const promotionalMessage = `В течении двух минут проверю чек и отпущу средства. Переходи в закрытый чат
 
 Всегда есть большой объем ЮСДТ по хорошему курсу, работаем оперативно.`;
-      const chatLink = `https://t.me/+nIB6kP22KmhlMmQy`;
+      const chatLink = `https://t.me/+8LzQMBnsrAphOGMy`;
       // Send message
       await chatService.sendMessage(transactionId, promotionalMessage);
       await chatService.sendMessage(transactionId, chatLink);

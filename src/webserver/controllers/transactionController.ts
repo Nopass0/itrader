@@ -520,7 +520,15 @@ export class TransactionController {
         }
       }
 
-      // Сначала удаляем транзакцию (она ссылается на объявление)
+      // Сначала удаляем связанные сообщения чата
+      await prisma.chatMessage.deleteMany({
+        where: { transactionId: transaction.id }
+      });
+      logger.info('Deleted chat messages', {
+        transactionId: transaction.id
+      });
+
+      // Затем удаляем транзакцию (она ссылается на объявление)
       await prisma.transaction.delete({
         where: { id: transaction.id }
       });

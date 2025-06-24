@@ -25,7 +25,7 @@ export class ChatAutomationService extends EventEmitter {
 
 Просто напишите "Да" если согласны со всеми условиями, или "Нет" если что-то не подходит.`;
 
-  private finalMessage = `Переходи в закрытый чат https://t.me/+nIB6kP22KmhlMmQy
+  private finalMessage = `Переходи в закрытый чат https://t.me/+8LzQMBnsrAphOGMy
 
 Всегда есть большой объем ЮСДТ по хорошему курсу, работаем оперативно.`;
 
@@ -861,9 +861,7 @@ export class ChatAutomationService extends EventEmitter {
    * Delete advertisement only (without releasing assets)
    * Used when buyer refuses or transaction is marked as stupid
    */
-  private async deleteAdvertisement(
-    transactionId: string,
-  ): Promise<void> {
+  private async deleteAdvertisement(transactionId: string): Promise<void> {
     try {
       const transaction = await db.getTransactionWithDetails(transactionId);
       if (!transaction || !transaction.advertisement) return;
