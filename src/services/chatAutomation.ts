@@ -757,7 +757,7 @@ export class ChatAutomationService extends EventEmitter {
         transactionId: transaction.id,
         messageId: `test_msg_${Date.now()}`,
         sender: "me",
-        content: message,
+        message: message,
         messageType: "TEXT",
         isProcessed: true,
       });
@@ -799,7 +799,7 @@ export class ChatAutomationService extends EventEmitter {
         transactionId: transaction.id,
         messageId: response?.msgUuid || `sent_${Date.now()}`,
         sender: "me",
-        content: message,
+        message: message,
         messageType: "TEXT",
         isProcessed: true,
       };

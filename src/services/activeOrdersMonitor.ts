@@ -552,7 +552,7 @@ export class ActiveOrdersMonitorService extends EventEmitter {
               transactionId: transactionId,
               messageId: msg.id,
               sender: sender,
-              content: msg.message,
+              content: msg.message || '',
               messageType:
                 msg.contentType === "str"
                   ? "TEXT"

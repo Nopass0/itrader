@@ -520,10 +520,13 @@ class DatabaseClient {
     content: string;
     messageType: string;
     isProcessed?: boolean;
+    sentAt?: Date;
   }): Promise<ChatMessage> {
     // Map content to message for createChatMessage
-    const { content, ...rest } = data;
-    return await this.createChatMessage({ ...rest, message: content });
+    const { content, sentAt, ...rest } = data;
+    // Ensure message is not undefined or null
+    const message = content || '';
+    return await this.createChatMessage({ ...rest, message, sentAt });
   }
 
   async getChatMessages(transactionId: string): Promise<ChatMessage[]> {

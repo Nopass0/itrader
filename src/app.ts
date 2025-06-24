@@ -1806,7 +1806,7 @@ async function main() {
                       transactionId: transaction.id,
                       messageId: msg.id,
                       sender: sender,
-                      content: msg.message,
+                      content: msg.message || '',
                       messageType: msg.contentType === "pic" ? "IMAGE" : "TEXT",
                       isProcessed: sender === "us",
                       sentAt: new Date(parseInt(msg.createDate))
@@ -1815,7 +1815,7 @@ async function main() {
                     logger.info("💾 [TransactionChatProcessor] Saved new message", {
                       transactionId: transaction.id,
                       sender: sender,
-                      preview: msg.message.substring(0, 50) + "..."
+                      preview: msg.message ? msg.message.substring(0, 50) + "..." : "[empty message]"
                     });
                   }
                 }
