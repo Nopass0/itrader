@@ -173,7 +173,7 @@ export class BybitP2PManagerService {
           transactionId: transaction.id,
           messageId: message.messageId,
           sender: sender,
-          message: message.content,  // Fixed: use message field instead of content
+          message: message.content || message.text || message.message || "",  // Handle different message field names
           messageType: message.type || "TEXT",
         };
 
