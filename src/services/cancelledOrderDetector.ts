@@ -14,6 +14,13 @@ export class CancelledOrderDetectorService {
   private isRunning: boolean = false;
   private checkInterval: NodeJS.Timeout | null = null;
 
+  // Bybit order status codes:
+  // 10 = waiting for buyer to pay
+  // 20 = waiting for seller to release (payment received)
+  // 30 = completed
+  // 40 = cancelled
+  // 50 = finished/disputed
+  
   // Cancellation message patterns
   private cancellationPatterns = [
     "Your order has been canceled. The seller is not allowed to appeal after the order is canceled.",
@@ -98,41 +105,75 @@ export class CancelledOrderDetectorService {
         if (!transaction.orderId || !transaction.advertisement?.bybitAccount) continue;
 
         try {
-          // Check existing messages in database first
-          const cancelledInDb = this.checkMessagesForCancellation(transaction.chatMessages);
-          
-          if (cancelledInDb) {
-            await this.markTransactionCancelled(transaction.id, "Order cancelled (detected from DB messages)");
-            continue;
-          }
-
-          // Get fresh messages from Bybit API
+          // Get fresh order status from Bybit API first
           const client = this.bybitManager.getClient(transaction.advertisement.bybitAccount.accountId);
           if (!client) continue;
 
-          const chatResponse = await client.getChatMessages(transaction.orderId, 1, 50);
+          // Check actual order status
+          const orderDetails = await client.getOrderDetails(transaction.orderId);
           
-          let messages = [];
-          if (Array.isArray(chatResponse)) {
-            messages = chatResponse;
-          } else if (chatResponse && chatResponse.list) {
-            messages = chatResponse.list;
-          } else if (chatResponse && chatResponse.result) {
-            messages = chatResponse.result;
+          // If order status is 30 (completed) or 50 (finished), skip cancellation check
+          if (orderDetails && (orderDetails.status === 30 || orderDetails.status === 50)) {
+            logger.debug(`Order ${transaction.orderId} is completed (status ${orderDetails.status}), skipping cancellation check`);
+            continue;
           }
 
-          // Check for cancellation messages
-          for (const msg of messages) {
-            if (this.isCancellationMessage(msg.message || msg.content || '')) {
-              logger.warn("🚫 Order cancellation detected!", {
-                transactionId: transaction.id,
-                orderId: transaction.orderId,
-                message: msg.message,
-                messageId: msg.id
-              });
+          // If order status is 40 (cancelled), mark as cancelled
+          if (orderDetails && orderDetails.status === 40) {
+            await this.markTransactionCancelled(transaction.id, "Order cancelled (status 40 from API)");
+            continue;
+          }
 
-              await this.markTransactionCancelled(transaction.id, msg.message || "Order cancelled");
-              break;
+          // Only check messages if order is still active (status 10 or 20)
+          if (orderDetails && (orderDetails.status === 10 || orderDetails.status === 20)) {
+            // Check existing messages in database first
+            const cancelledInDb = this.checkMessagesForCancellation(transaction.chatMessages);
+            
+            if (cancelledInDb) {
+              // Double-check with API before marking as cancelled
+              const freshOrderDetails = await client.getOrderDetails(transaction.orderId);
+              if (freshOrderDetails && freshOrderDetails.status === 40) {
+                await this.markTransactionCancelled(transaction.id, "Order cancelled (detected from messages and confirmed by API)");
+              }
+              continue;
+            }
+
+            // Get fresh messages from Bybit API
+            const chatResponse = await client.getChatMessages(transaction.orderId, 1, 50);
+            
+            let messages = [];
+            if (Array.isArray(chatResponse)) {
+              messages = chatResponse;
+            } else if (chatResponse && chatResponse.list) {
+              messages = chatResponse.list;
+            } else if (chatResponse && chatResponse.result) {
+              messages = chatResponse.result;
+            }
+
+            // Check for cancellation messages
+            for (const msg of messages) {
+              if (this.isCancellationMessage(msg.message || msg.content || '')) {
+                // Double-check order status before marking as cancelled
+                const finalOrderCheck = await client.getOrderDetails(transaction.orderId);
+                if (finalOrderCheck && finalOrderCheck.status === 40) {
+                  logger.warn("🚫 Order cancellation confirmed!", {
+                    transactionId: transaction.id,
+                    orderId: transaction.orderId,
+                    message: msg.message,
+                    messageId: msg.id,
+                    orderStatus: finalOrderCheck.status
+                  });
+
+                  await this.markTransactionCancelled(transaction.id, msg.message || "Order cancelled");
+                } else {
+                  logger.warn("⚠️ Cancellation message found but order not cancelled", {
+                    transactionId: transaction.id,
+                    orderId: transaction.orderId,
+                    orderStatus: finalOrderCheck?.status
+                  });
+                }
+                break;
+              }
             }
           }
 
