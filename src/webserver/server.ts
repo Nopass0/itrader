@@ -24,6 +24,7 @@ import { ReceiptController } from './controllers/receiptController';
 import { BybitChatController } from './controllers/bybitChatController';
 import { initLogsController } from './controllers/logsController';
 import { MailSlurpController } from './controllers/mailSlurpController';
+import { CleanupController } from './controllers/cleanupController';
 import { setGlobalIO } from './global';
 
 const logger = createLogger('WebSocketServer');
@@ -391,6 +392,11 @@ export class WebSocketServer {
       socket.on('logs:cleanupNow', withAuth(async (socket, data, callback) => {
         await logsController.handleCleanupNow(socket, data, callback);
       }));
+
+      // Управление очисткой объявлений
+      socket.on('cleanup:getStatus', withAuth(CleanupController.getStatus));
+      socket.on('cleanup:forceCleanup', withAuthAndLogging(CleanupController.forceCleanup, 'forceCleanup', 'cleanup:forceCleanup', () => ({})));
+      socket.on('cleanup:cleanupTransaction', withAuthAndLogging(CleanupController.cleanupTransaction, 'cleanupTransaction', 'cleanup:cleanupTransaction', (data) => ({ transactionId: data?.transactionId })));
 
       // Отключение
       socket.on('disconnect', () => {
