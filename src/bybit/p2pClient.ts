@@ -366,13 +366,19 @@ export class P2PClient extends EventEmitter {
     page: number = 1,
     pageSize: number = 50,
   ): Promise<any> {
+    const params: any = { 
+      orderId, 
+      size: pageSize.toString()
+    };
+    
+    // Only add currentPage if not the first page
+    if (page > 1) {
+      params.currentPage = page.toString();
+    }
+    
     const response = await this.httpClient.post<any>(
       "/v5/p2p/order/message/listpage",
-      { 
-        orderId, 
-        currentPage: page.toString(),
-        size: pageSize.toString()
-      },
+      params,
     );
     // Return the result array directly
     return response.result || [];

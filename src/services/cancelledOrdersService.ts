@@ -34,10 +34,10 @@ export class CancelledOrdersService {
     // Проверяем сразу при запуске
     await this.checkCancelledOrders();
 
-    // Запускаем периодическую проверку каждые 20 секунд
+    // Запускаем периодическую проверку каждые 5 секунд для быстрого обнаружения отмен через чат
     this.checkInterval = setInterval(async () => {
       await this.checkCancelledOrders();
-    }, 20 * 1000);
+    }, 5 * 1000);
   }
 
   /**
@@ -72,6 +72,11 @@ export class CancelledOrdersService {
             include: {
               bybitAccount: true
             }
+          },
+          chatMessages: {
+            orderBy: {
+              createdAt: 'desc'
+            }
           }
         }
       });
@@ -86,6 +91,19 @@ export class CancelledOrdersService {
 
       for (const transaction of activeTransactions) {
         try {
+          // Сначала проверяем сообщения чата на предмет отмены
+          const cancelledByChat = await this.checkChatForCancellation(transaction);
+          
+          if (cancelledByChat) {
+            logger.info('Order cancelled detected via chat message', {
+              transactionId: transaction.id,
+              orderId: transaction.orderId
+            });
+            await this.markTransactionAsCancelled(transaction.id);
+            continue;
+          }
+
+          // Если не найдено в чате, проверяем через API
           await this.checkTransactionOrder(transaction);
         } catch (error) {
           logger.error('Error checking transaction order', error, { 
@@ -97,6 +115,34 @@ export class CancelledOrdersService {
     } catch (error) {
       logger.error('Error in checkCancelledOrders', error);
     }
+  }
+
+  /**
+   * Проверка сообщений чата на предмет отмены ордера
+   */
+  private async checkChatForCancellation(transaction: any): Promise<boolean> {
+    if (!transaction.chatMessages || transaction.chatMessages.length === 0) {
+      return false;
+    }
+
+    const cancellationMessage = "Your order has been canceled. The seller is not allowed to appeal after the order is canceled.";
+    
+    for (const message of transaction.chatMessages) {
+      const messageContent = message.content || message.message || '';
+      
+      if (messageContent.includes(cancellationMessage)) {
+        logger.info('Found cancellation message in chat', {
+          transactionId: transaction.id,
+          orderId: transaction.orderId,
+          messageId: message.id,
+          sender: message.sender,
+          messagePreview: messageContent.substring(0, 100)
+        });
+        return true;
+      }
+    }
+    
+    return false;
   }
 
   /**
