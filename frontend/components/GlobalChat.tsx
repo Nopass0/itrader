@@ -107,7 +107,8 @@ export function GlobalChat({ className }: GlobalChatProps) {
     try {
       const response = await api.emit('chats:list', {});
       if (response.success && response.data) {
-        const rooms: ChatRoom[] = response.data.map((chat: any) => ({
+        const chatsData = Array.isArray(response.data) ? response.data : response.data.data;
+        const rooms: ChatRoom[] = chatsData.map((chat: any) => ({
           orderId: chat.orderId,
           counterpartyName: chat.counterparty || chat.counterpartyName || 'Unknown',
           counterpartyId: chat.counterpartyId || '',

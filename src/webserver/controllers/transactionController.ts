@@ -519,7 +519,15 @@ export class TransactionController {
         }
       }
 
-      // Удаляем объявление из БД
+      // Сначала удаляем транзакцию (она ссылается на объявление)
+      await prisma.transaction.delete({
+        where: { id: transaction.id }
+      });
+      logger.info('Deleted transaction from database', {
+        transactionId: transaction.id
+      });
+
+      // Затем удаляем объявление из БД
       if (transaction.advertisementId) {
         await prisma.advertisement.delete({
           where: { id: transaction.advertisementId }
@@ -529,14 +537,6 @@ export class TransactionController {
           transactionId: transaction.id
         });
       }
-
-      // Удаляем транзакцию
-      await prisma.transaction.delete({
-        where: { id: transaction.id }
-      });
-      logger.info('Deleted transaction from database', {
-        transactionId: transaction.id
-      });
 
       handleSuccess(null, 'Advertisement reissued successfully', callback);
     } catch (error) {
