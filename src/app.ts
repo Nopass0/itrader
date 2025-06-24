@@ -2000,6 +2000,7 @@ async function main() {
 
     // Set global context for WebSocket controllers
     (global as any).appContext = context;
+    (global as any).bybitP2PManager = context.bybitManager;
 
     // Start WebSocket server
     const webSocketPort = parseInt(process.env.WEBSOCKET_PORT || "3001");
