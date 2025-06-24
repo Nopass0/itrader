@@ -336,8 +336,7 @@ export default function TransactionsPage() {
 
   const handleRecreateAdvertisement = async (transactionId: string) => {
     try {
-      const socket = (window as any).socket;
-      if (!socket) {
+      if (!socket?.connected) {
         toast({
           title: "Ошибка",
           description: "Нет подключения к серверу",
@@ -374,8 +373,7 @@ export default function TransactionsPage() {
 
   const handleReissueAdvertisement = async (transactionId: string) => {
     try {
-      const socket = (window as any).socket;
-      if (!socket) {
+      if (!socket?.connected) {
         toast({
           title: "Ошибка",
           description: "Нет подключения к серверу",
@@ -488,62 +486,62 @@ export default function TransactionsPage() {
     'pending': { 
       icon: Clock,
       text: 'Ожидание',
-      className: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20'
+      className: 'bg-yellow-100 text-yellow-800 border-yellow-300'
     },
     'chat_started': { 
       icon: MessageSquare,
       text: 'Чат',
-      className: 'bg-blue-500/10 text-blue-500 border-blue-500/20'
+      className: 'bg-blue-100 text-blue-800 border-blue-300'
     },
     'waiting_payment': { 
       icon: Clock,
       text: 'Ожидание оплаты',
-      className: 'bg-orange-500/10 text-orange-500 border-orange-500/20'
+      className: 'bg-orange-100 text-orange-800 border-orange-300'
     },
     'payment_received': { 
       icon: DollarSign,
       text: 'Оплачено',
-      className: 'bg-purple-500/10 text-purple-500 border-purple-500/20'
+      className: 'bg-purple-100 text-purple-800 border-purple-300'
     },
     'completed': { 
       icon: CheckCircle,
       text: 'Завершено',
-      className: 'bg-green-500/10 text-green-500 border-green-500/20'
+      className: 'bg-green-100 text-green-800 border-green-300'
     },
     'failed': { 
       icon: XCircle,
       text: 'Ошибка',
-      className: 'bg-red-500/10 text-red-500 border-red-500/20'
+      className: 'bg-red-100 text-red-800 border-red-300'
     },
     'cancelled': { 
       icon: XCircle,
       text: 'Отменено',
-      className: 'bg-gray-500/10 text-gray-500 border-gray-500/20'
+      className: 'bg-gray-100 text-gray-800 border-gray-300'
     },
     'cancelled_by_counterparty': { 
       icon: AlertCircle,
       text: 'Отменено контрагентом',
-      className: 'bg-orange-500/10 text-orange-500 border-orange-500/20'
+      className: 'bg-orange-100 text-orange-800 border-orange-300'
     },
     'check_received': { 
       icon: CheckCircle,
       text: 'Чек получен',
-      className: 'bg-green-500/10 text-green-500 border-green-500/20'
+      className: 'bg-green-100 text-green-800 border-green-300'
     },
     'receipt_received': { 
       icon: FileText,
       text: 'Квитанция получена',
-      className: 'bg-indigo-500/10 text-indigo-500 border-indigo-500/20'
+      className: 'bg-indigo-100 text-indigo-800 border-indigo-300'
     },
     'stupid': { 
       icon: XCircle,
       text: 'Контрагент идиот',
-      className: 'bg-red-500/10 text-red-500 border-red-500/20'
+      className: 'bg-red-100 text-red-800 border-red-300'
     },
     'release_money': { 
       icon: Send,
       text: 'Отправка средств',
-      className: 'bg-blue-500/10 text-blue-500 border-blue-500/20'
+      className: 'bg-blue-100 text-blue-800 border-blue-300'
     },
     // Order statuses
     'open': { 
@@ -664,9 +662,15 @@ export default function TransactionsPage() {
     const Icon = config.icon;
 
     return (
-      <Badge variant="outline" className={cn("text-xs", config.className)}>
-        <Icon size={10} className="mr-1" />
-        {config.text}
+      <Badge 
+        variant="outline" 
+        className={cn(
+          "text-xs whitespace-nowrap inline-flex items-center gap-1 px-2 py-0.5 font-medium",
+          config.className
+        )}
+      >
+        <Icon size={12} className="flex-shrink-0" />
+        <span className="truncate">{config.text}</span>
       </Badge>
     );
   };
