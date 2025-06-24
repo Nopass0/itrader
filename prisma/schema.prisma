@@ -415,3 +415,18 @@ model SystemLog {
   @@index([isSystem])
   @@index([createdAt])
 }
+
+model WebServerUser {
+  id         String   @id @default(cuid())
+  username   String   @unique
+  password   String
+  role       String   @default("operator")
+  isActive   Boolean  @default(true)
+  lastLogin  DateTime?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([username])
+  @@index([role])
+  @@index([isActive])
+}

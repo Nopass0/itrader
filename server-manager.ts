@@ -10,14 +10,14 @@ let PrismaClient: any;
 let prisma: any;
 
 try {
-  const prismaModule = await import("@prisma/client");
+  const prismaModule = await import("./generated/prisma");
   PrismaClient = prismaModule.PrismaClient;
   prisma = new PrismaClient();
 } catch (error) {
   console.log("Prisma client not found. Generating...\n");
   try {
     execSync("bunx prisma generate", { stdio: "inherit" });
-    const prismaModule = await import("@prisma/client");
+    const prismaModule = await import("./generated/prisma");
     PrismaClient = prismaModule.PrismaClient;
     prisma = new PrismaClient();
   } catch (genError) {

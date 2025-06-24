@@ -9,14 +9,14 @@ let PrismaClient: any;
 let prisma: any;
 
 try {
-  const prismaModule = await import("@prisma/client");
+  const prismaModule = await import("./generated/prisma");
   PrismaClient = prismaModule.PrismaClient;
   prisma = new PrismaClient();
 } catch (error) {
   console.log("Prisma client not found. Generating...\n");
   try {
     execSync("bunx prisma generate", { stdio: "inherit" });
-    const prismaModule = await import("@prisma/client");
+    const prismaModule = await import("./generated/prisma");
     PrismaClient = prismaModule.PrismaClient;
     prisma = new PrismaClient();
   } catch (genError) {
@@ -50,57 +50,81 @@ function showHeader() {
   console.log(`${colors.cyan}╚═══════════════════════════════════════╝${colors.reset}\n`);
 }
 
-async function createAccount(role: string = "operator") {
-  const { username } = await inquirer.prompt([
-    {
-      type: "input",
-      name: "username",
-      message: "Enter username:",
-      validate: (input) => input.trim().length > 0 || "Username cannot be empty",
-    },
-  ]);
+async function createAccount(role: string = "operator", username?: string, password?: string) {
+  // If username not provided, prompt for it
+  if (!username) {
+    const response = await inquirer.prompt([
+      {
+        type: "input",
+        name: "username",
+        message: `Enter ${role} username (default: ${role}):`,
+        default: role,
+        validate: (input) => input.trim().length > 0 || "Username cannot be empty",
+      },
+    ]);
+    username = response.username;
+  }
 
-  const { password } = await inquirer.prompt([
-    {
-      type: "password",
-      name: "password",
-      message: "Enter password:",
-      mask: "*",
-      validate: (input) => input.length >= 6 || "Password must be at least 6 characters",
-    },
-  ]);
+  // If password not provided, prompt for it
+  if (!password) {
+    const response = await inquirer.prompt([
+      {
+        type: "password",
+        name: "password",
+        message: "Enter password:",
+        mask: "*",
+        validate: (input) => input.length >= 6 || "Password must be at least 6 characters",
+      },
+    ]);
+    password = response.password;
 
-  const { confirmPassword } = await inquirer.prompt([
-    {
-      type: "password",
-      name: "confirmPassword",
-      message: "Confirm password:",
-      mask: "*",
-      validate: (input, answers) => input === password || "Passwords do not match",
-    },
-  ]);
+    const confirmResponse = await inquirer.prompt([
+      {
+        type: "password",
+        name: "confirmPassword",
+        message: "Confirm password:",
+        mask: "*",
+        validate: (input) => input === password || "Passwords do not match",
+      },
+    ]);
+  }
 
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
     
-    const user = await prisma.webServerUser.create({
-      data: {
-        username,
-        password: hashedPassword,
-        role,
-        isActive: true,
-      },
+    // Try to find existing user first
+    const existingUser = await prisma.webServerUser.findUnique({
+      where: { username },
     });
 
-    console.log(`\n${colors.green}✓${colors.reset} User ${colors.bright}${username}${colors.reset} created successfully with role ${colors.yellow}${role}${colors.reset}`);
-    logger.info("WebServer user created", { username, role });
-  } catch (error: any) {
-    if (error.code === 'P2002') {
-      console.error(`\n${colors.red}✗${colors.reset} User ${colors.bright}${username}${colors.reset} already exists`);
+    if (existingUser) {
+      // Update existing user
+      await prisma.webServerUser.update({
+        where: { username },
+        data: {
+          password: hashedPassword,
+          role,
+          isActive: true,
+        },
+      });
+      console.log(`\n${colors.green}✓${colors.reset} User ${colors.bright}${username}${colors.reset} updated successfully with role ${colors.yellow}${role}${colors.reset}`);
+      logger.info("WebServer user updated", { username, role });
     } else {
-      console.error(`\n${colors.red}✗${colors.reset} Error creating user:`, error.message);
-      logger.error("Failed to create WebServer user", error, { username, role });
+      // Create new user
+      const user = await prisma.webServerUser.create({
+        data: {
+          username,
+          password: hashedPassword,
+          role,
+          isActive: true,
+        },
+      });
+      console.log(`\n${colors.green}✓${colors.reset} User ${colors.bright}${username}${colors.reset} created successfully with role ${colors.yellow}${role}${colors.reset}`);
+      logger.info("WebServer user created", { username, role });
     }
+  } catch (error: any) {
+    console.error(`\n${colors.red}✗${colors.reset} Error creating/updating user:`, error.message);
+    logger.error("Failed to create/update WebServer user", error, { username, role });
   }
 }
 
@@ -270,9 +294,13 @@ async function accountMenu() {
 
     switch (choice) {
       case "1":
+        console.log("\n" + colors.cyan + "Creating/Resetting Admin Account" + colors.reset);
+        console.log("--------------------------------");
         await createAccount("admin");
         break;
       case "2":
+        console.log("\n" + colors.cyan + "Creating Operator Account" + colors.reset);
+        console.log("------------------------");
         await createAccount("operator");
         break;
       case "3":
