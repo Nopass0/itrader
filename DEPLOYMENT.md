@@ -266,6 +266,16 @@ ls -la /home/itrader/itrader_project
 sudo netstat -tlnp | grep -E '3000|3001'
 ```
 
+#### MailSlurp API key error
+If you get `Unknown argument apiKey` error:
+```bash
+# Run database migration
+bunx prisma db push
+
+# Update existing MailSlurp accounts with API key
+bun run scripts/update-mailslurp-apikey.ts
+```
+
 #### Can't access from external IP
 - Check firewall rules
 - Ensure services are listening on 0.0.0.0, not just localhost

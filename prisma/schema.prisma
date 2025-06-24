@@ -169,6 +169,7 @@ model MailSlurpAccount {
   id        String    @id @default(cuid())
   email     String    @unique
   inboxId   String    @unique
+  apiKey    String?
   isActive  Boolean   @default(false)
   lastUsed  DateTime?
   createdAt DateTime  @default(now())
