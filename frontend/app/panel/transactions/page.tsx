@@ -458,6 +458,7 @@ export default function TransactionsPage() {
     { value: 'failed', label: 'Ошибка' },
     { value: 'cancelled', label: 'Отменено' },
     { value: 'cancelled_by_counterparty', label: 'Отменено контрагентом' },
+    { value: 'stupid', label: 'Контрагент идиот' },
   ];
 
   // Status configuration
@@ -512,6 +513,11 @@ export default function TransactionsPage() {
       icon: FileText,
       text: 'Квитанция получена',
       className: 'bg-indigo-500/10 text-indigo-500 border-indigo-500/20'
+    },
+    'stupid': { 
+      icon: XCircle,
+      text: 'Контрагент идиот',
+      className: 'bg-red-500/10 text-red-500 border-red-500/20'
     },
     // Order statuses
     'open': { 
@@ -724,6 +730,7 @@ export default function TransactionsPage() {
               <SelectItem value="failed">Ошибка</SelectItem>
               <SelectItem value="cancelled">Отменено</SelectItem>
               <SelectItem value="cancelled_by_counterparty">Отменено контрагентом</SelectItem>
+              <SelectItem value="stupid">Контрагент идиот</SelectItem>
             </SelectContent>
           </Select>
 
@@ -1010,17 +1017,23 @@ export default function TransactionsPage() {
                             <MessageSquare size={12} />
                           </Button>
                         )}
-                        {(transaction.status === 'cancelled_by_counterparty' || transaction.status === 'cancelled' || transaction.status === 'stupid') && currentUser?.role === 'admin' && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-6 w-6 p-0 text-orange-600"
-                            onClick={() => handleReissueAdvertisement(transaction.id)}
-                            title="Перевыпустить объявление"
-                          >
-                            <RefreshCw size={12} />
-                          </Button>
-                        )}
+                        {(() => {
+                          const showButton = (transaction.status === 'cancelled_by_counterparty' || transaction.status === 'cancelled' || transaction.status === 'stupid') && currentUser?.role === 'admin';
+                          if (transaction.status === 'cancelled' || transaction.status === 'stupid') {
+                            console.log('Transaction status:', transaction.status, 'User role:', currentUser?.role, 'Show button:', showButton);
+                          }
+                          return showButton ? (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 w-6 p-0 text-orange-600"
+                              onClick={() => handleReissueAdvertisement(transaction.id)}
+                              title="Перевыпустить объявление"
+                            >
+                              <RefreshCw size={12} />
+                            </Button>
+                          ) : null;
+                        })()}
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
