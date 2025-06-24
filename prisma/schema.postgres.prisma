@@ -1,0 +1,433 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Payout {
+  id              String         @id @default(cuid())
+  gatePayoutId    Int?           @unique
+  paymentMethodId Int?
+  wallet          String?
+  amountTrader    Json?
+  totalTrader     Json?
+  status          Int
+  approvedAt      DateTime?
+  expiredAt       DateTime?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  meta            Json?
+  method          Json?
+  attachments     Json?
+  tooltip         Json?
+  bank            Json?
+  trader          Json?
+  gateAccount     String?
+  gateAccountId   String?
+  amount          Float?
+  recipientCard   String?
+  recipientName   String?
+  description     String?
+  failureReason   String?
+  completedAt     DateTime?
+  transaction     Transaction?
+  gateAccountRef  GateAccount?   @relation("GateAccountToPayouts", fields: [gateAccountId], references: [id])
+  advertisement   Advertisement?
+
+  @@index([status])
+  @@index([gateAccount])
+  @@index([gateAccountId])
+  @@index([gatePayoutId])
+}
+
+model Advertisement {
+  id               String        @id @default(cuid())
+  bybitAdId        String?       @unique
+  bybitAccountId   String
+  payoutId         String        @unique
+  type             String?
+  currency         String?
+  fiat             String?
+  price            String?
+  minAmount        Float?
+  maxAmount        Float?
+  paymentMethods   Json?
+  description      String?
+  autoReply        Boolean       @default(false)
+  autoReplyMessage String?
+  isActive         Boolean       @default(true)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  side             String?
+  asset            String?
+  fiatCurrency     String?
+  quantity         String?
+  minOrderAmount   String?
+  maxOrderAmount   String?
+  paymentMethod    String?
+  status           String?
+  bybitAccount     BybitAccount  @relation(fields: [bybitAccountId], references: [id])
+  payout           Payout        @relation(fields: [payoutId], references: [id])
+  transaction      Transaction?
+
+  @@index([bybitAccountId])
+  @@index([isActive])
+  @@index([payoutId])
+}
+
+model Transaction {
+  id               String           @id @default(cuid())
+  payoutId         String?          @unique
+  advertisementId  String           @unique
+  orderId          String?          @unique
+  amount           Float            @default(0)
+  counterpartyName String?
+  status           String
+  chatStep         Int              @default(0)
+  paymentSentAt    DateTime?
+  checkReceivedAt  DateTime?
+  receiptReceivedAt DateTime?
+  approvedAt       DateTime?
+  completedAt      DateTime?
+  failureReason    String?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  chatMessages     ChatMessage[]
+  payout           Payout?          @relation(fields: [payoutId], references: [id])
+  advertisement    Advertisement    @relation(fields: [advertisementId], references: [id])
+  tinkoffReceipt   TinkoffReceipt?
+
+  @@index([status])
+  @@index([orderId])
+}
+
+model ChatMessage {
+  id            String      @id @default(cuid())
+  transactionId String
+  messageId     String?
+  sender        String
+  message       String      @db.Text
+  messageType   String      @default("TEXT")
+  isAutoReply   Boolean     @default(false)
+  isProcessed   Boolean     @default(false)
+  readAt        DateTime?
+  sentAt        DateTime?
+  metadata      String?     @db.Text
+  createdAt     DateTime    @default(now())
+  content       String?     @db.Text
+  transaction   Transaction @relation(fields: [transactionId], references: [id])
+
+  @@index([transactionId])
+  @@index([isProcessed])
+  @@index([sender])
+}
+
+model GateAccount {
+  id          String    @id @default(cuid())
+  accountId   String    @unique
+  accountName String?
+  email       String
+  password    String?   @default("")
+  apiKey      String
+  apiSecret   String
+  isActive    Boolean   @default(true)
+  lastSync    DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  payouts     Payout[]  @relation("GateAccountToPayouts")
+}
+
+model BybitAccount {
+  id             String          @id @default(cuid())
+  accountId      String          @unique
+  accountName    String?
+  apiKey         String
+  apiSecret      String
+  isActive       Boolean         @default(true)
+  activeAdsCount Int             @default(0)
+  lastSync       DateTime?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  advertisements Advertisement[]
+}
+
+model GmailAccount {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  refreshToken String
+  isActive     Boolean   @default(true)
+  lastSync     DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model MailSlurpAccount {
+  id        String    @id @default(cuid())
+  email     String    @unique
+  inboxId   String    @unique
+  apiKey    String?
+  isActive  Boolean   @default(false)
+  lastUsed  DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model BlacklistedTransaction {
+  id        String   @id @default(cuid())
+  payoutId  String
+  reason    String
+  wallet    String?
+  amount    String?
+  createdAt DateTime @default(now())
+
+  @@index([wallet])
+}
+
+model Settings {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ProcessedEmail {
+  id          String   @id @default(cuid())
+  emailId     String   @unique
+  processedAt DateTime @default(now())
+
+  @@index([processedAt])
+}
+
+model SystemAccount {
+  id           String      @id @default(cuid())
+  username     String      @unique
+  passwordHash String
+  role         String      @default("operator")
+  isActive     Boolean     @default(true)
+  lastLogin    DateTime?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  authTokens   AuthToken[]
+
+  @@index([username])
+  @@index([role])
+}
+
+model AuthToken {
+  id        String        @id @default(cuid())
+  token     String        @unique
+  accountId String
+  expiresAt DateTime
+  createdAt DateTime      @default(now())
+  account   SystemAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId])
+  @@index([expiresAt])
+}
+
+model CustomStatus {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  name        String
+  description String?  @db.Text
+  color       String?
+  isFinal     Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([code])
+}
+
+model ChatTemplate {
+  id              String          @id @default(cuid())
+  name            String
+  message         String          @db.Text
+  keywords        Json
+  groupId         String?
+  customReactions String?         @db.Text
+  priority        Int             @default(0)
+  metadata        String?         @db.Text
+  isActive        Boolean         @default(true)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  group           ResponseGroup?  @relation(fields: [groupId], references: [id])
+  usageHistory    TemplateUsage[]
+
+  @@index([groupId])
+  @@index([priority])
+}
+
+model ResponseGroup {
+  id          String         @id @default(cuid())
+  name        String         @unique
+  description String?        @db.Text
+  color       String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  templates   ChatTemplate[]
+}
+
+model TemplateUsage {
+  id         String       @id @default(cuid())
+  templateId String
+  context    String?      @db.Text
+  usedAt     DateTime     @default(now())
+  template   ChatTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@index([templateId])
+  @@index([usedAt])
+}
+
+model AutomationLog {
+  id        String   @id @default(cuid())
+  level     String
+  module    String
+  message   String   @db.Text
+  metadata  String?  @db.Text
+  createdAt DateTime @default(now())
+
+  @@index([level])
+  @@index([module])
+  @@index([createdAt])
+}
+
+model ExchangeRateHistory {
+  id        String   @id @default(cuid())
+  rate      Float
+  source    String
+  metadata  String?  @db.Text
+  timestamp DateTime @default(now())
+
+  @@index([source])
+  @@index([timestamp])
+}
+
+model TinkoffReceipt {
+  id                String       @id @default(cuid())
+  pdfHash           String       @unique
+  pdfPath           String
+  amount            Float
+  transferDate      DateTime
+  senderName        String
+  recipientName     String
+  recipientWallet   String
+  transferType      String
+  status            String       @default("PENDING")
+  transactionNumber String
+  originalText      String       @db.Text
+  transactionId     String?      @unique
+  receivedAt        DateTime?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  transaction       Transaction? @relation(fields: [transactionId], references: [id])
+
+  @@index([status])
+  @@index([pdfHash])
+  @@index([amount])
+  @@index([recipientWallet])
+  @@index([transferDate])
+  @@index([transactionId])
+}
+
+model Receipt {
+  id              String    @id @default(cuid())
+  emailId         String    @unique
+  emailFrom       String?
+  emailSubject    String?
+  attachmentName  String?
+  filePath        String?
+  fileHash        String?   @unique
+  amount          Float?
+  bank            String?
+  reference       String?
+  transferType    String?
+  status          String?
+  senderName      String?
+  recipientName   String?
+  recipientPhone  String?
+  recipientCard   String?
+  recipientBank   String?
+  commission      Float?
+  transactionDate DateTime?
+  total           Float?
+  operationId     String?
+  sbpCode         String?
+  receiptNumber   String?
+  senderAccount   String?
+  parsedData      Json?
+  rawText         String?   @db.Text
+  isProcessed     Boolean   @default(false)
+  payoutId        String?
+  filename        String?
+  sender          String?
+  subject         String?
+  receivedAt      DateTime?
+  processed       Boolean   @default(false)
+  rawEmailData    Json?
+  isParsed        Boolean   @default(false)
+  parseError      String?   @db.Text
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([emailId])
+  @@index([fileHash])
+  @@index([amount])
+  @@index([bank])
+  @@index([transactionDate])
+  @@index([isProcessed])
+  @@index([payoutId])
+  @@index([isParsed])
+}
+
+model SystemLog {
+  id           String   @id @default(cuid())
+  level        String
+  service      String
+  module       String?
+  message      String   @db.Text
+  timestamp    DateTime @default(now())
+  userId       String?
+  action       String?
+  method       String?
+  path         String?
+  statusCode   Int?
+  duration     Int?
+  ip           String?
+  userAgent    String?
+  requestId    String?
+  error        Json?
+  stack        String?  @db.Text
+  data         Json?
+  variables    Json?
+  isSystem     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  @@index([level])
+  @@index([service])
+  @@index([module])
+  @@index([timestamp])
+  @@index([userId])
+  @@index([action])
+  @@index([isSystem])
+  @@index([createdAt])
+}
+
+model WebServerUser {
+  id         String   @id @default(cuid())
+  username   String   @unique
+  password   String
+  role       String   @default("operator")
+  isActive   Boolean  @default(true)
+  lastLogin  DateTime?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([username])
+  @@index([role])
+  @@index([isActive])
+}
