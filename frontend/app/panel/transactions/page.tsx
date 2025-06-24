@@ -126,11 +126,31 @@ export default function TransactionsPage() {
 
   // Get current user role from localStorage
   useEffect(() => {
+    // Try to get user from Zustand store
+    const authStorage = localStorage.getItem('auth-storage');
+    if (authStorage) {
+      try {
+        const authData = JSON.parse(authStorage);
+        const user = authData.state?.user;
+        if (user) {
+          setCurrentUser(user);
+          console.log('Current user from auth-storage:', user); // Debug log
+        }
+      } catch (e) {
+        console.error('Failed to parse auth-storage:', e);
+      }
+    }
+    
+    // Fallback to systemAccount (old method)
     const userStr = localStorage.getItem('systemAccount');
-    if (userStr) {
-      const user = JSON.parse(userStr);
-      setCurrentUser(user);
-      console.log('Current user:', user); // Debug log
+    if (userStr && !currentUser) {
+      try {
+        const user = JSON.parse(userStr);
+        setCurrentUser(user);
+        console.log('Current user from systemAccount:', user); // Debug log
+      } catch (e) {
+        console.error('Failed to parse systemAccount:', e);
+      }
     }
   }, []);
 
@@ -454,6 +474,7 @@ export default function TransactionsPage() {
     { value: 'payment_received', label: 'Оплата получена' },
     { value: 'check_received', label: 'Чек получен' },
     { value: 'receipt_received', label: 'Квитанция получена' },
+    { value: 'release_money', label: 'Отправка средств' },
     { value: 'completed', label: 'Завершено' },
     { value: 'failed', label: 'Ошибка' },
     { value: 'cancelled', label: 'Отменено' },
@@ -518,6 +539,11 @@ export default function TransactionsPage() {
       icon: XCircle,
       text: 'Контрагент идиот',
       className: 'bg-red-500/10 text-red-500 border-red-500/20'
+    },
+    'release_money': { 
+      icon: Send,
+      text: 'Отправка средств',
+      className: 'bg-blue-500/10 text-blue-500 border-blue-500/20'
     },
     // Order statuses
     'open': { 
@@ -726,6 +752,7 @@ export default function TransactionsPage() {
               <SelectItem value="waiting_payment">Ожидание оплаты</SelectItem>
               <SelectItem value="payment_received">Оплата получена</SelectItem>
               <SelectItem value="check_received">Чек получен</SelectItem>
+              <SelectItem value="release_money">Отправка средств</SelectItem>
               <SelectItem value="completed">Завершено</SelectItem>
               <SelectItem value="failed">Ошибка</SelectItem>
               <SelectItem value="cancelled">Отменено</SelectItem>
