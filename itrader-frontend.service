@@ -1,0 +1,20 @@
+[Unit]
+Description=iTrader Frontend Panel
+After=network.target itrader.service
+
+[Service]
+Type=simple
+User=itrader
+WorkingDirectory=/home/itrader/itrader_project/frontend
+Environment="NODE_ENV=production"
+ExecStart=/usr/bin/npm run start
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+# Resource limits
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

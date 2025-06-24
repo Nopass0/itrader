@@ -8,6 +8,7 @@ import type { Socket } from 'socket.io';
 import { authMiddleware, requireAuth } from './middleware/auth';
 import { AuthManager } from './auth/authManager';
 import { createLogger } from '../logger';
+import { getServerURLs } from '../utils/getExternalIP';
 
 // Импорт контроллеров
 import { AccountController } from './controllers/accountController';
@@ -55,7 +56,7 @@ export class WebSocketServer {
     
     this.io = new Server(this.httpServer, {
       cors: {
-        origin: process.env.CORS_ORIGIN || ['http://localhost:3000', 'http://localhost:3001'],
+        origin: process.env.CORS_ORIGIN || '*', // Allow all origins for external access
         methods: ['GET', 'POST'],
         credentials: true
       }
@@ -383,8 +384,28 @@ export class WebSocketServer {
     }, 60 * 60 * 1000); // Каждый час
 
     return new Promise((resolve) => {
-      this.httpServer.listen(this.port, () => {
+      this.httpServer.listen(this.port, '0.0.0.0', async () => {
         logger.info(`Socket.IO server listening on port ${this.port}`, { port: this.port });
+        
+        // Get and display server URLs
+        const urls = await getServerURLs(this.port);
+        console.log('\n' + '='.repeat(60));
+        console.log('🚀 WebSocket Server Started Successfully!');
+        console.log('='.repeat(60));
+        console.log(`📡 Socket.IO API: ${urls.local}`);
+        if (urls.external) {
+          console.log(`🌐 External API: ${urls.external}`);
+        }
+        console.log('='.repeat(60));
+        console.log('📱 Frontend Panel URLs:');
+        console.log(`   Local: http://localhost:3000`);
+        if (urls.external) {
+          console.log(`   External: http://${urls.external.split(':')[1].replace('//', '')}:3000`);
+        }
+        console.log('='.repeat(60));
+        console.log('💡 Make sure ports 3000 and 3001 are open in your firewall!');
+        console.log('='.repeat(60) + '\n');
+        
         resolve(undefined);
       });
     });

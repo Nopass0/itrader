@@ -1,0 +1,26 @@
+[Unit]
+Description=iTrader P2P Trading Automation System
+After=network.target
+
+[Service]
+Type=simple
+User=itrader
+WorkingDirectory=/home/itrader/itrader_project
+Environment="NODE_ENV=production"
+Environment="MODE=auto"
+ExecStart=/home/itrader/.bun/bin/bun run src/app.ts
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+# Resource limits
+LimitNOFILE=65536
+LimitNPROC=4096
+
+# Security
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

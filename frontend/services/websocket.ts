@@ -44,8 +44,16 @@ class WebSocketService {
 
     try {
       this.isConnecting = true;
-      // WebSocket runs on port 3002
-      const wsUrl = process.env.NEXT_PUBLIC_WS_URL || 'http://localhost:3002';
+      // Determine WebSocket URL dynamically
+      let wsUrl = process.env.NEXT_PUBLIC_WS_URL || 'http://localhost:3001';
+      
+      // If in browser and no explicit URL is set, use current hostname
+      if (typeof window !== 'undefined' && !process.env.NEXT_PUBLIC_WS_URL) {
+        const hostname = window.location.hostname;
+        const protocol = window.location.protocol;
+        // WebSocket API runs on port 3001
+        wsUrl = `${protocol}//${hostname}:3001`;
+      }
       
       this.socket = io(wsUrl, {
         autoConnect: false,
