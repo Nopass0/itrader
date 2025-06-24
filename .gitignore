@@ -187,3 +187,5 @@ prisma/database.db
 prisma/*.db
 *.sqlite
 *.sqlite3
+database.db-shm
+database.db-wal
