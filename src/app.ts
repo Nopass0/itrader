@@ -727,7 +727,8 @@ async function main() {
               checkInterval: 10000, // 10 seconds for faster checking
               pdfStoragePath: "data/receipts",
             },
-            io
+            io,
+            context.chatService
           );
           
           if (gateClient) {

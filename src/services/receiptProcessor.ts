@@ -11,6 +11,7 @@ import { BybitP2PManagerService } from "./bybitP2PManager";
 import { EmailAttachment, GmailMessage } from "../gmail/types/models";
 import { MailSlurpService, getMailSlurpService } from "./mailslurpService";
 import { TinkoffReceiptParser } from "../ocr/receiptParser";
+import { ChatAutomationService } from "./chatAutomation";
 import * as fs from "fs/promises";
 import * as path from "path";
 import * as crypto from "crypto";
@@ -43,17 +44,20 @@ export class ReceiptProcessorService extends EventEmitter {
   private receiptMatcher: ReceiptMatcher;
   private io?: any; // WebSocket server instance
   private mailslurpService?: MailSlurpService;
+  private chatAutomationService?: ChatAutomationService;
 
   constructor(
     private gmailManager: GmailManager,
     private gateClient: GateClient | null,
     private bybitManager: BybitP2PManagerService,
     config: ReceiptProcessorConfig = {},
-    io?: any
+    io?: any,
+    chatAutomationService?: ChatAutomationService
   ) {
     super();
 
     this.io = io;
+    this.chatAutomationService = chatAutomationService;
     this.config = {
       checkInterval: config.checkInterval || 10000, // 10 секунд
       pdfStoragePath: config.pdfStoragePath || "data/pdf",
@@ -935,6 +939,16 @@ export class ReceiptProcessorService extends EventEmitter {
             // Release assets
             await bybitClient.releaseAssets(transaction.orderId);
             
+            // Send advertisement message after release
+            if (this.chatAutomationService) {
+              try {
+                await this.chatAutomationService.sendFinalMessage(transactionId);
+                logger.info('Advertisement message sent', { transactionId });
+              } catch (error) {
+                logger.error('Failed to send advertisement message', error, { transactionId });
+              }
+            }
+            
             // Update to completed
             await prisma.transaction.update({
               where: { id: transactionId },
@@ -966,12 +980,16 @@ export async function startReceiptProcessor(
   gateClient: GateClient,
   bybitManager: BybitP2PManagerService,
   config?: ReceiptProcessorConfig,
+  io?: any,
+  chatAutomationService?: ChatAutomationService,
 ): Promise<ReceiptProcessorService> {
   const processor = new ReceiptProcessorService(
     gmailManager,
     gateClient,
     bybitManager,
     config,
+    io,
+    chatAutomationService,
   );
 
   await processor.start();
