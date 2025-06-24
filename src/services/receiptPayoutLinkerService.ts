@@ -388,7 +388,7 @@ export class ReceiptPayoutLinkerService {
             { amount: receipt.amount },
             { 
               amountTrader: {
-                path: '$.643',
+                path: ['643'],
                 equals: receipt.amount
               }
             }
@@ -426,7 +426,7 @@ export class ReceiptPayoutLinkerService {
               // Или по amountTrader['643'] для RUB
               { 
                 amountTrader: {
-                  path: '$.643',
+                  path: ['643'],
                   equals: receipt.amount
                 }
               }
@@ -463,7 +463,7 @@ export class ReceiptPayoutLinkerService {
                 { amount: receipt.amount },
                 { 
                   amountTrader: {
-                    path: '$.643',
+                    path: ['643'],
                     equals: receipt.amount
                   }
                 }
@@ -475,7 +475,7 @@ export class ReceiptPayoutLinkerService {
                 { wallet: { contains: receipt.recipientName } },
                 { 
                   meta: {
-                    path: '$.name',
+                    path: ['name'],
                     string_contains: receipt.recipientName
                   }
                 }
@@ -508,7 +508,7 @@ export class ReceiptPayoutLinkerService {
             { amount: receipt.amount },
             { 
               amountTrader: {
-                path: '$.643',
+                path: ['643'],
                 equals: receipt.amount
               }
             }
