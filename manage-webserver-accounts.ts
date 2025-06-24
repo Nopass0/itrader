@@ -307,39 +307,69 @@ async function cliMode() {
     case "create":
       const username = args[1];
       const role = args[2] || "operator";
+      const plainPassword = args[3]; // Optional password as argument
       
       if (!username) {
-        console.error("Usage: bun run manage-webserver-accounts.ts create <username> [role]");
+        console.error("Usage: bun run manage-webserver-accounts.ts create <username> [role] [password]");
         process.exit(1);
       }
 
-      const { password } = await inquirer.prompt([
-        {
-          type: "password",
-          name: "password",
-          message: `Enter password for ${username}:`,
-          mask: "*",
-          validate: (input) => input.length >= 6 || "Password must be at least 6 characters",
-        },
-      ]);
+      let password: string;
+      
+      if (plainPassword) {
+        // Password provided as argument (for shell script usage)
+        if (plainPassword.length < 6) {
+          console.error("Password must be at least 6 characters");
+          process.exit(1);
+        }
+        password = plainPassword;
+      } else {
+        // Interactive password prompt
+        const response = await inquirer.prompt([
+          {
+            type: "password",
+            name: "password",
+            message: `Enter password for ${username}:`,
+            mask: "*",
+            validate: (input) => input.length >= 6 || "Password must be at least 6 characters",
+          },
+        ]);
+        password = response.password;
+      }
 
       try {
         const hashedPassword = await bcrypt.hash(password, 10);
-        const user = await prisma.webServerUser.create({
-          data: {
-            username,
-            password: hashedPassword,
-            role,
-            isActive: true,
-          },
+        
+        // Check if user exists and update if so
+        const existingUser = await prisma.webServerUser.findUnique({
+          where: { username },
         });
-        console.log(`User ${username} created successfully with role ${role}`);
-      } catch (error: any) {
-        if (error.code === 'P2002') {
-          console.error(`User ${username} already exists`);
+        
+        if (existingUser) {
+          // Update existing user
+          await prisma.webServerUser.update({
+            where: { username },
+            data: {
+              password: hashedPassword,
+              role,
+              isActive: true,
+            },
+          });
+          console.log(`User ${username} updated successfully with role ${role}`);
         } else {
-          console.error("Error creating user:", error.message);
+          // Create new user
+          const user = await prisma.webServerUser.create({
+            data: {
+              username,
+              password: hashedPassword,
+              role,
+              isActive: true,
+            },
+          });
+          console.log(`User ${username} created successfully with role ${role}`);
         }
+      } catch (error: any) {
+        console.error("Error creating/updating user:", error.message);
       }
       break;
 

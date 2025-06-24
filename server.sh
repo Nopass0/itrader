@@ -72,7 +72,7 @@ manage_accounts() {
                 fi
                 
                 # Create admin account using new manage-webserver-accounts script
-                echo -e "$admin_pass\n$admin_pass_confirm" | bun run manage-webserver-accounts.ts create "$admin_user" admin
+                bun run manage-webserver-accounts.ts create "$admin_user" admin "$admin_pass"
                 echo -e "${GREEN}Admin account created/updated successfully!${NC}"
                 read -p "Press Enter to continue..."
                 ;;
