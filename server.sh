@@ -20,7 +20,7 @@ show_header() {
 
 # Function to check if development server is running
 check_dev_server() {
-    if pgrep -f "bun.*app.ts" > /dev/null || pgrep -f "next dev" > /dev/null; then
+    if pgrep -f "bun.*app.ts" > /dev/null || pgrep -f "next dev" > /dev/null || pgrep -f "next start" > /dev/null; then
         return 0
     else
         return 1
@@ -29,12 +29,14 @@ check_dev_server() {
 
 # Function to stop development server
 stop_dev_server() {
-    echo -e "${YELLOW}Stopping development server...${NC}"
+    echo -e "${YELLOW}Stopping all servers...${NC}"
     pkill -f "bun.*app.ts" 2>/dev/null
     pkill -f "next dev" 2>/dev/null
+    pkill -f "next start" 2>/dev/null
     pkill -f "next-server" 2>/dev/null
+    pkill -f "concurrently" 2>/dev/null
     sleep 2
-    echo -e "${GREEN}Development server stopped${NC}"
+    echo -e "${GREEN}All servers stopped${NC}"
 }
 
 # Function to manage system accounts
@@ -187,9 +189,18 @@ start_dev_server() {
     echo -e "${CYAN}🔥 Hot reload enabled for both services${NC}"
     echo ""
     
-    # Start the development server
-    # Note: start-dev.ts no longer exists, starting main app instead
-    exec bun run src/app.ts
+    # Check if concurrently is installed
+    if ! command -v concurrently &> /dev/null; then
+        echo -e "${YELLOW}Installing concurrently...${NC}"
+        npm install -g concurrently
+    fi
+    
+    # Start both services with concurrently
+    WEBSOCKET_PORT=3001 exec concurrently \
+        --names "backend,frontend" \
+        --prefix-colors "blue,green" \
+        "bun run src/app.ts" \
+        "cd frontend && npm run dev"
 }
 
 # Function to start production server
@@ -203,11 +214,33 @@ start_prod_server() {
     echo -e "${GREEN}Starting production server...${NC}"
     echo ""
     
-    # Check for admin account
-    # Note: check-admin-password.ts no longer exists, so we'll skip this check
-    echo -e "${YELLOW}Starting server...${NC}"
+    # Build frontend if needed
+    if [ ! -d "frontend/.next" ]; then
+        echo -e "${YELLOW}Building frontend...${NC}"
+        cd frontend && npm run build && cd ..
+    fi
     
-    exec bun run src/app.ts
+    echo -e "${YELLOW}Starting servers...${NC}"
+    
+    # Start backend
+    NODE_ENV=production WEBSOCKET_PORT=3001 bun run src/app.ts &
+    BACKEND_PID=$!
+    
+    # Wait a bit for backend to start
+    sleep 3
+    
+    # Start frontend
+    cd frontend && NODE_ENV=production npm run start &
+    FRONTEND_PID=$!
+    cd ..
+    
+    echo ""
+    echo -e "${GREEN}Both servers started!${NC}"
+    echo -e "${YELLOW}Backend PID: $BACKEND_PID${NC}"
+    echo -e "${YELLOW}Frontend PID: $FRONTEND_PID${NC}"
+    echo ""
+    echo -e "${YELLOW}Press Enter to return to menu (servers will continue running)${NC}"
+    read
 }
 
 # Function to show server status
