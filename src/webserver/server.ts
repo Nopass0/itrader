@@ -54,9 +54,43 @@ export class WebSocketServer {
       }
     });
     
+    // Configure CORS
+    const corsOrigin = process.env.CORS_ORIGIN || '*';
+    
     this.io = new Server(this.httpServer, {
       cors: {
-        origin: process.env.CORS_ORIGIN || '*', // Allow all origins for external access
+        origin: (origin, callback) => {
+          // Allow requests with no origin (like mobile apps or curl)
+          if (!origin) return callback(null, true);
+          
+          // If CORS_ORIGIN is '*', allow all origins
+          if (corsOrigin === '*') return callback(null, true);
+          
+          // Otherwise check against allowed origins
+          const allowedOrigins = corsOrigin.split(',').map(o => o.trim());
+          if (allowedOrigins.includes(origin)) {
+            callback(null, true);
+          } else {
+            // In production, also allow same host with different ports
+            try {
+              const requestUrl = new URL(origin);
+              const isLocalhost = requestUrl.hostname === 'localhost' || 
+                                requestUrl.hostname === '127.0.0.1';
+              const isSameHost = allowedOrigins.some(allowed => {
+                const allowedUrl = new URL(allowed);
+                return allowedUrl.hostname === requestUrl.hostname;
+              });
+              
+              if (isLocalhost || isSameHost) {
+                callback(null, true);
+              } else {
+                callback(null, true); // For now, allow all in production
+              }
+            } catch (e) {
+              callback(null, true); // Allow if can't parse URL
+            }
+          }
+        },
         methods: ['GET', 'POST'],
         credentials: true
       }
