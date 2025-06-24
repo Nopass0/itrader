@@ -44,6 +44,12 @@ try {
   execSync('bunx prisma migrate deploy', { stdio: 'inherit' });
   
   console.log(`✅ Database setup complete with ${databaseType}!`);
+  
+  // Ensure admin account exists
+  console.log('');
+  console.log('🔐 Ensuring admin account...');
+  execSync('bun run scripts/ensure-admin.ts', { stdio: 'inherit' });
+  
 } catch (error) {
   console.error('❌ Database setup failed:', error);
   process.exit(1);

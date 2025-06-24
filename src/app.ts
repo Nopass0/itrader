@@ -161,6 +161,52 @@ async function main() {
       const context = getContext(taskContext);
       logger.info("Initializing all accounts...");
       console.log("Initializing all accounts...");
+      
+      // Ensure admin account exists
+      try {
+        logger.info("Checking for admin account...");
+        const adminAccount = await context.db.prisma.systemAccount.findUnique({
+          where: { username: 'admin' }
+        });
+        
+        if (!adminAccount) {
+          logger.info("Creating default admin account...");
+          console.log("⚠️  No admin account found, creating default admin account...");
+          
+          const { hashPassword } = await import("./webserver/utils/password");
+          const defaultPassword = 'admin123';
+          const passwordHash = await hashPassword(defaultPassword);
+          
+          const newAdmin = await context.db.prisma.systemAccount.create({
+            data: {
+              username: 'admin',
+              passwordHash,
+              role: 'admin',
+              isActive: true
+            }
+          });
+          
+          logger.info("Default admin account created", {
+            id: newAdmin.id,
+            username: newAdmin.username
+          });
+          
+          console.log("\n✅ Default admin account created!");
+          console.log("====================================");
+          console.log("Username: admin");
+          console.log("Password: admin123");
+          console.log("====================================");
+          console.log("⚠️  IMPORTANT: Change the password after first login!\n");
+        } else {
+          logger.info("Admin account already exists", {
+            username: adminAccount.username,
+            active: adminAccount.isActive
+          });
+        }
+      } catch (error) {
+        logger.error("Failed to ensure admin account", error as Error);
+        console.error("⚠️  Failed to ensure admin account:", error);
+      }
 
       // Initialize GateAccountManager
       await context.gateAccountManager.initialize();
