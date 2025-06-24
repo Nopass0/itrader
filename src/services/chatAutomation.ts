@@ -599,9 +599,9 @@ export class ChatAutomationService extends EventEmitter {
       });
 
       // Split payment details into 5 separate messages
-      const bankMessage = `${bankName} ${wallet || ""}`;
+      const bankMessage = `СТРОГО на ${bankName} ${wallet || ""}`;
       const amountMessage = `Сумма: ${finalAmount} RUB`;
-      const emailMessage = `Почта ${receiptEmail}`;
+      const emailMessage = `${receiptEmail}`;
       const instructionsMessage = `⚠️ ФИО не спрашивать, реквизиты верные!
 
 После оплаты отправьте чек в формате PDF на указанный email с официальной почты банка. После отправки чека, не забудьте прожать кнопку что оплатили, иначе средства будут утерены.`;
