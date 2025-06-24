@@ -269,12 +269,28 @@ sudo netstat -tlnp | grep -E '3000|3001'
 #### MailSlurp API key error
 If you get `Unknown argument apiKey` error:
 ```bash
+# Regenerate Prisma client
+bunx prisma generate
+
 # Run database migration
 bunx prisma db push
 
 # Update existing MailSlurp accounts with API key
 bun run scripts/update-mailslurp-apikey.ts
 ```
+
+#### Database corrupted error
+If you get "database disk image is malformed":
+```bash
+# Run the repair script
+./scripts/repair-database.sh
+
+# Or manually reset:
+rm -f prisma/database.db prisma/database.db-*
+bunx prisma generate
+bunx prisma db push
+```
+See [DATABASE_REPAIR.md](./DATABASE_REPAIR.md) for detailed instructions.
 
 #### Can't access from external IP
 - Check firewall rules
