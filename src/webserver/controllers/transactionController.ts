@@ -457,4 +457,90 @@ export class TransactionController {
       handleError(error, callback);
     }
   }
+
+  /**
+   * Перевыпуск объявления для отмененной или stupid транзакции
+   * Удаляет объявление на Bybit, в БД и саму транзакцию
+   */
+  static async reissueAdvertisement(
+    socket: AuthenticatedSocket,
+    data: { transactionId: string },
+    callback: Function
+  ) {
+    try {
+      // Только админы могут перевыпускать объявления
+      if (socket.role !== 'admin') {
+        throw new Error('Only admins can reissue advertisements');
+      }
+
+      const transaction = await prisma.transaction.findUnique({
+        where: { id: data.transactionId },
+        include: {
+          advertisement: {
+            include: {
+              bybitAccount: true
+            }
+          }
+        }
+      });
+
+      if (!transaction) {
+        throw new Error('Transaction not found');
+      }
+
+      // Проверяем статус - только cancelled или stupid
+      if (transaction.status !== 'cancelled' && transaction.status !== 'stupid') {
+        throw new Error('Can only reissue cancelled or stupid transactions');
+      }
+
+      // Получаем BybitP2PManager из глобального контекста
+      const bybitManager = (global as any).bybitP2PManager;
+      if (!bybitManager) {
+        throw new Error('BybitP2PManager not initialized');
+      }
+
+      // Удаляем объявление на Bybit если оно есть
+      if (transaction.advertisement?.bybitAdId && transaction.advertisement?.bybitAccount) {
+        try {
+          const client = bybitManager.getClient(transaction.advertisement.bybitAccount.accountId);
+          if (client) {
+            await client.deleteAdvertisement(transaction.advertisement.bybitAdId);
+            logger.info('Deleted advertisement from Bybit', {
+              bybitAdId: transaction.advertisement.bybitAdId,
+              transactionId: transaction.id
+            });
+          }
+        } catch (error) {
+          logger.warn('Failed to delete advertisement from Bybit', error as Error, {
+            bybitAdId: transaction.advertisement?.bybitAdId,
+            transactionId: transaction.id
+          });
+          // Продолжаем даже если не удалось удалить на Bybit
+        }
+      }
+
+      // Удаляем объявление из БД
+      if (transaction.advertisementId) {
+        await prisma.advertisement.delete({
+          where: { id: transaction.advertisementId }
+        });
+        logger.info('Deleted advertisement from database', {
+          advertisementId: transaction.advertisementId,
+          transactionId: transaction.id
+        });
+      }
+
+      // Удаляем транзакцию
+      await prisma.transaction.delete({
+        where: { id: transaction.id }
+      });
+      logger.info('Deleted transaction from database', {
+        transactionId: transaction.id
+      });
+
+      handleSuccess(null, 'Advertisement reissued successfully', callback);
+    } catch (error) {
+      handleError(error, callback);
+    }
+  }
 }

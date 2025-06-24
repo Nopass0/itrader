@@ -352,6 +352,49 @@ export default function TransactionsPage() {
     }
   };
 
+  const handleReissueAdvertisement = async (transactionId: string) => {
+    try {
+      const socket = (window as any).socket;
+      if (!socket) {
+        toast({
+          title: "Ошибка",
+          description: "Нет подключения к серверу",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Подтверждение действия
+      if (!confirm("Вы уверены, что хотите перевыпустить объявление? Это удалит объявление на Bybit, в базе данных и саму транзакцию.")) {
+        return;
+      }
+
+      const result = await new Promise((resolve, reject) => {
+        socket.emit('transactions:reissueAdvertisement', { transactionId }, (response: any) => {
+          if (response.error) {
+            reject(new Error(response.error));
+          } else {
+            resolve(response.data);
+          }
+        });
+      });
+
+      toast({
+        title: "Успешно",
+        description: "Объявление успешно перевыпущено",
+      });
+
+      // Обновляем список транзакций
+      loadTransactions();
+    } catch (error: any) {
+      toast({
+        title: "Ошибка",
+        description: error.message || "Не удалось пересоздать объявление",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleCreateAd = () => {
     setSelectedAd(null);
     setShowAdDialog(true);
@@ -967,13 +1010,13 @@ export default function TransactionsPage() {
                             <MessageSquare size={12} />
                           </Button>
                         )}
-                        {transaction.status === 'cancelled_by_counterparty' && currentUser?.role === 'admin' && (
+                        {(transaction.status === 'cancelled_by_counterparty' || transaction.status === 'cancelled' || transaction.status === 'stupid') && currentUser?.role === 'admin' && (
                           <Button
                             variant="ghost"
                             size="sm"
                             className="h-6 w-6 p-0 text-orange-600"
-                            onClick={() => handleRecreateAdvertisement(transaction.id)}
-                            title="Перевыставить"
+                            onClick={() => handleReissueAdvertisement(transaction.id)}
+                            title="Перевыпустить объявление"
                           >
                             <RefreshCw size={12} />
                           </Button>
@@ -1000,15 +1043,15 @@ export default function TransactionsPage() {
                               <Copy size={14} className="mr-2" />
                               Копировать ID
                             </DropdownMenuItem>
-                            {transaction.status === 'cancelled_by_counterparty' && currentUser?.role === 'admin' && (
+                            {(transaction.status === 'cancelled_by_counterparty' || transaction.status === 'cancelled' || transaction.status === 'stupid') && currentUser?.role === 'admin' && (
                               <>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem 
-                                  onClick={() => handleRecreateAdvertisement(transaction.id)}
+                                  onClick={() => handleReissueAdvertisement(transaction.id)}
                                   className="text-orange-600"
                                 >
                                   <RefreshCw size={14} className="mr-2" />
-                                  Перевыставить
+                                  Перевыпустить объявление
                                 </DropdownMenuItem>
                               </>
                             )}

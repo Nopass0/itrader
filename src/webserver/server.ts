@@ -270,6 +270,7 @@ export class WebSocketServer {
       socket.on('transactions:getStatistics', withAuthAndLogging(TransactionController.getStatistics, 'getTransactionStatistics', 'transactions:getStatistics', () => ({})));
       socket.on('transactions:recreateAdvertisement', withAuthAndLogging(TransactionController.recreateAdvertisement, 'recreateAdvertisement', 'transactions:recreateAdvertisement', (data) => ({ transactionId: data?.transactionId })));
       socket.on('transactions:getCancelled', withAuthAndLogging(TransactionController.getCancelledTransactions, 'getCancelledTransactions', 'transactions:getCancelled', (data) => ({ page: data?.page, limit: data?.limit })));
+      socket.on('transactions:reissueAdvertisement', withAuthAndLogging(TransactionController.reissueAdvertisement, 'reissueAdvertisement', 'transactions:reissueAdvertisement', (data) => ({ transactionId: data?.transactionId })));
 
       // Управление выплатами
       socket.on('payouts:list', withAuth(PayoutController.list));
