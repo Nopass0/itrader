@@ -389,10 +389,18 @@ export default function TransactionsPage() {
 
       const result = await new Promise((resolve, reject) => {
         socket.emit('transactions:reissueAdvertisement', { transactionId }, (response: any) => {
-          if (response.error) {
-            reject(new Error(response.error));
-          } else {
+          console.log('Reissue response:', response);
+          if (!response) {
+            reject(new Error('No response from server'));
+          } else if (response.success === false) {
+            // Handle error response format from server
+            const errorMessage = response.error?.message || response.error || 'Failed to reissue advertisement';
+            reject(new Error(errorMessage));
+          } else if (response.success === true) {
             resolve(response.data);
+          } else {
+            // Fallback for unexpected response format
+            reject(new Error('Unexpected response format'));
           }
         });
       });
@@ -405,9 +413,14 @@ export default function TransactionsPage() {
       // Обновляем список транзакций
       loadTransactions();
     } catch (error: any) {
+      console.error('Reissue error:', error);
+      const errorMessage = typeof error === 'string' ? error : 
+                          error?.message || 
+                          error?.toString() || 
+                          "Не удалось перевыпустить объявление";
       toast({
         title: "Ошибка",
-        description: error.message || "Не удалось пересоздать объявление",
+        description: errorMessage,
         variant: "destructive",
       });
     }
