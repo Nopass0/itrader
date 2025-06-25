@@ -11,6 +11,7 @@ import {
   type BlacklistedTransaction,
   type Settings,
 } from "../../generated/prisma";
+import { getGlobalIO } from "../webserver/global";
 
 interface GatePayoutData {
   id: number;
@@ -368,12 +369,28 @@ class DatabaseClient {
         }
       }
       
-      return await this.prisma.transaction.create({
+      const transaction = await this.prisma.transaction.create({
         data: {
           ...data,
           chatStep: data.chatStep ?? 0,
         },
+        include: {
+          payout: true,
+          advertisement: {
+            include: {
+              bybitAccount: true,
+            }
+          }
+        },
       });
+
+      // Emit WebSocket event for new transaction
+      const io = getGlobalIO();
+      if (io) {
+        io.emit('transaction:created', { transaction });
+      }
+
+      return transaction;
     }, "Create transaction");
   }
 
@@ -382,10 +399,26 @@ class DatabaseClient {
     data: Partial<Transaction>,
   ): Promise<Transaction> {
     return await this.executeWithRetry(async () => {
-      return await this.prisma.transaction.update({
+      const transaction = await this.prisma.transaction.update({
         where: { id },
         data,
+        include: {
+          payout: true,
+          advertisement: {
+            include: {
+              bybitAccount: true,
+            }
+          }
+        },
       });
+
+      // Emit WebSocket event for updated transaction
+      const io = getGlobalIO();
+      if (io) {
+        io.emit('transaction:updated', { id, transaction });
+      }
+
+      return transaction;
     }, "Update transaction");
   }
 

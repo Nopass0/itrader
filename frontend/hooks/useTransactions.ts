@@ -431,6 +431,136 @@ export function useTransactions() {
     }
   }, [isConnected, loadPayouts]);
 
+  // Real-time updates for transactions
+  useEffect(() => {
+    if (!isConnected) return;
+
+    const socket = (window as any).socket;
+    if (!socket) return;
+
+    // Handle transaction updates
+    const handleTransactionUpdated = (data: { id: string; transaction: Transaction }) => {
+      console.log('Transaction updated:', data);
+      
+      // Update the transaction in the list
+      setTransactions(prev => prev.map(t => 
+        t.id === data.id ? data.transaction : t
+      ));
+    };
+
+    // Handle new transactions
+    const handleTransactionCreated = (data: { transaction: Transaction }) => {
+      console.log('New transaction created:', data);
+      
+      // Add to the beginning of the list if it matches current filters
+      setTransactions(prev => [data.transaction, ...prev]);
+      setTransactionsTotalCount(prev => prev + 1);
+    };
+
+    // Handle transaction deletions
+    const handleTransactionDeleted = (data: { id: string }) => {
+      console.log('Transaction deleted:', data);
+      
+      // Remove from the list
+      setTransactions(prev => prev.filter(t => t.id !== data.id));
+      setTransactionsTotalCount(prev => Math.max(0, prev - 1));
+    };
+
+    // Subscribe to events
+    socket.on('transaction:updated', handleTransactionUpdated);
+    socket.on('transaction:created', handleTransactionCreated);
+    socket.on('transaction:deleted', handleTransactionDeleted);
+
+    return () => {
+      socket.off('transaction:updated', handleTransactionUpdated);
+      socket.off('transaction:created', handleTransactionCreated);
+      socket.off('transaction:deleted', handleTransactionDeleted);
+    };
+  }, [isConnected]);
+
+  // Real-time updates for advertisements
+  useEffect(() => {
+    if (!isConnected) return;
+
+    const socket = (window as any).socket;
+    if (!socket) return;
+
+    // Handle advertisement updates
+    const handleAdvertisementUpdated = (data: { id: string; advertisement: Advertisement }) => {
+      console.log('Advertisement updated:', data);
+      
+      // Update the advertisement in the list
+      setAdvertisements(prev => prev.map(a => 
+        a.id === data.id ? data.advertisement : a
+      ));
+    };
+
+    // Handle new advertisements
+    const handleAdvertisementCreated = (data: { advertisement: Advertisement }) => {
+      console.log('New advertisement created:', data);
+      
+      // Add to the beginning of the list
+      setAdvertisements(prev => [data.advertisement, ...prev]);
+      setAdvertisementsTotalCount(prev => prev + 1);
+    };
+
+    // Handle advertisement deletions
+    const handleAdvertisementDeleted = (data: { id: string }) => {
+      console.log('Advertisement deleted:', data);
+      
+      // Remove from the list
+      setAdvertisements(prev => prev.filter(a => a.id !== data.id));
+      setAdvertisementsTotalCount(prev => Math.max(0, prev - 1));
+    };
+
+    // Subscribe to events
+    socket.on('advertisement:updated', handleAdvertisementUpdated);
+    socket.on('advertisement:created', handleAdvertisementCreated);
+    socket.on('advertisement:deleted', handleAdvertisementDeleted);
+
+    return () => {
+      socket.off('advertisement:updated', handleAdvertisementUpdated);
+      socket.off('advertisement:created', handleAdvertisementCreated);
+      socket.off('advertisement:deleted', handleAdvertisementDeleted);
+    };
+  }, [isConnected]);
+
+  // Real-time updates for payouts
+  useEffect(() => {
+    if (!isConnected) return;
+
+    const socket = (window as any).socket;
+    if (!socket) return;
+
+    // Handle payout updates
+    const handlePayoutUpdated = (data: { id: string; payout: Payout }) => {
+      console.log('Payout updated:', data);
+      
+      // Update the payout in the list
+      setPayouts(prev => prev.map(p => 
+        p.id === data.id ? data.payout : p
+      ));
+    };
+
+    // Handle new payouts
+    const handlePayoutCreated = (data: { payout: Payout }) => {
+      console.log('New payout created:', data);
+      
+      // Add to the beginning of the list
+      setPayouts(prev => [data.payout, ...prev]);
+      setPayoutsTotalCount(prev => prev + 1);
+    };
+
+    // Subscribe to events
+    socket.on('payout:updated', handlePayoutUpdated);
+    socket.on('payout:created', handlePayoutCreated);
+
+    return () => {
+      socket.off('payout:updated', handlePayoutUpdated);
+      socket.off('payout:created', handlePayoutCreated);
+    };
+  }, [isConnected]);
+
   return {
     // Virtual Transactions
     transactions,

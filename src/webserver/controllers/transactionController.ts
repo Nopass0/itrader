@@ -538,11 +538,7 @@ export class TransactionController {
         throw new Error('Transaction not found');
       }
 
-      // Проверяем статус - только cancelled, cancelled_by_counterparty или stupid
-      const allowedStatuses = ['cancelled', 'cancelled_by_counterparty', 'stupid'];
-      if (!allowedStatuses.includes(transaction.status)) {
-        throw new Error('Can only reissue cancelled, cancelled_by_counterparty or stupid transactions');
-      }
+      // Удалена проверка статуса - теперь можно перевыпускать на любом этапе
 
       // Получаем BybitP2PManager из глобального контекста
       const bybitManager = (global as any).bybitP2PManager;
@@ -586,6 +582,11 @@ export class TransactionController {
         transactionId: transaction.id
       });
 
+      // Emit событие об удалении транзакции
+      socket.broadcast.emit('transaction:deleted', {
+        id: transaction.id
+      });
+
       // Затем удаляем объявление из БД
       if (transaction.advertisementId) {
         await prisma.advertisement.delete({
@@ -594,6 +595,11 @@ export class TransactionController {
         logger.info('Deleted advertisement from database', {
           advertisementId: transaction.advertisementId,
           transactionId: transaction.id
+        });
+
+        // Emit событие об удалении объявления
+        socket.broadcast.emit('advertisement:deleted', {
+          id: transaction.advertisementId
         });
       }
 

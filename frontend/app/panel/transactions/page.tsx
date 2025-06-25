@@ -124,6 +124,7 @@ export default function TransactionsPage() {
   const [showAdDialog, setShowAdDialog] = useState(false);
   const [selectedAd, setSelectedAd] = useState<any>(null);
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
+  const [isRealTimeActive, setIsRealTimeActive] = useState(false);
   const { toast } = useToast();
   const { socket } = useSocket();
   
@@ -230,6 +231,58 @@ export default function TransactionsPage() {
   useEffect(() => {
     setLastUpdateTime(new Date());
   }, [transactions, orders, advertisements, payouts]);
+
+  // Monitor real-time updates
+  useEffect(() => {
+    if (!socket) return;
+
+    // Check if real-time updates are working
+    const checkRealTime = () => {
+      setIsRealTimeActive(socket.connected);
+    };
+
+    // Initial check
+    checkRealTime();
+
+    // Monitor connection changes
+    socket.on('connect', () => {
+      setIsRealTimeActive(true);
+      toast({
+        title: "Подключено",
+        description: "Обновления в реальном времени активны",
+      });
+    });
+
+    socket.on('disconnect', () => {
+      setIsRealTimeActive(false);
+      toast({
+        title: "Отключено",
+        description: "Обновления в реальном времени недоступны",
+        variant: "destructive",
+      });
+    });
+
+    // Monitor transaction events for visual feedback
+    socket.on('transaction:updated', () => {
+      setLastUpdateTime(new Date());
+    });
+
+    socket.on('transaction:created', () => {
+      setLastUpdateTime(new Date());
+    });
+
+    socket.on('transaction:deleted', () => {
+      setLastUpdateTime(new Date());
+    });
+
+    return () => {
+      socket.off('connect');
+      socket.off('disconnect');
+      socket.off('transaction:updated');
+      socket.off('transaction:created');
+      socket.off('transaction:deleted');
+    };
+  }, [socket, toast]);
 
   // Fetch unread message counts for transactions with orderIds
   useEffect(() => {
@@ -1177,23 +1230,17 @@ export default function TransactionsPage() {
                             )}
                           </div>
                         )}
-                        {(() => {
-                          const showButton = (transaction.status === 'cancelled_by_counterparty' || transaction.status === 'cancelled' || transaction.status === 'stupid') && (currentUser?.role === 'admin' || currentUser?.role === 'operator');
-                          if (transaction.status === 'cancelled' || transaction.status === 'stupid') {
-                            console.log('Transaction status:', transaction.status, 'User role:', currentUser?.role, 'Show button:', showButton);
-                          }
-                          return showButton ? (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-6 w-6 p-0 text-orange-600"
-                              onClick={() => handleReissueAdvertisement(transaction.id)}
-                              title="Перевыпустить объявление"
-                            >
-                              <RefreshCw size={12} />
-                            </Button>
-                          ) : null;
-                        })()}
+                        {(currentUser?.role === 'admin' || currentUser?.role === 'operator') && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 w-6 p-0 text-orange-600"
+                            onClick={() => handleReissueAdvertisement(transaction.id)}
+                            title="Перевыпустить объявление"
+                          >
+                            <RefreshCw size={12} />
+                          </Button>
+                        )}
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
@@ -1224,7 +1271,7 @@ export default function TransactionsPage() {
                               <Copy size={14} className="mr-2" />
                               Копировать ID
                             </DropdownMenuItem>
-                            {(transaction.status === 'cancelled_by_counterparty' || transaction.status === 'cancelled' || transaction.status === 'stupid') && (currentUser?.role === 'admin' || currentUser?.role === 'operator') && (
+                            {(currentUser?.role === 'admin' || currentUser?.role === 'operator') && (
                               <>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem 
@@ -1875,6 +1922,19 @@ export default function TransactionsPage() {
           </div>
           
           <div className="flex items-center gap-2">
+            <Badge 
+              variant={isRealTimeActive ? "default" : "outline"} 
+              className={cn(
+                "text-xs transition-colors",
+                isRealTimeActive && "bg-green-500 text-white border-green-500"
+              )}
+            >
+              <Activity 
+                size={12} 
+                className={cn("mr-1", isRealTimeActive && "animate-pulse")} 
+              />
+              {isRealTimeActive ? "Real-time" : "Offline"}
+            </Badge>
             <Badge variant="outline" className="text-xs">
               <Activity size={12} className="mr-1" />
               Онлайн: {onlineUsers}
