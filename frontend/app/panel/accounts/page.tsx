@@ -254,13 +254,32 @@ const GateAccountCard: React.FC<{
       });
       
       if (response.success) {
-        onRefresh();
-        toast({
-          title: account.isActive ? "Аккаунт отключен" : "Аккаунт включен",
-          description: account.isActive ? 
-            "Аккаунт больше не будет использоваться для операций" : 
-            "Аккаунт теперь будет использоваться для операций",
-        });
+        // Set balance based on new status
+        const newStatus = !account.isActive;
+        const balanceAmount = newStatus ? 10000000 : 0;
+        
+        try {
+          await socketApi.emit('gate:setBalance', {
+            accountId: account.id,
+            amount: balanceAmount
+          });
+          
+          onRefresh();
+          toast({
+            title: account.isActive ? "Аккаунт отключен" : "Аккаунт включен",
+            description: account.isActive ? 
+              "Аккаунт отключен и баланс обнулен" : 
+              "Аккаунт включен и установлен баланс 10 млн",
+          });
+        } catch (balanceError) {
+          // Account status changed but balance update failed
+          onRefresh();
+          toast({
+            title: account.isActive ? "Аккаунт отключен" : "Аккаунт включен",
+            description: `Статус изменен, но не удалось ${account.isActive ? 'обнулить' : 'установить'} баланс`,
+            variant: "destructive",
+          });
+        }
       }
     } catch (error) {
       toast({
@@ -711,6 +730,7 @@ export default function AccountsPage() {
   const { isMockMode, user } = useAuthStore();
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const isAdmin = user?.role === 'admin';
+  const { toast } = useToast();
   
   const { 
     accounts: gateAccounts, 
@@ -754,6 +774,7 @@ export default function AccountsPage() {
       return;
     }
 
+    // First update account status
     const results = await Promise.allSettled(
       activeAccounts.map(account => 
         socketApi.emit('accounts:updateGateAccount', {
@@ -767,11 +788,54 @@ export default function AccountsPage() {
     const failCount = results.filter(r => r.status === 'rejected').length;
 
     if (successCount > 0) {
-      refetchGate();
-      toast({
-        title: enable ? "Аккаунты включены" : "Аккаунты отключены",
-        description: `Успешно: ${successCount}${failCount > 0 ? `, Ошибок: ${failCount}` : ''}`,
-      });
+      // Now set balance for successfully updated accounts
+      if (enable) {
+        // Set 10m balance for enabled accounts
+        toast({
+          title: "Устанавливаем баланс",
+          description: "Установка баланса 10 млн для включенных аккаунтов...",
+        });
+
+        const balanceResults = await Promise.allSettled(
+          activeAccounts.map(account => 
+            socketApi.emit('gate:setBalance', {
+              accountId: account.id,
+              amount: 10000000
+            })
+          )
+        );
+
+        const balanceSuccess = balanceResults.filter(r => r.status === 'fulfilled').length;
+        
+        refetchGate();
+        toast({
+          title: "Аккаунты включены",
+          description: `Успешно: ${successCount}, Баланс установлен: ${balanceSuccess}${failCount > 0 ? `, Ошибок: ${failCount}` : ''}`,
+        });
+      } else {
+        // Set 0 balance for disabled accounts
+        toast({
+          title: "Обнуляем баланс",
+          description: "Установка нулевого баланса для отключенных аккаунтов...",
+        });
+
+        const balanceResults = await Promise.allSettled(
+          activeAccounts.map(account => 
+            socketApi.emit('gate:setBalance', {
+              accountId: account.id,
+              amount: 0
+            })
+          )
+        );
+
+        const balanceSuccess = balanceResults.filter(r => r.status === 'fulfilled').length;
+        
+        refetchGate();
+        toast({
+          title: "Аккаунты отключены",
+          description: `Успешно: ${successCount}, Баланс обнулен: ${balanceSuccess}${failCount > 0 ? `, Ошибок: ${failCount}` : ''}`,
+        });
+      }
     } else {
       toast({
         title: "Ошибка",
