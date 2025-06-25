@@ -1,3 +1,6 @@
+import * as dotenv from "dotenv";
+dotenv.config();
+
 import { db } from "./db";
 import { Orchestrator } from "./orchestrator";
 import { GateAccountManager } from "./gate";
@@ -2023,7 +2026,7 @@ async function main() {
     (global as any).bybitP2PManager = context.bybitManager;
 
     // Start WebSocket server
-    const webSocketPort = parseInt(process.env.WEBSOCKET_PORT || "3001");
+    const webSocketPort = parseInt(process.env.WEBSOCKET_PORT || "3002");
     const webSocketServer = new WebSocketServer(webSocketPort);
 
     // Set orchestrator instance in controller

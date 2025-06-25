@@ -3,6 +3,9 @@
  * Main entry point for Itrader application
  */
 
+import * as dotenv from "dotenv";
+dotenv.config();
+
 import main from "./app";
 import { runCLI } from "./cli";
 
