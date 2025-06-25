@@ -318,6 +318,8 @@ export class WebSocketServer {
       socket.on('bybit:getChatMessages', withAuthAndLogging(BybitChatController.getChatMessages, 'getBybitChatMessages', 'bybit:getChatMessages', (data) => ({ orderId: data?.orderId })));
       socket.on('bybit:sendChatMessage', withAuthAndLogging(BybitChatController.sendChatMessage, 'sendBybitChatMessage', 'bybit:sendChatMessage', (data) => ({ orderId: data?.orderId, messageLength: data?.message?.length })));
       socket.on('bybit:sendChatImage', withAuthAndLogging(BybitChatController.sendChatImage, 'sendBybitChatImage', 'bybit:sendChatImage', (data) => ({ orderId: data?.orderId, hasCaption: !!data?.caption })));
+      socket.on('bybit:getUnreadMessagesCount', withAuth(BybitChatController.getUnreadMessagesCount));
+      socket.on('bybit:markMessagesAsRead', withAuth(BybitChatController.markMessagesAsRead));
 
       // Управление MailSlurp
       socket.on('mailslurp:listAccounts', withAuth(MailSlurpController.listAccounts));

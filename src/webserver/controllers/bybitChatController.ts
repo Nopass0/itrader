@@ -274,6 +274,69 @@ export class BybitChatController {
   }
 
   /**
+   * Получение количества непрочитанных сообщений
+   */
+  static async getUnreadMessagesCount(
+    socket: AuthenticatedSocket,
+    data: { transactionId: string },
+    callback: Function
+  ) {
+    try {
+      logger.info('Getting unread messages count', { transactionId: data.transactionId });
+
+      // Получаем количество непрочитанных сообщений из БД
+      const unreadCount = await prisma.chatMessage.count({
+        where: {
+          transactionId: data.transactionId,
+          sender: 'them',
+          isRead: false
+        }
+      });
+
+      handleSuccess({ count: unreadCount }, 'Unread count retrieved', callback);
+    } catch (error) {
+      logger.error('Error getting unread messages count', error as Error);
+      handleError(error, callback);
+    }
+  }
+
+  /**
+   * Отметить сообщения как прочитанные
+   */
+  static async markMessagesAsRead(
+    socket: AuthenticatedSocket,
+    data: { transactionId: string },
+    callback: Function
+  ) {
+    try {
+      logger.info('Marking messages as read', { transactionId: data.transactionId });
+
+      // Обновляем все непрочитанные сообщения
+      const result = await prisma.chatMessage.updateMany({
+        where: {
+          transactionId: data.transactionId,
+          sender: 'them',
+          isRead: false
+        },
+        data: {
+          isRead: true,
+          readAt: new Date()
+        }
+      });
+
+      logger.info('Messages marked as read', { 
+        transactionId: data.transactionId,
+        count: result.count 
+      });
+
+      handleSuccess({ updatedCount: result.count }, 'Messages marked as read', callback);
+    } catch (error) {
+      logger.error('Error marking messages as read', error as Error);
+      handleError(error, callback);
+    }
+  }
+
+  /**
    * Отправка изображения в чат
    */
   static async sendChatImage(

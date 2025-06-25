@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Textarea } from '@/components/ui/textarea';
+import { MultiSelect, MultiSelectOption } from '@/components/ui/multi-select';
 import { 
   RefreshCw, 
   Search, 
@@ -57,6 +58,7 @@ import {
 import Link from 'next/link';
 import { useTransactions } from '@/hooks/useTransactions';
 import { useSocket } from '@/hooks/useSocket';
+import { useGateAccounts, useBybitAccounts } from '@/hooks/useAccounts';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
@@ -121,8 +123,13 @@ export default function TransactionsPage() {
   const [selectedChatTransaction, setSelectedChatTransaction] = useState<any>(null);
   const [showAdDialog, setShowAdDialog] = useState(false);
   const [selectedAd, setSelectedAd] = useState<any>(null);
+  const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
   const { toast } = useToast();
   const { socket } = useSocket();
+  
+  // Get Gate and Bybit accounts for filters
+  const { accounts: gateAccounts } = useGateAccounts();
+  const { accounts: bybitAccounts } = useBybitAccounts();
 
   // Get current user role from localStorage
   useEffect(() => {
@@ -223,6 +230,46 @@ export default function TransactionsPage() {
   useEffect(() => {
     setLastUpdateTime(new Date());
   }, [transactions, orders, advertisements, payouts]);
+
+  // Fetch unread message counts for transactions with orderIds
+  useEffect(() => {
+    const fetchUnreadCounts = async () => {
+      if (!socket?.connected || transactions.length === 0) return;
+
+      const transactionsWithOrders = transactions.filter(t => t.orderId);
+      const counts: Record<string, number> = {};
+
+      // Fetch unread counts for all transactions
+      await Promise.all(
+        transactionsWithOrders.map(async (transaction) => {
+          try {
+            const response = await new Promise<any>((resolve, reject) => {
+              socket.emit('bybit:getUnreadMessagesCount', { 
+                transactionId: transaction.id 
+              }, (res: any) => {
+                if (res.error) {
+                  reject(new Error(res.error));
+                } else {
+                  resolve(res);
+                }
+              });
+            });
+
+            if (response.success && response.data) {
+              counts[transaction.id] = response.data.count || 0;
+            }
+          } catch (error) {
+            console.error('Error fetching unread count for transaction', transaction.id, error);
+            counts[transaction.id] = 0;
+          }
+        })
+      );
+
+      setUnreadCounts(counts);
+    };
+
+    fetchUnreadCounts();
+  }, [transactions, socket]);
 
   const copyToClipboard = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
@@ -493,120 +540,164 @@ export default function TransactionsPage() {
     { value: 'stupid', label: 'Контрагент идиот' },
   ];
 
-  // Status configuration
-  const statusConfig: Record<string, { icon: any; text: string; className: string }> = {
+  // Status configuration with vibrant colors
+  const statusConfig: Record<string, { icon: any; text: string; className: string; bgColor: string; textColor: string }> = {
     // Transaction statuses
     'pending': { 
       icon: Clock,
       text: 'Ожидание',
-      className: 'bg-yellow-100 text-yellow-800 border-yellow-300'
+      className: 'bg-yellow-100 text-yellow-800 border-yellow-300',
+      bgColor: 'bg-yellow-500',
+      textColor: 'text-yellow-50'
     },
     'chat_started': { 
       icon: MessageSquare,
       text: 'Чат',
-      className: 'bg-blue-100 text-blue-800 border-blue-300'
+      className: 'bg-blue-100 text-blue-800 border-blue-300',
+      bgColor: 'bg-blue-500',
+      textColor: 'text-blue-50'
     },
     'waiting_payment': { 
       icon: Clock,
       text: 'Ожидание оплаты',
-      className: 'bg-orange-100 text-orange-800 border-orange-300'
+      className: 'bg-orange-100 text-orange-800 border-orange-300',
+      bgColor: 'bg-orange-500',
+      textColor: 'text-orange-50'
     },
     'payment_received': { 
       icon: DollarSign,
       text: 'Оплачено',
-      className: 'bg-purple-100 text-purple-800 border-purple-300'
+      className: 'bg-purple-100 text-purple-800 border-purple-300',
+      bgColor: 'bg-purple-500',
+      textColor: 'text-purple-50'
     },
     'completed': { 
       icon: CheckCircle,
       text: 'Завершено',
-      className: 'bg-green-100 text-green-800 border-green-300'
+      className: 'bg-green-100 text-green-800 border-green-300',
+      bgColor: 'bg-green-500',
+      textColor: 'text-green-50'
     },
     'failed': { 
       icon: XCircle,
       text: 'Ошибка',
-      className: 'bg-red-100 text-red-800 border-red-300'
+      className: 'bg-red-100 text-red-800 border-red-300',
+      bgColor: 'bg-red-500',
+      textColor: 'text-red-50'
     },
     'cancelled': { 
       icon: XCircle,
       text: 'Отменено',
-      className: 'bg-gray-100 text-gray-800 border-gray-300'
+      className: 'bg-gray-100 text-gray-800 border-gray-300',
+      bgColor: 'bg-gray-500',
+      textColor: 'text-gray-50'
     },
     'cancelled_by_counterparty': { 
       icon: AlertCircle,
       text: 'Отменено контрагентом',
-      className: 'bg-orange-100 text-orange-800 border-orange-300'
+      className: 'bg-orange-100 text-orange-800 border-orange-300',
+      bgColor: 'bg-orange-600',
+      textColor: 'text-orange-50'
     },
     'check_received': { 
       icon: CheckCircle,
       text: 'Чек получен',
-      className: 'bg-green-100 text-green-800 border-green-300'
+      className: 'bg-green-100 text-green-800 border-green-300',
+      bgColor: 'bg-teal-500',
+      textColor: 'text-teal-50'
     },
     'receipt_received': { 
       icon: FileText,
       text: 'Квитанция получена',
-      className: 'bg-indigo-100 text-indigo-800 border-indigo-300'
+      className: 'bg-indigo-100 text-indigo-800 border-indigo-300',
+      bgColor: 'bg-indigo-500',
+      textColor: 'text-indigo-50'
     },
     'stupid': { 
       icon: XCircle,
       text: 'Контрагент идиот',
-      className: 'bg-red-100 text-red-800 border-red-300'
+      className: 'bg-red-100 text-red-800 border-red-300',
+      bgColor: 'bg-red-600',
+      textColor: 'text-red-50'
     },
     'release_money': { 
       icon: Send,
       text: 'Отправка средств',
-      className: 'bg-blue-100 text-blue-800 border-blue-300'
+      className: 'bg-blue-100 text-blue-800 border-blue-300',
+      bgColor: 'bg-cyan-500',
+      textColor: 'text-cyan-50'
     },
     // Order statuses
     'open': { 
       icon: ShoppingCart,
       text: 'Открыт',
-      className: 'bg-green-500/10 text-green-500 border-green-500/20'
+      className: 'bg-green-500/10 text-green-500 border-green-500/20',
+      bgColor: 'bg-emerald-500',
+      textColor: 'text-emerald-50'
     },
     'in_progress': { 
       icon: Clock,
       text: 'В процессе',
-      className: 'bg-blue-500/10 text-blue-500 border-blue-500/20'
+      className: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
+      bgColor: 'bg-blue-500',
+      textColor: 'text-blue-50'
     },
     'closed': { 
       icon: CheckCircle,
       text: 'Закрыт',
-      className: 'bg-gray-500/10 text-gray-500 border-gray-500/20'
+      className: 'bg-gray-500/10 text-gray-500 border-gray-500/20',
+      bgColor: 'bg-gray-500',
+      textColor: 'text-gray-50'
     },
     // Payout statuses (numeric)
     '1': { 
       icon: Clock,
       text: 'Создано',
-      className: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20'
+      className: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20',
+      bgColor: 'bg-yellow-500',
+      textColor: 'text-yellow-50'
     },
     '2': { 
       icon: Clock,
       text: 'Обработка',
-      className: 'bg-blue-500/10 text-blue-500 border-blue-500/20'
+      className: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
+      bgColor: 'bg-blue-500',
+      textColor: 'text-blue-50'
     },
     '3': { 
       icon: CheckCircle,
       text: 'Подтверждено',
-      className: 'bg-purple-500/10 text-purple-500 border-purple-500/20'
+      className: 'bg-purple-500/10 text-purple-500 border-purple-500/20',
+      bgColor: 'bg-purple-500',
+      textColor: 'text-purple-50'
     },
     '4': { 
       icon: Activity,
       text: 'Взято в работу',
-      className: 'bg-orange-500/10 text-orange-500 border-orange-500/20'
+      className: 'bg-orange-500/10 text-orange-500 border-orange-500/20',
+      bgColor: 'bg-orange-500',
+      textColor: 'text-orange-50'
     },
     '5': { 
       icon: Activity,
       text: 'В процессе',
-      className: 'bg-indigo-500/10 text-indigo-500 border-indigo-500/20'
+      className: 'bg-indigo-500/10 text-indigo-500 border-indigo-500/20',
+      bgColor: 'bg-indigo-500',
+      textColor: 'text-indigo-50'
     },
     '6': { 
       icon: XCircle,
       text: 'Отменено',
-      className: 'bg-gray-500/10 text-gray-500 border-gray-500/20'
+      className: 'bg-gray-500/10 text-gray-500 border-gray-500/20',
+      bgColor: 'bg-gray-500',
+      textColor: 'text-gray-50'
     },
     '7': { 
       icon: CheckCircle,
       text: 'Выполнено',
-      className: 'bg-green-500/10 text-green-500 border-green-500/20'
+      className: 'bg-green-500/10 text-green-500 border-green-500/20',
+      bgColor: 'bg-green-500',
+      textColor: 'text-green-50'
     }
   };
 
@@ -665,21 +756,23 @@ export default function TransactionsPage() {
     }
   };
 
-  const getStatusBadge = (status: string, type: 'transaction' | 'order' | 'payout' = 'transaction') => {
+  const getStatusBadge = (status: string, type: 'transaction' | 'order' | 'payout' = 'transaction', useColoredBg: boolean = true) => {
 
     const config = statusConfig[status.toString()] || {
       icon: Clock,
       text: status,
-      className: 'bg-muted'
+      className: 'bg-muted',
+      bgColor: 'bg-gray-500',
+      textColor: 'text-gray-50'
     };
     const Icon = config.icon;
 
     return (
       <Badge 
-        variant="outline" 
+        variant={useColoredBg ? "default" : "outline"}
         className={cn(
-          "text-xs whitespace-nowrap inline-flex items-center gap-1 px-2 py-0.5 font-medium",
-          config.className
+          "text-xs whitespace-nowrap inline-flex items-center gap-1 px-2 py-0.5 font-medium border-0",
+          useColoredBg ? `${config.bgColor} ${config.textColor}` : config.className
         )}
       >
         <Icon size={12} className="flex-shrink-0" />
@@ -687,6 +780,13 @@ export default function TransactionsPage() {
       </Badge>
     );
   };
+
+  // Convert statuses to MultiSelect options with icons
+  const statusOptions: MultiSelectOption[] = transactionStatuses.map(status => ({
+    value: status.value,
+    label: status.label,
+    icon: statusConfig[status.value]?.icon
+  }));
 
 
   // Calculate statistics
@@ -755,28 +855,16 @@ export default function TransactionsPage() {
             />
           </div>
           
-          <Select
-            value={transactionsFilters.status || 'all'}
-            onValueChange={(value) => updateTransactionsFilters({ status: value === 'all' ? undefined : value })}
-          >
-            <SelectTrigger className="w-[180px] h-8 text-sm">
-              <SelectValue placeholder="Статус" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Все статусы</SelectItem>
-              <SelectItem value="pending">Ожидание</SelectItem>
-              <SelectItem value="chat_started">Чат начат</SelectItem>
-              <SelectItem value="waiting_payment">Ожидание оплаты</SelectItem>
-              <SelectItem value="payment_received">Оплата получена</SelectItem>
-              <SelectItem value="check_received">Чек получен</SelectItem>
-              <SelectItem value="release_money">Отправка средств</SelectItem>
-              <SelectItem value="completed">Завершено</SelectItem>
-              <SelectItem value="failed">Ошибка</SelectItem>
-              <SelectItem value="cancelled">Отменено</SelectItem>
-              <SelectItem value="cancelled_by_counterparty">Отменено контрагентом</SelectItem>
-              <SelectItem value="stupid">Контрагент идиот</SelectItem>
-            </SelectContent>
-          </Select>
+          <MultiSelect
+            options={statusOptions}
+            selected={transactionsFilters.statuses || []}
+            onChange={(values) => updateTransactionsFilters({ 
+              statuses: values.length > 0 ? values : undefined,
+              status: undefined // Clear single status when using multi-select
+            })}
+            placeholder="Все статусы"
+            className="w-[180px]"
+          />
 
           <Button 
             variant="outline"
@@ -850,18 +938,38 @@ export default function TransactionsPage() {
                 onChange={(e) => updateTransactionsFilters({ orderId: e.target.value || undefined })}
                 className="h-8 text-sm"
               />
-              <Input
-                placeholder="Bybit аккаунт"
-                value={transactionsFilters.bybitAccount || ''}
-                onChange={(e) => updateTransactionsFilters({ bybitAccount: e.target.value || undefined })}
-                className="h-8 text-sm"
-              />
-              <Input
-                placeholder="Gate аккаунт"
-                value={transactionsFilters.gateAccount || ''}
-                onChange={(e) => updateTransactionsFilters({ gateAccount: e.target.value || undefined })}
-                className="h-8 text-sm"
-              />
+              <Select
+                value={transactionsFilters.bybitAccount || 'all'}
+                onValueChange={(value) => updateTransactionsFilters({ bybitAccount: value === 'all' ? undefined : value })}
+              >
+                <SelectTrigger className="h-8 text-sm">
+                  <SelectValue placeholder="Bybit аккаунт" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Все аккаунты</SelectItem>
+                  {bybitAccounts?.map((account) => (
+                    <SelectItem key={account.id} value={account.accountId}>
+                      {account.accountName || account.name || account.accountId}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select
+                value={transactionsFilters.gateAccount || 'all'}
+                onValueChange={(value) => updateTransactionsFilters({ gateAccount: value === 'all' ? undefined : value })}
+              >
+                <SelectTrigger className="h-8 text-sm">
+                  <SelectValue placeholder="Gate аккаунт" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Все аккаунты</SelectItem>
+                  {gateAccounts?.map((account) => (
+                    <SelectItem key={account.id} value={account.email}>
+                      {account.name || account.email}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </motion.div>
         )}
@@ -957,26 +1065,16 @@ export default function TransactionsPage() {
                           onValueChange={(value) => handleStatusChange(transaction.id, value)}
                           disabled={updatingStatuses.has(transaction.id)}
                         >
-                          <SelectTrigger className={cn("h-7 w-[160px] text-xs", updatingStatuses.has(transaction.id) && "opacity-50")}>
+                          <SelectTrigger className={cn("h-7 w-[160px] text-xs border-0", updatingStatuses.has(transaction.id) && "opacity-50")}>
                             <SelectValue>
                               {updatingStatuses.has(transaction.id) ? (
                                 <div className="flex items-center gap-1">
                                   <RefreshCw size={10} className="animate-spin" />
                                   <span>Обновление...</span>
                                 </div>
-                              ) : (() => {
-                                const statusInfo = statusConfig[transaction.status];
-                                if (statusInfo) {
-                                  const Icon = statusInfo.icon;
-                                  return (
-                                    <div className="flex items-center gap-1">
-                                      <Icon size={10} />
-                                      <span>{statusInfo.text}</span>
-                                    </div>
-                                  );
-                                }
-                                return transaction.status;
-                              })()}
+                              ) : (
+                                <div className="w-full">{getStatusBadge(transaction.status)}</div>
+                              )}
                             </SelectValue>
                           </SelectTrigger>
                           <SelectContent>
@@ -985,9 +1083,17 @@ export default function TransactionsPage() {
                               const Icon = statusInfo?.icon || Clock;
                               return (
                                 <SelectItem key={status.value} value={status.value}>
-                                  <div className="flex items-center gap-1">
-                                    <Icon size={12} />
-                                    <span className="text-xs">{status.label}</span>
+                                  <div className="flex items-center gap-2">
+                                    <Badge 
+                                      variant="default"
+                                      className={cn(
+                                        "text-xs inline-flex items-center gap-1 px-2 py-0.5 font-medium border-0",
+                                        statusInfo ? `${statusInfo.bgColor} ${statusInfo.textColor}` : 'bg-gray-500 text-gray-50'
+                                      )}
+                                    >
+                                      <Icon size={12} />
+                                      <span>{status.label}</span>
+                                    </Badge>
                                   </div>
                                 </SelectItem>
                               );
@@ -1051,18 +1157,28 @@ export default function TransactionsPage() {
                           <Eye size={12} />
                         </Button>
                         {transaction.orderId && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-6 w-6 p-0"
-                            onClick={() => setSelectedChatTransaction(transaction)}
-                            title="Открыть чат"
-                          >
-                            <MessageSquare size={12} />
-                          </Button>
+                          <div className="relative">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 w-6 p-0"
+                              onClick={() => setSelectedChatTransaction(transaction)}
+                              title="Открыть чат"
+                            >
+                              <MessageSquare size={12} />
+                            </Button>
+                            {unreadCounts[transaction.id] > 0 && (
+                              <Badge 
+                                variant="destructive" 
+                                className="absolute -top-2 -right-2 h-4 min-w-[16px] px-1 text-[10px] font-bold"
+                              >
+                                {unreadCounts[transaction.id]}
+                              </Badge>
+                            )}
+                          </div>
                         )}
                         {(() => {
-                          const showButton = (transaction.status === 'cancelled_by_counterparty' || transaction.status === 'cancelled' || transaction.status === 'stupid') && currentUser?.role === 'admin';
+                          const showButton = (transaction.status === 'cancelled_by_counterparty' || transaction.status === 'cancelled' || transaction.status === 'stupid') && (currentUser?.role === 'admin' || currentUser?.role === 'operator');
                           if (transaction.status === 'cancelled' || transaction.status === 'stupid') {
                             console.log('Transaction status:', transaction.status, 'User role:', currentUser?.role, 'Show button:', showButton);
                           }
@@ -1093,6 +1209,14 @@ export default function TransactionsPage() {
                               <DropdownMenuItem onClick={() => setSelectedChatTransaction(transaction)}>
                                 <MessageSquare size={14} className="mr-2" />
                                 Открыть чат
+                                {unreadCounts[transaction.id] > 0 && (
+                                  <Badge 
+                                    variant="destructive" 
+                                    className="ml-auto h-4 min-w-[16px] px-1 text-[10px] font-bold"
+                                  >
+                                    {unreadCounts[transaction.id]}
+                                  </Badge>
+                                )}
                               </DropdownMenuItem>
                             )}
                             <DropdownMenuSeparator />
@@ -1100,7 +1224,7 @@ export default function TransactionsPage() {
                               <Copy size={14} className="mr-2" />
                               Копировать ID
                             </DropdownMenuItem>
-                            {(transaction.status === 'cancelled_by_counterparty' || transaction.status === 'cancelled' || transaction.status === 'stupid') && currentUser?.role === 'admin' && (
+                            {(transaction.status === 'cancelled_by_counterparty' || transaction.status === 'cancelled' || transaction.status === 'stupid') && (currentUser?.role === 'admin' || currentUser?.role === 'operator') && (
                               <>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem 
@@ -1269,17 +1393,27 @@ export default function TransactionsPage() {
                     <td className="px-3 py-2 text-right">
                       {transaction.advertisement ? `${transaction.advertisement.price} RUB` : '-'}
                     </td>
-                    <td className="px-3 py-2">{getStatusBadge(transaction.status)}</td>
+                    <td className="px-3 py-2">{getStatusBadge(transaction.status, 'transaction')}</td>
                     <td className="px-3 py-2">
                       <div className="flex items-center justify-center gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-6 w-6 p-0"
-                          onClick={() => setSelectedChatTransaction(transaction)}
-                        >
-                          <MessageSquare size={12} />
-                        </Button>
+                        <div className="relative">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 w-6 p-0"
+                            onClick={() => setSelectedChatTransaction(transaction)}
+                          >
+                            <MessageSquare size={12} />
+                          </Button>
+                          {unreadCounts[transaction.id] > 0 && (
+                            <Badge 
+                              variant="destructive" 
+                              className="absolute -top-2 -right-2 h-4 min-w-[16px] px-1 text-[10px] font-bold"
+                            >
+                              {unreadCounts[transaction.id]}
+                            </Badge>
+                          )}
+                        </div>
                       </div>
                     </td>
                   </tr>
@@ -1563,12 +1697,22 @@ export default function TransactionsPage() {
                 onChange={(e) => updatePayoutsFilters({ amountTo: e.target.value ? Number(e.target.value) : undefined })}
                 className="h-8 text-sm"
               />
-              <Input
-                placeholder="Gate аккаунт"
-                value={payoutsFilters.gateAccount || ''}
-                onChange={(e) => updatePayoutsFilters({ gateAccount: e.target.value || undefined })}
-                className="h-8 text-sm"
-              />
+              <Select
+                value={payoutsFilters.gateAccount || 'all'}
+                onValueChange={(value) => updatePayoutsFilters({ gateAccount: value === 'all' ? undefined : value })}
+              >
+                <SelectTrigger className="h-8 text-sm">
+                  <SelectValue placeholder="Gate аккаунт" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Все аккаунты</SelectItem>
+                  {gateAccounts?.map((account) => (
+                    <SelectItem key={account.id} value={account.email}>
+                      {account.name || account.email}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <Input
                 placeholder="Gate Payout ID"
                 value={payoutsFilters.gatePayoutId || ''}
@@ -1668,10 +1812,7 @@ export default function TransactionsPage() {
                     </td>
                     <td className="px-3 py-2 text-xs">{payout.gateAccount || '-'}</td>
                     <td className="px-3 py-2">
-                      <div className="flex items-center gap-2">
-                        {getStatusBadge(payout.status.toString(), 'payout')}
-                        <span className="text-xs text-muted-foreground">({payout.status})</span>
-                      </div>
+                      {getStatusBadge(payout.status.toString(), 'payout')}
                     </td>
                     <td className="px-3 py-2 text-xs">
                       {(() => {

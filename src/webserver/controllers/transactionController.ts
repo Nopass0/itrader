@@ -27,7 +27,12 @@ export class TransactionController {
       // Формируем where условие
       const where: any = {};
       
-      if (data.status) {
+      // Support both single status and multiple statuses
+      if (data.statuses && Array.isArray(data.statuses) && data.statuses.length > 0) {
+        where.status = {
+          in: data.statuses
+        };
+      } else if (data.status) {
         where.status = data.status;
       }
       
@@ -43,6 +48,51 @@ export class TransactionController {
         if (data.dateTo) {
           where.createdAt.lte = new Date(data.dateTo);
         }
+      }
+      
+      // Add support for additional filters
+      if (data.type) {
+        where.advertisement = {
+          type: data.type
+        };
+      }
+      
+      if (data.amountFrom || data.amountTo) {
+        where.amount = {};
+        if (data.amountFrom) {
+          where.amount.gte = data.amountFrom;
+        }
+        if (data.amountTo) {
+          where.amount.lte = data.amountTo;
+        }
+      }
+      
+      if (data.bybitAccount) {
+        where.advertisement = {
+          ...where.advertisement,
+          bybitAccount: {
+            OR: [
+              { accountId: { contains: data.bybitAccount, mode: 'insensitive' } },
+              { accountName: { contains: data.bybitAccount, mode: 'insensitive' } },
+              { name: { contains: data.bybitAccount, mode: 'insensitive' } }
+            ]
+          }
+        };
+      }
+      
+      if (data.gateAccount) {
+        where.payout = {
+          gateAccount: { contains: data.gateAccount, mode: 'insensitive' }
+        };
+      }
+      
+      // Search functionality
+      if (data.search) {
+        where.OR = [
+          { id: { contains: data.search, mode: 'insensitive' } },
+          { orderId: { contains: data.search, mode: 'insensitive' } },
+          { counterpartyName: { contains: data.search, mode: 'insensitive' } }
+        ];
       }
 
       const response = await paginatePrisma(
@@ -468,9 +518,9 @@ export class TransactionController {
     callback: Function
   ) {
     try {
-      // Только админы могут перевыпускать объявления
-      if (socket.role !== 'admin') {
-        throw new Error('Only admins can reissue advertisements');
+      // Админы и операторы могут перевыпускать объявления
+      if (socket.role !== 'admin' && socket.role !== 'operator') {
+        throw new Error('Only admins and operators can reissue advertisements');
       }
 
       const transaction = await prisma.transaction.findUnique({

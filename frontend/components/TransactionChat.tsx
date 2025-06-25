@@ -65,6 +65,17 @@ export function TransactionChat({
   const [autoRefresh, setAutoRefresh] = useState(true);
   const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Mark messages as read when chat is opened
+  useEffect(() => {
+    if (isOpen && transactionId && socket && isConnected) {
+      socket.emit('bybit:markMessagesAsRead', { transactionId }, (response: any) => {
+        if (response.error) {
+          console.error('Failed to mark messages as read:', response.error);
+        }
+      });
+    }
+  }, [isOpen, transactionId, socket, isConnected]);
+
   // Load messages from Bybit API
   const loadMessages = useCallback(async () => {
     console.log('Loading messages:', { orderId, socket: !!socket, isConnected });

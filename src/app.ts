@@ -10,7 +10,7 @@ import { ActiveOrdersMonitorService } from "./services/activeOrdersMonitor";
 import { InstantOrderMonitorService } from "./services/instantOrderMonitor";
 import { TinkoffReceiptService } from "./services/tinkoffReceiptService";
 import { CancelledOrdersService } from "./services/cancelledOrdersService";
-import { CleanupAdvertisementsService } from "./services/cleanupAdvertisementsService";
+// import { CleanupAdvertisementsService } from "./services/cleanupAdvertisementsService";
 import { GmailClient, GmailManager } from "./gmail";
 import { WebSocketServer } from "./webserver";
 import { loadConfig } from "./utils/config";
@@ -35,7 +35,7 @@ interface AppContext {
   instantOrderMonitor: InstantOrderMonitorService | null;
   tinkoffReceiptService: TinkoffReceiptService | null;
   cancelledOrdersService: CancelledOrdersService | null;
-  cleanupAdvertisementsService: CleanupAdvertisementsService | null;
+  // cleanupAdvertisementsService: CleanupAdvertisementsService | null;
   isManualMode: boolean;
   webSocketServer?: WebSocketServer;
   mailslurpService?: any;
@@ -120,7 +120,7 @@ async function main() {
     let instantOrderMonitor: any = null;
     let tinkoffReceiptService: any = null;
     let cancelledOrdersService: any = null;
-    let cleanupAdvertisementsService: any = null;
+    // let cleanupAdvertisementsService: any = null;
 
     const checkService = new CheckVerificationService(
       null as any, // Will be set after Gmail initialization
@@ -145,7 +145,7 @@ async function main() {
       instantOrderMonitor,
       tinkoffReceiptService,
       cancelledOrdersService,
-      cleanupAdvertisementsService,
+      // cleanupAdvertisementsService,
       isManualMode: false,
     };
 
@@ -750,21 +750,21 @@ async function main() {
         console.error("[Init] Failed to start Cancelled Orders Service:", error);
       }
       
-      // Initialize Cleanup Advertisements Service
-      console.log("[Init] 🧹 Starting Cleanup Advertisements Service...");
-      try {
-        const cleanupAdvertisementsService = new CleanupAdvertisementsService(context.bybitManager);
-        context.cleanupAdvertisementsService = cleanupAdvertisementsService;
-        await cleanupAdvertisementsService.start();
-        
-        logger.info("✅ Cleanup Advertisements Service started", {
-          checkInterval: "10s"
-        });
-        console.log("[Init] ✅ Cleanup Advertisements Service started (checking every 10 seconds)");
-      } catch (error) {
-        logger.error("Failed to start Cleanup Advertisements Service", error as Error);
-        console.error("[Init] Failed to start Cleanup Advertisements Service:", error);
-      }
+      // Initialize Cleanup Advertisements Service - DISABLED (marks completed transactions as cancelled incorrectly)
+      // console.log("[Init] 🧹 Starting Cleanup Advertisements Service...");
+      // try {
+      //   const cleanupAdvertisementsService = new CleanupAdvertisementsService(context.bybitManager);
+      //   context.cleanupAdvertisementsService = cleanupAdvertisementsService;
+      //   await cleanupAdvertisementsService.start();
+      //   
+      //   logger.info("✅ Cleanup Advertisements Service started", {
+      //     checkInterval: "10s"
+      //   });
+      //   console.log("[Init] ✅ Cleanup Advertisements Service started (checking every 10 seconds)");
+      // } catch (error) {
+      //   logger.error("Failed to start Cleanup Advertisements Service", error as Error);
+      //   console.error("[Init] Failed to start Cleanup Advertisements Service:", error);
+      // }
       
       // Initialize Cancelled Order Detector Service - DISABLED
       // console.log("[Init] 🚫 Starting Cancelled Order Detector Service...");

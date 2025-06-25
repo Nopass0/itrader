@@ -559,12 +559,6 @@ export class ReceiptPayoutLinkerService {
               OR: [
                 { recipientName: { contains: receipt.recipientName } },
                 { wallet: { contains: receipt.recipientName } },
-                {
-                  meta: {
-                    path: ["name"],
-                    string_contains: receipt.recipientName,
-                  },
-                },
               ],
             },
           ],
@@ -577,6 +571,45 @@ export class ReceiptPayoutLinkerService {
         },
         orderBy: { createdAt: "desc" },
       });
+
+      // If not found, try searching in meta field
+      if (!payout) {
+        const payoutsWithMeta = await prisma.payout.findMany({
+          where: {
+            AND: [
+              {
+                OR: [
+                  { amount: receipt.amount },
+                  {
+                    amountTrader: {
+                      path: ["643"],
+                      equals: receipt.amount,
+                    },
+                  },
+                ],
+              },
+              { meta: { not: null } },
+            ],
+            createdAt: receipt.transactionDate
+              ? {
+                  gte: dayjs(receipt.transactionDate).subtract(1, "day").toDate(),
+                  lte: dayjs(receipt.transactionDate).add(1, "day").toDate(),
+                }
+              : undefined,
+          },
+          orderBy: { createdAt: "desc" },
+        });
+
+        // Check meta field in application code
+        for (const p of payoutsWithMeta) {
+          if (p.meta && typeof p.meta === 'object') {
+            const meta = p.meta as any;
+            if (meta.name && typeof meta.name === 'string' && meta.name.includes(receipt.recipientName)) {
+              return p;
+            }
+          }
+        }
+      }
 
       return payout;
     } catch (error) {

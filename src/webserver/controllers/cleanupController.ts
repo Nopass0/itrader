@@ -17,20 +17,10 @@ export class CleanupController {
     callback: Function
   ) {
     try {
-      const context = (global as any).appContext;
-      const cleanupService = context?.cleanupAdvertisementsService;
-      
-      if (!cleanupService) {
-        handleSuccess({
-          status: 'not_initialized',
-          message: 'Cleanup service is not initialized'
-        }, undefined, callback);
-        return;
-      }
-
+      // Service is disabled
       const status = {
-        status: 'running',
-        message: 'Cleanup service is running'
+        status: 'disabled',
+        message: 'Cleanup service is disabled (marks completed transactions as cancelled incorrectly)'
       };
 
       handleSuccess(status, undefined, callback);
@@ -47,23 +37,8 @@ export class CleanupController {
     callback: Function
   ) {
     try {
-      // Только админы могут запускать принудительную очистку
-      if (socket.role !== 'admin') {
-        throw new Error('Only admins can force cleanup');
-      }
-
-      const context = (global as any).appContext;
-      const cleanupService = context?.cleanupAdvertisementsService;
-      
-      if (!cleanupService) {
-        throw new Error('Cleanup service is not initialized');
-      }
-
-      logger.info('Force cleanup requested', { userId: socket.accountId });
-      
-      await cleanupService.forceCleanup();
-
-      handleSuccess(null, 'Force cleanup completed', callback);
+      // Service is disabled
+      throw new Error('Cleanup service is disabled (marks completed transactions as cancelled incorrectly)');
     } catch (error) {
       handleError(error, callback);
     }
@@ -78,26 +53,8 @@ export class CleanupController {
     callback: Function
   ) {
     try {
-      // Только админы могут очищать транзакции
-      if (socket.role !== 'admin') {
-        throw new Error('Only admins can cleanup transactions');
-      }
-
-      const context = (global as any).appContext;
-      const cleanupService = context?.cleanupAdvertisementsService;
-      
-      if (!cleanupService) {
-        throw new Error('Cleanup service is not initialized');
-      }
-
-      logger.info('Cleanup transaction requested', { 
-        transactionId: data.transactionId,
-        userId: socket.accountId 
-      });
-      
-      await cleanupService.cleanupSingleTransaction(data.transactionId);
-
-      handleSuccess(null, 'Transaction cleaned up successfully', callback);
+      // Service is disabled
+      throw new Error('Cleanup service is disabled (marks completed transactions as cancelled incorrectly)');
     } catch (error) {
       handleError(error, callback);
     }

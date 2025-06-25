@@ -127,6 +127,7 @@ export interface Filters {
   limit?: number;
   search?: string;
   status?: string;
+  statuses?: string[];  // Support for multiple statuses
   dateFrom?: string;
   dateTo?: string;
   sortBy?: string;
@@ -138,6 +139,12 @@ export interface TransactionFilters extends Filters {
   gateAccountId?: string;
   amountMin?: number;
   amountMax?: number;
+  type?: 'buy' | 'sell';
+  amountFrom?: number;
+  amountTo?: number;
+  orderId?: string;
+  bybitAccount?: string;
+  gateAccount?: string;
 }
 
 export interface OrderFilters extends Filters {
@@ -161,6 +168,12 @@ export interface PayoutFilters extends Filters {
   wallet?: string;
   amountMin?: number;
   amountMax?: number;
+  method?: number;
+  hasReceipt?: boolean;
+  amountFrom?: number;
+  amountTo?: number;
+  gateAccount?: string;
+  gatePayoutId?: string;
 }
 
 export function useTransactions() {

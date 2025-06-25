@@ -10,6 +10,7 @@ import {
   ExternalLink, 
   Check,
   CheckCircle,
+  XCircle,
   AlertCircle,
   Clock,
   Shield,
@@ -742,6 +743,82 @@ export default function AccountsPage() {
     refreshMailSlurp();
   };
 
+  // Toggle all Gate accounts
+  const handleToggleAllGate = async (enable: boolean) => {
+    const activeAccounts = gateAccounts.filter(acc => acc.isActive === !enable);
+    if (activeAccounts.length === 0) {
+      toast({
+        title: "Информация",
+        description: enable ? "Все аккаунты уже включены" : "Все аккаунты уже отключены",
+      });
+      return;
+    }
+
+    const results = await Promise.allSettled(
+      activeAccounts.map(account => 
+        socketApi.emit('accounts:updateGateAccount', {
+          id: account.id,
+          updates: { isActive: enable }
+        })
+      )
+    );
+
+    const successCount = results.filter(r => r.status === 'fulfilled').length;
+    const failCount = results.filter(r => r.status === 'rejected').length;
+
+    if (successCount > 0) {
+      refetchGate();
+      toast({
+        title: enable ? "Аккаунты включены" : "Аккаунты отключены",
+        description: `Успешно: ${successCount}${failCount > 0 ? `, Ошибок: ${failCount}` : ''}`,
+      });
+    } else {
+      toast({
+        title: "Ошибка",
+        description: "Не удалось изменить статус аккаунтов",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Toggle all Bybit accounts
+  const handleToggleAllBybit = async (enable: boolean) => {
+    const activeAccounts = bybitAccounts.filter(acc => acc.isActive === !enable);
+    if (activeAccounts.length === 0) {
+      toast({
+        title: "Информация",
+        description: enable ? "Все аккаунты уже включены" : "Все аккаунты уже отключены",
+      });
+      return;
+    }
+
+    const results = await Promise.allSettled(
+      activeAccounts.map(account => 
+        socketApi.emit('accounts:updateBybitAccount', {
+          id: account.id,
+          updates: { isActive: enable }
+        })
+      )
+    );
+
+    const successCount = results.filter(r => r.status === 'fulfilled').length;
+    const failCount = results.filter(r => r.status === 'rejected').length;
+
+    if (successCount > 0) {
+      refetchBybit();
+      toast({
+        title: enable ? "Аккаунты включены" : "Аккаунты отключены",
+        description: `Успешно: ${successCount}${failCount > 0 ? `, Ошибок: ${failCount}` : ''}`,
+      });
+    } else {
+      toast({
+        title: "Ошибка",
+        description: "Не удалось изменить статус аккаунтов",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleAccountAdded = () => {
     refetchGate();
     refetchBybit();
@@ -825,6 +902,29 @@ export default function AccountsPage() {
               animate={{ opacity: 1 }}
               className="space-y-4"
             >
+              {/* Action buttons */}
+              {gateAccounts.length > 0 && (
+                <div className="flex justify-end gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleToggleAllGate(true)}
+                    className="glass-button"
+                  >
+                    <CheckCircle size={16} className="mr-2" />
+                    Включить все
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleToggleAllGate(false)}
+                    className="glass-button"
+                  >
+                    <XCircle size={16} className="mr-2" />
+                    Отключить все
+                  </Button>
+                </div>
+              )}
               {gateLoading ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {[...Array(3)].map((_, i) => (
@@ -894,6 +994,29 @@ export default function AccountsPage() {
               animate={{ opacity: 1 }}
               className="space-y-4"
             >
+              {/* Action buttons */}
+              {bybitAccounts.length > 0 && (
+                <div className="flex justify-end gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleToggleAllBybit(true)}
+                    className="glass-button"
+                  >
+                    <CheckCircle size={16} className="mr-2" />
+                    Включить все
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleToggleAllBybit(false)}
+                    className="glass-button"
+                  >
+                    <XCircle size={16} className="mr-2" />
+                    Отключить все
+                  </Button>
+                </div>
+              )}
               {bybitLoading ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {[...Array(3)].map((_, i) => (
