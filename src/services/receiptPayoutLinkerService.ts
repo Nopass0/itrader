@@ -456,22 +456,16 @@ export class ReceiptPayoutLinkerService {
     );
 
     try {
-      // Ищем payout где wallet начинается с первых 6 цифр и заканчивается последними 4
-      const payout = await prisma.payout.findFirst({
+      // SQLite workaround: Get all payouts and filter in application code
+      const payouts = await prisma.payout.findMany({
         where: {
-          OR: [
-            { amount: receipt.amount },
-            {
-              amountTrader: {
-                path: ["643"],
-                equals: receipt.amount,
-              },
-            },
-          ],
-          AND: [
-            { wallet: { startsWith: firstSix } },
-            { wallet: { endsWith: lastFour } },
-          ],
+          amount: receipt.amount,
+          wallet: {
+            AND: [
+              { startsWith: firstSix },
+              { endsWith: lastFour }
+            ]
+          },
           createdAt: receipt.transactionDate
             ? {
                 gte: dayjs(receipt.transactionDate).subtract(1, "day").toDate(),
@@ -482,7 +476,21 @@ export class ReceiptPayoutLinkerService {
         orderBy: { createdAt: "desc" },
       });
 
-      return payout;
+      // Check amountTrader field in application code
+      for (const payout of payouts) {
+        if (payout.amount === receipt.amount) {
+          return payout;
+        }
+        // Check amountTrader JSON field
+        if (payout.amountTrader && typeof payout.amountTrader === 'object') {
+          const amountTrader = payout.amountTrader as any;
+          if (amountTrader['643'] === receipt.amount) {
+            return payout;
+          }
+        }
+      }
+
+      return null;
     } catch (error) {
       console.error(`[ReceiptPayoutLinker] Error searching by card:`, error);
       return null;
@@ -497,39 +505,37 @@ export class ReceiptPayoutLinkerService {
     normalizedPhone: string,
   ): Promise<any> {
     try {
-      const payout = await Promise.race([
-        prisma.payout.findFirst({
-          where: {
-            OR: [
-              // Ищем по amount если оно заполнено
-              { amount: receipt.amount },
-              // Или по amountTrader['643'] для RUB
-              {
-                amountTrader: {
-                  path: ["643"],
-                  equals: receipt.amount,
-                },
-              },
-            ],
-            wallet: { contains: normalizedPhone },
-            // Payout должен быть создан примерно в то же время (±1 день)
-            createdAt: receipt.transactionDate
-              ? {
-                  gte: dayjs(receipt.transactionDate)
-                    .subtract(1, "day")
-                    .toDate(),
-                  lte: dayjs(receipt.transactionDate).add(1, "day").toDate(),
-                }
-              : undefined,
-          },
-          orderBy: { createdAt: "desc" },
-        }),
-        new Promise((_, reject) =>
-          setTimeout(() => reject(new Error("Query timeout")), 5000),
-        ),
-      ]);
+      // SQLite workaround: Get all matching payouts and filter in application code
+      const payouts = await prisma.payout.findMany({
+        where: {
+          wallet: { contains: normalizedPhone },
+          createdAt: receipt.transactionDate
+            ? {
+                gte: dayjs(receipt.transactionDate)
+                  .subtract(1, "day")
+                  .toDate(),
+                lte: dayjs(receipt.transactionDate).add(1, "day").toDate(),
+              }
+            : undefined,
+        },
+        orderBy: { createdAt: "desc" },
+      });
 
-      return payout;
+      // Check amount or amountTrader in application code
+      for (const payout of payouts) {
+        if (payout.amount === receipt.amount) {
+          return payout;
+        }
+        // Check amountTrader JSON field
+        if (payout.amountTrader && typeof payout.amountTrader === 'object') {
+          const amountTrader = payout.amountTrader as any;
+          if (amountTrader['643'] === receipt.amount) {
+            return payout;
+          }
+        }
+      }
+
+      return null;
     } catch (error) {
       console.error(`[ReceiptPayoutLinker] Error searching by phone:`, error);
       return null;
@@ -541,26 +547,13 @@ export class ReceiptPayoutLinkerService {
    */
   private async findPayoutByName(receipt: any): Promise<any> {
     try {
-      const payout = await prisma.payout.findFirst({
+      // First try direct field search
+      const directPayout = await prisma.payout.findFirst({
         where: {
-          AND: [
-            {
-              OR: [
-                { amount: receipt.amount },
-                {
-                  amountTrader: {
-                    path: ["643"],
-                    equals: receipt.amount,
-                  },
-                },
-              ],
-            },
-            {
-              OR: [
-                { recipientName: { contains: receipt.recipientName } },
-                { wallet: { contains: receipt.recipientName } },
-              ],
-            },
+          amount: receipt.amount,
+          OR: [
+            { recipientName: { contains: receipt.recipientName } },
+            { wallet: { contains: receipt.recipientName } },
           ],
           createdAt: receipt.transactionDate
             ? {
@@ -572,46 +565,46 @@ export class ReceiptPayoutLinkerService {
         orderBy: { createdAt: "desc" },
       });
 
-      // If not found, try searching in meta field
-      if (!payout) {
-        const payoutsWithMeta = await prisma.payout.findMany({
-          where: {
-            AND: [
-              {
-                OR: [
-                  { amount: receipt.amount },
-                  {
-                    amountTrader: {
-                      path: ["643"],
-                      equals: receipt.amount,
-                    },
-                  },
-                ],
-              },
-              { meta: { not: null } },
-            ],
-            createdAt: receipt.transactionDate
-              ? {
-                  gte: dayjs(receipt.transactionDate).subtract(1, "day").toDate(),
-                  lte: dayjs(receipt.transactionDate).add(1, "day").toDate(),
-                }
-              : undefined,
-          },
-          orderBy: { createdAt: "desc" },
-        });
+      if (directPayout) {
+        return directPayout;
+      }
 
-        // Check meta field in application code
-        for (const p of payoutsWithMeta) {
-          if (p.meta && typeof p.meta === 'object') {
-            const meta = p.meta as any;
-            if (meta.name && typeof meta.name === 'string' && meta.name.includes(receipt.recipientName)) {
-              return p;
-            }
+      // SQLite workaround: Get all payouts with matching date and filter in application code
+      const payoutsWithMeta = await prisma.payout.findMany({
+        where: {
+          meta: { not: null },
+          createdAt: receipt.transactionDate
+            ? {
+                gte: dayjs(receipt.transactionDate).subtract(1, "day").toDate(),
+                lte: dayjs(receipt.transactionDate).add(1, "day").toDate(),
+              }
+            : undefined,
+        },
+        orderBy: { createdAt: "desc" },
+      });
+
+      // Check meta field and amount in application code
+      for (const payout of payoutsWithMeta) {
+        // Check amount match
+        let amountMatches = false;
+        if (payout.amount === receipt.amount) {
+          amountMatches = true;
+        } else if (payout.amountTrader && typeof payout.amountTrader === 'object') {
+          const amountTrader = payout.amountTrader as any;
+          if (amountTrader['643'] === receipt.amount) {
+            amountMatches = true;
+          }
+        }
+
+        if (amountMatches && payout.meta && typeof payout.meta === 'object') {
+          const meta = payout.meta as any;
+          if (meta.name && typeof meta.name === 'string' && meta.name.includes(receipt.recipientName)) {
+            return payout;
           }
         }
       }
 
-      return payout;
+      return null;
     } catch (error) {
       console.error(`[ReceiptPayoutLinker] Error searching by name:`, error);
       return null;
@@ -623,17 +616,9 @@ export class ReceiptPayoutLinkerService {
    */
   private async findPayoutByAmountAndTime(receipt: any): Promise<any> {
     try {
-      const payout = await prisma.payout.findFirst({
+      // SQLite workaround: Get all payouts within time range and filter in application code
+      const payouts = await prisma.payout.findMany({
         where: {
-          OR: [
-            { amount: receipt.amount },
-            {
-              amountTrader: {
-                path: ["643"],
-                equals: receipt.amount,
-              },
-            },
-          ],
           createdAt: receipt.transactionDate
             ? {
                 gte: dayjs(receipt.transactionDate)
@@ -646,25 +631,42 @@ export class ReceiptPayoutLinkerService {
         orderBy: { createdAt: "desc" },
       });
 
-      // Проверяем, что payout не привязан к другому чеку
-      if (payout) {
-        const existingReceipt = await prisma.receipt.findFirst({
-          where: {
-            payoutId: payout.id, // ID записи в БД
-            id: { not: receipt.id },
-          },
-        });
-
-        if (existingReceipt) {
-          logger.debug("Payout already linked to another receipt", {
-            payoutId: payout.gatePayoutId,
-            existingReceiptId: existingReceipt.id,
+      // Check amount in application code
+      for (const payout of payouts) {
+        if (payout.amount === receipt.amount) {
+          // Check if not already linked
+          const existingReceipt = await prisma.receipt.findFirst({
+            where: {
+              payoutId: payout.id,
+              id: { not: receipt.id },
+            },
           });
-          return null;
+
+          if (!existingReceipt) {
+            return payout;
+          }
+        }
+        
+        // Check amountTrader JSON field
+        if (payout.amountTrader && typeof payout.amountTrader === 'object') {
+          const amountTrader = payout.amountTrader as any;
+          if (amountTrader['643'] === receipt.amount) {
+            // Check if not already linked
+            const existingReceipt = await prisma.receipt.findFirst({
+              where: {
+                payoutId: payout.id,
+                id: { not: receipt.id },
+              },
+            });
+
+            if (!existingReceipt) {
+              return payout;
+            }
+          }
         }
       }
 
-      return payout;
+      return null;
     } catch (error) {
       console.error(
         `[ReceiptPayoutLinker] Error searching by amount/time:`,
