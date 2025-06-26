@@ -15,7 +15,8 @@ import {
   Settings,
   Bell,
   HelpCircle,
-  Receipt
+  Receipt,
+  Mail
 } from "lucide-react";
 
 import Logo from "@/components/Logo";
@@ -67,6 +68,12 @@ const menuItems = [
     icon: <Receipt size={20} />,
     emoji: <AnimatePresence><motion.span>🧾</motion.span></AnimatePresence>,
     label: "Чеки"
+  },
+  {
+    href: "/panel/emails",
+    icon: <Mail size={20} />,
+    emoji: <AnimatePresence><motion.span>📧</motion.span></AnimatePresence>,
+    label: "Почта"
   },
   {
     href: "/panel/stats",

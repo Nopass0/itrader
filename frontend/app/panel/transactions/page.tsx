@@ -1,19 +1,25 @@
 "use client";
 
-import { useState, useEffect, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Textarea } from '@/components/ui/textarea';
-import { MultiSelect, MultiSelectOption } from '@/components/ui/multi-select';
-import { 
-  RefreshCw, 
-  Search, 
+import { useState, useEffect, useRef } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Textarea } from "@/components/ui/textarea";
+import { MultiSelect, MultiSelectOption } from "@/components/ui/multi-select";
+import {
+  RefreshCw,
+  Search,
   Filter,
   ExternalLink,
   MessageSquare,
@@ -53,35 +59,50 @@ import {
   MoreVertical,
   Plus,
   Edit2,
-  Trash2
-} from 'lucide-react';
-import Link from 'next/link';
-import { useTransactions } from '@/hooks/useTransactions';
-import { useSocket } from '@/hooks/useSocket';
-import { useGateAccounts, useBybitAccounts } from '@/hooks/useAccounts';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { useToast } from '@/components/ui/use-toast';
-import { cn } from '@/lib/utils';
-import { Separator } from '@/components/ui/separator';
+  Trash2,
+  LayoutGrid,
+  Kanban,
+} from "lucide-react";
+import Link from "next/link";
+import { useTransactions } from "@/hooks/useTransactions";
+import { useSocket } from "@/hooks/useSocket";
+import { useGateAccounts, useBybitAccounts } from "@/hooks/useAccounts";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { useToast } from "@/components/ui/use-toast";
+import { cn } from "@/lib/utils";
+import { Separator } from "@/components/ui/separator";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  DropdownMenuSeparator
-} from '@/components/ui/dropdown-menu';
-import { Progress } from '@/components/ui/progress';
-import { TransactionDetailsDialog } from '@/components/TransactionDetailsDialog';
-import { GlobalChat, openGlobalChat } from '@/components/GlobalChat';
-import { TransactionChat } from '@/components/TransactionChat';
-import { ReceiptPopover } from '@/components/ReceiptPopover';
-import { AdvertisementDialog } from '@/components/AdvertisementDialog';
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
+import { Progress } from "@/components/ui/progress";
+import { TransactionDetailsDialog } from "@/components/TransactionDetailsDialog";
+import { GlobalChat, openGlobalChat } from "@/components/GlobalChat";
+import { TransactionChat } from "@/components/TransactionChat";
+import { ReceiptPopover } from "@/components/ReceiptPopover";
+import { AdvertisementsTab } from "@/components/panel/AdvertisementsTab";
+import { KanbanBoard } from "@/components/panel/transactions/kanban";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
 // Tab types
-type TabType = 'transactions' | 'orders' | 'advertisements' | 'payouts';
+type TabType = "transactions" | "orders" | "advertisements" | "payouts";
 
 // Statistics Card Component
-const StatCard = ({ title, value, change, icon: Icon, color }: {
+const StatCard = ({
+  title,
+  value,
+  change,
+  icon: Icon,
+  color,
+}: {
   title: string;
   value: string;
   change?: { value: number; isPositive: boolean };
@@ -95,11 +116,17 @@ const StatCard = ({ title, value, change, icon: Icon, color }: {
           <p className="text-sm text-muted-foreground">{title}</p>
           <p className="text-2xl font-bold">{value}</p>
           {change && (
-            <div className={cn(
-              "flex items-center gap-1 text-xs",
-              change.isPositive ? "text-green-500" : "text-red-500"
-            )}>
-              {change.isPositive ? <ArrowUp size={12} /> : <ArrowDown size={12} />}
+            <div
+              className={cn(
+                "flex items-center gap-1 text-xs",
+                change.isPositive ? "text-green-500" : "text-red-500",
+              )}
+            >
+              {change.isPositive ? (
+                <ArrowUp size={12} />
+              ) : (
+                <ArrowDown size={12} />
+              )}
               <span>{Math.abs(change.value)}%</span>
             </div>
           )}
@@ -113,21 +140,29 @@ const StatCard = ({ title, value, change, icon: Icon, color }: {
 );
 
 export default function TransactionsPage() {
-  const [activeTab, setActiveTab] = useState<TabType>('transactions');
+  const [activeTab, setActiveTab] = useState<TabType>("transactions");
   const [selectedItem, setSelectedItem] = useState<any>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
-  const [updatingStatuses, setUpdatingStatuses] = useState<Set<string>>(new Set());
+  const [updatingStatuses, setUpdatingStatuses] = useState<Set<string>>(
+    new Set(),
+  );
   const [lastUpdateTime, setLastUpdateTime] = useState<Date>(new Date());
   const [onlineUsers, setOnlineUsers] = useState<number>(0);
-  const [selectedChatTransaction, setSelectedChatTransaction] = useState<any>(null);
-  const [showAdDialog, setShowAdDialog] = useState(false);
-  const [selectedAd, setSelectedAd] = useState<any>(null);
+  const [selectedChatTransaction, setSelectedChatTransaction] =
+    useState<any>(null);
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
   const [isRealTimeActive, setIsRealTimeActive] = useState(false);
+  const [viewMode, setViewMode] = useState<"table" | "kanban">(() => {
+    // Load view mode from localStorage or default to 'table'
+    const savedMode = localStorage.getItem("transactionsViewMode");
+    return savedMode === "kanban" || savedMode === "table"
+      ? savedMode
+      : "table";
+  });
   const { toast } = useToast();
   const { socket } = useSocket();
-  
+
   // Get Gate and Bybit accounts for filters
   const { accounts: gateAccounts } = useGateAccounts();
   const { accounts: bybitAccounts } = useBybitAccounts();
@@ -135,52 +170,51 @@ export default function TransactionsPage() {
   // Get current user role from localStorage
   useEffect(() => {
     // Try to get user from Zustand store
-    const authStorage = localStorage.getItem('auth-storage');
+    const authStorage = localStorage.getItem("auth-storage");
     if (authStorage) {
       try {
         const authData = JSON.parse(authStorage);
         const user = authData.state?.user;
         if (user) {
           setCurrentUser(user);
-          console.log('Current user from auth-storage:', user); // Debug log
+          console.log("Current user from auth-storage:", user); // Debug log
         }
       } catch (e) {
-        console.error('Failed to parse auth-storage:', e);
+        console.error("Failed to parse auth-storage:", e);
       }
     }
-    
+
     // Fallback to systemAccount (old method)
-    const userStr = localStorage.getItem('systemAccount');
+    const userStr = localStorage.getItem("systemAccount");
     if (userStr && !currentUser) {
       try {
         const user = JSON.parse(userStr);
         setCurrentUser(user);
-        console.log('Current user from systemAccount:', user); // Debug log
+        console.log("Current user from systemAccount:", user); // Debug log
       } catch (e) {
-        console.error('Failed to parse systemAccount:', e);
+        console.error("Failed to parse systemAccount:", e);
       }
     }
   }, []);
-
 
   // Get online users count from socket
   useEffect(() => {
     const socket = (window as any).socket;
     if (socket) {
       // Request online users count
-      socket.emit('system:getOnlineUsers', (response: any) => {
+      socket.emit("system:getOnlineUsers", (response: any) => {
         if (response.success) {
           setOnlineUsers(response.data.count || 0);
         }
       });
 
       // Listen for online users updates
-      socket.on('system:onlineUsersUpdate', (data: any) => {
+      socket.on("system:onlineUsersUpdate", (data: any) => {
         setOnlineUsers(data.count || 0);
       });
 
       return () => {
-        socket.off('system:onlineUsersUpdate');
+        socket.off("system:onlineUsersUpdate");
       };
     }
   }, []);
@@ -195,7 +229,7 @@ export default function TransactionsPage() {
     loadTransactions,
     transactionsTotalCount,
     transactionsTotalPages,
-    
+
     // Orders
     orders,
     ordersLoading,
@@ -205,7 +239,7 @@ export default function TransactionsPage() {
     loadOrders,
     ordersTotalCount,
     ordersTotalPages,
-    
+
     // Advertisements
     advertisements,
     advertisementsLoading,
@@ -215,7 +249,7 @@ export default function TransactionsPage() {
     loadAdvertisements,
     advertisementsTotalCount,
     advertisementsTotalPages,
-    
+
     // Payouts
     payouts,
     payoutsLoading,
@@ -245,7 +279,7 @@ export default function TransactionsPage() {
     checkRealTime();
 
     // Monitor connection changes
-    socket.on('connect', () => {
+    socket.on("connect", () => {
       setIsRealTimeActive(true);
       toast({
         title: "Подключено",
@@ -253,7 +287,7 @@ export default function TransactionsPage() {
       });
     });
 
-    socket.on('disconnect', () => {
+    socket.on("disconnect", () => {
       setIsRealTimeActive(false);
       toast({
         title: "Отключено",
@@ -263,24 +297,24 @@ export default function TransactionsPage() {
     });
 
     // Monitor transaction events for visual feedback
-    socket.on('transaction:updated', () => {
+    socket.on("transaction:updated", () => {
       setLastUpdateTime(new Date());
     });
 
-    socket.on('transaction:created', () => {
+    socket.on("transaction:created", () => {
       setLastUpdateTime(new Date());
     });
 
-    socket.on('transaction:deleted', () => {
+    socket.on("transaction:deleted", () => {
       setLastUpdateTime(new Date());
     });
 
     return () => {
-      socket.off('connect');
-      socket.off('disconnect');
-      socket.off('transaction:updated');
-      socket.off('transaction:created');
-      socket.off('transaction:deleted');
+      socket.off("connect");
+      socket.off("disconnect");
+      socket.off("transaction:updated");
+      socket.off("transaction:created");
+      socket.off("transaction:deleted");
     };
   }, [socket, toast]);
 
@@ -289,7 +323,7 @@ export default function TransactionsPage() {
     const fetchUnreadCounts = async () => {
       if (!socket?.connected || transactions.length === 0) return;
 
-      const transactionsWithOrders = transactions.filter(t => t.orderId);
+      const transactionsWithOrders = transactions.filter((t) => t.orderId);
       const counts: Record<string, number> = {};
 
       // Fetch unread counts for all transactions
@@ -297,25 +331,49 @@ export default function TransactionsPage() {
         transactionsWithOrders.map(async (transaction) => {
           try {
             const response = await new Promise<any>((resolve, reject) => {
-              socket.emit('bybit:getUnreadMessagesCount', { 
-                transactionId: transaction.id 
-              }, (res: any) => {
-                if (res.error) {
-                  reject(new Error(res.error));
-                } else {
-                  resolve(res);
-                }
-              });
+              socket.emit(
+                "bybit:getUnreadMessagesCount",
+                {
+                  transactionId: transaction.id,
+                },
+                (res: any) => {
+                  if (res.error) {
+                    // Temporarily suppress errors until backend is restarted
+                    if (res.error.message?.includes("isRead")) {
+                      console.log(
+                        "Backend needs restart to fix isRead field issue",
+                      );
+                      resolve({ success: true, data: { count: 0 } });
+                      return;
+                    }
+                    reject(
+                      new Error(
+                        typeof res.error === "string"
+                          ? res.error
+                          : res.error.message || "Failed to fetch unread count",
+                      ),
+                    );
+                  } else if (!res.success) {
+                    reject(new Error("Failed to fetch unread count"));
+                  } else {
+                    resolve(res);
+                  }
+                },
+              );
             });
 
             if (response.success && response.data) {
               counts[transaction.id] = response.data.count || 0;
             }
           } catch (error) {
-            console.error('Error fetching unread count for transaction', transaction.id, error);
+            console.error(
+              "Error fetching unread count for transaction",
+              transaction.id,
+              error,
+            );
             counts[transaction.id] = 0;
           }
-        })
+        }),
       );
 
       setUnreadCounts(counts);
@@ -333,84 +391,132 @@ export default function TransactionsPage() {
   };
 
   const formatDate = (date: string | Date) => {
-    return new Date(date).toLocaleString('ru-RU', {
-      day: '2-digit',
-      month: '2-digit',
-      year: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit'
+    return new Date(date).toLocaleString("ru-RU", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
     });
   };
 
-  const formatAmount = (amount: number | null | undefined, currency: string = 'RUB') => {
+  const formatAmount = (
+    amount: number | null | undefined,
+    currency: string = "RUB",
+  ) => {
     if (amount === null || amount === undefined) {
-      return '-';
+      return "-";
     }
-    if (currency === 'USDT') {
-      return `${amount.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 4 })} USDT`;
+    if (currency === "USDT") {
+      return `${amount.toLocaleString("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 4 })} USDT`;
     }
-    return amount.toLocaleString('ru-RU', { style: 'currency', currency: 'RUB' });
+    return amount.toLocaleString("ru-RU", {
+      style: "currency",
+      currency: "RUB",
+    });
   };
 
-  const getPayoutMethodName = (method: number | string | null | undefined) => {
+  const getPayoutMethodName = (
+    method: number | string | any | null | undefined,
+  ) => {
+    // If method is an object with type and name fields
+    if (typeof method === "object" && method !== null) {
+      const type = method.type;
+      const name = method.name;
+
+      // Map based on (type, name) combination
+      if (type === 2 && name === 1) {
+        return "Карта";
+      } else if (type === 2 && name === 2) {
+        return "СБП";
+      }
+
+      // Use label if available (most descriptive)
+      if (method.label) {
+        // Clean up label by removing "OUT: " prefix
+        const label = method.label.replace(/^OUT:\s*/, "");
+
+        // Simplify common labels
+        if (label.includes("P2P Card") || label.includes("P2P Карта")) {
+          return "Карта";
+        }
+        if (
+          label.includes("Система быстрых платежей") ||
+          label.includes("СБП")
+        ) {
+          return "СБП";
+        }
+        return label;
+      }
+
+      // Try payment_method_id or id
+      const methodId = method.payment_method_id || method.id;
+      if (methodId === 4) return "Карта";
+      if (methodId === 5) return "СБП";
+    }
+
+    // Legacy mapping for simple numeric/string values
     const methodMap: Record<string, string> = {
-      '1': 'СБП',
-      '2': 'Банковская карта',
-      '3': 'Наличные',
-      '4': 'Криптовалюта',
-      '5': 'Электронный кошелек',
-      '6': 'Банковский перевод',
-      '7': 'Другое'
+      "1": "СБП",
+      "2": "Карта",
+      "3": "Наличные",
+      "4": "Карта",
+      "5": "СБП",
+      "6": "Банковский перевод",
+      "7": "Другое",
     };
-    
-    // Map for numeric values as well
+
+    // Map for numeric values
     const methodMapNumeric: Record<number, string> = {
-      1: 'СБП',
-      2: 'Банковская карта',
-      3: 'Наличные',
-      4: 'Криптовалюта',
-      5: 'Электронный кошелек',
-      6: 'Банковский перевод',
-      7: 'Другое'
+      1: "СБП",
+      2: "Карта",
+      3: "Наличные",
+      4: "Карта",
+      5: "СБП",
+      6: "Банковский перевод",
+      7: "Другое",
     };
-    
-    if (!method && method !== 0) return '-';
-    
+
+    if (!method && method !== 0) return "-";
+
     // Check if it's a number
-    if (typeof method === 'number') {
+    if (typeof method === "number") {
       return methodMapNumeric[method] || `Метод ${method}`;
     }
-    
+
     // Otherwise convert to string
     const methodStr = method.toString();
     return methodMap[methodStr] || `Метод ${methodStr}`;
   };
 
   const formatWallet = (wallet: string | null | undefined) => {
-    if (!wallet) return '-';
-    
+    if (!wallet) return "-";
+
     // Remove all non-digit characters for checking
-    const digitsOnly = wallet.replace(/\D/g, '');
-    
+    const digitsOnly = wallet.replace(/\D/g, "");
+
     // Check if it's a card number (16 digits)
     if (digitsOnly.length === 16) {
       // Format as card: XXXX XXXX XXXX XXXX
-      return digitsOnly.replace(/(\d{4})/g, '$1 ').trim();
+      return digitsOnly.replace(/(\d{4})/g, "$1 ").trim();
     }
-    
+
     // Check if it's a Russian phone number (11 digits starting with 7 or 8)
-    if (digitsOnly.length === 11 && (digitsOnly.startsWith('7') || digitsOnly.startsWith('8'))) {
+    if (
+      digitsOnly.length === 11 &&
+      (digitsOnly.startsWith("7") || digitsOnly.startsWith("8"))
+    ) {
       // Format as phone: +7 (XXX) XXX-XX-XX
-      const phone = digitsOnly.replace(/^[78]/, '7');
+      const phone = digitsOnly.replace(/^[78]/, "7");
       return `+${phone.slice(0, 1)} (${phone.slice(1, 4)}) ${phone.slice(4, 7)}-${phone.slice(7, 9)}-${phone.slice(9, 11)}`;
     }
-    
+
     // Check if it's a phone without country code (10 digits)
     if (digitsOnly.length === 10) {
       // Format as phone: +7 (XXX) XXX-XX-XX
       return `+7 (${digitsOnly.slice(0, 3)}) ${digitsOnly.slice(3, 6)}-${digitsOnly.slice(6, 8)}-${digitsOnly.slice(8, 10)}`;
     }
-    
+
     // Return as is for other formats
     return wallet;
   };
@@ -419,9 +525,9 @@ export default function TransactionsPage() {
     const now = new Date();
     const diff = now.getTime() - date.getTime();
     const seconds = Math.floor(diff / 1000);
-    
+
     if (seconds < 60) {
-      return 'только что';
+      return "только что";
     } else if (seconds < 3600) {
       const minutes = Math.floor(seconds / 60);
       return `${minutes} мин. назад`;
@@ -446,13 +552,17 @@ export default function TransactionsPage() {
       }
 
       const result = await new Promise((resolve, reject) => {
-        socket.emit('transactions:recreateAdvertisement', { transactionId }, (response: any) => {
-          if (response.error) {
-            reject(new Error(response.error));
-          } else {
-            resolve(response.data);
-          }
-        });
+        socket.emit(
+          "transactions:recreateAdvertisement",
+          { transactionId },
+          (response: any) => {
+            if (response.error) {
+              reject(new Error(response.error));
+            } else {
+              resolve(response.data);
+            }
+          },
+        );
       });
 
       toast({
@@ -483,26 +593,37 @@ export default function TransactionsPage() {
       }
 
       // Подтверждение действия
-      if (!confirm("Вы уверены, что хотите перевыпустить объявление? Это удалит объявление на Bybit, в базе данных и саму транзакцию.")) {
+      if (
+        !confirm(
+          "Вы уверены, что хотите перевыпустить объявление? Это удалит объявление на Bybit, в базе данных и саму транзакцию.",
+        )
+      ) {
         return;
       }
 
       const result = await new Promise((resolve, reject) => {
-        socket.emit('transactions:reissueAdvertisement', { transactionId }, (response: any) => {
-          console.log('Reissue response:', response);
-          if (!response) {
-            reject(new Error('No response from server'));
-          } else if (response.success === false) {
-            // Handle error response format from server
-            const errorMessage = response.error?.message || response.error || 'Failed to reissue advertisement';
-            reject(new Error(errorMessage));
-          } else if (response.success === true) {
-            resolve(response.data);
-          } else {
-            // Fallback for unexpected response format
-            reject(new Error('Unexpected response format'));
-          }
-        });
+        socket.emit(
+          "transactions:reissueAdvertisement",
+          { transactionId },
+          (response: any) => {
+            console.log("Reissue response:", response);
+            if (!response) {
+              reject(new Error("No response from server"));
+            } else if (response.success === false) {
+              // Handle error response format from server
+              const errorMessage =
+                response.error?.message ||
+                response.error ||
+                "Failed to reissue advertisement";
+              reject(new Error(errorMessage));
+            } else if (response.success === true) {
+              resolve(response.data);
+            } else {
+              // Fallback for unexpected response format
+              reject(new Error("Unexpected response format"));
+            }
+          },
+        );
       });
 
       toast({
@@ -513,11 +634,13 @@ export default function TransactionsPage() {
       // Обновляем список транзакций
       loadTransactions();
     } catch (error: any) {
-      console.error('Reissue error:', error);
-      const errorMessage = typeof error === 'string' ? error : 
-                          error?.message || 
-                          error?.toString() || 
-                          "Не удалось перевыпустить объявление";
+      console.error("Reissue error:", error);
+      const errorMessage =
+        typeof error === "string"
+          ? error
+          : error?.message ||
+            error?.toString() ||
+            "Не удалось перевыпустить объявление";
       toast({
         title: "Ошибка",
         description: errorMessage,
@@ -526,23 +649,9 @@ export default function TransactionsPage() {
     }
   };
 
-  const handleCreateAd = () => {
-    setSelectedAd(null);
-    setShowAdDialog(true);
-  };
-
-  const handleEditAd = (ad: any) => {
-    setSelectedAd(ad);
-    setShowAdDialog(true);
-  };
-
-  const handleDeleteAd = async (ad: any) => {
-    if (!confirm('Вы уверены, что хотите удалить это объявление?')) {
-      return;
-    }
-
+  const handleReleaseMoney = async (transactionId: string) => {
     try {
-      if (!socket) {
+      if (!socket?.connected) {
         toast({
           title: "Ошибка",
           description: "Нет подключения к серверу",
@@ -551,27 +660,56 @@ export default function TransactionsPage() {
         return;
       }
 
+      // Подтверждение действия
+      if (
+        !confirm(
+          "Вы уверены, что хотите отпустить монеты? Это действие нельзя отменить.",
+        )
+      ) {
+        return;
+      }
+
       const result = await new Promise((resolve, reject) => {
-        socket.emit('advertisements:delete', { id: ad.id }, (response: any) => {
-          if (response.error) {
-            reject(new Error(response.error));
-          } else {
-            resolve(response.data);
-          }
-        });
+        socket.emit(
+          "transactions:releaseMoney",
+          { transactionId },
+          (response: any) => {
+            console.log("Release money response:", response);
+            if (!response) {
+              reject(new Error("No response from server"));
+            } else if (response.success === false) {
+              const errorMessage =
+                response.error?.message ||
+                response.error ||
+                "Failed to release money";
+              reject(new Error(errorMessage));
+            } else if (response.success === true) {
+              resolve(response.data);
+            } else {
+              reject(new Error("Unexpected response format"));
+            }
+          },
+        );
       });
 
       toast({
         title: "Успешно",
-        description: "Объявление удалено",
+        description: "Монеты были отпущены",
       });
 
-      // Обновляем список объявлений
-      loadAdvertisements();
+      // Обновляем список транзакций
+      loadTransactions();
     } catch (error: any) {
+      console.error("Release money error:", error);
+      const errorMessage =
+        typeof error === "string"
+          ? error
+          : error?.message ||
+            error?.toString() ||
+            "Не удалось отпустить монеты";
       toast({
         title: "Ошибка",
-        description: error.message || "Не удалось удалить объявление",
+        description: errorMessage,
         variant: "destructive",
       });
     }
@@ -579,183 +717,195 @@ export default function TransactionsPage() {
 
   // Transaction statuses in Russian
   const transactionStatuses = [
-    { value: 'pending', label: 'Ожидание' },
-    { value: 'chat_started', label: 'Чат начат' },
-    { value: 'waiting_payment', label: 'Ожидание оплаты' },
-    { value: 'payment_received', label: 'Оплата получена' },
-    { value: 'check_received', label: 'Чек получен' },
-    { value: 'receipt_received', label: 'Квитанция получена' },
-    { value: 'release_money', label: 'Отправка средств' },
-    { value: 'completed', label: 'Завершено' },
-    { value: 'failed', label: 'Ошибка' },
-    { value: 'cancelled', label: 'Отменено' },
-    { value: 'cancelled_by_counterparty', label: 'Отменено контрагентом' },
-    { value: 'stupid', label: 'Контрагент идиот' },
+    { value: "pending", label: "Ожидание" },
+    { value: "chat_started", label: "Чат начат" },
+    { value: "waiting_payment", label: "Ожидание оплаты" },
+    { value: "payment_received", label: "Оплата получена" },
+    { value: "check_received", label: "Чек получен" },
+    { value: "receipt_received", label: "Квитанция получена" },
+    { value: "release_money", label: "Отправка средств" },
+    { value: "completed", label: "Завершено" },
+    { value: "failed", label: "Ошибка" },
+    { value: "cancelled", label: "Отменено" },
+    { value: "cancelled_by_counterparty", label: "Отменено контрагентом" },
+    { value: "stupid", label: "Контрагент идиот" },
   ];
 
   // Status configuration with vibrant colors
-  const statusConfig: Record<string, { icon: any; text: string; className: string; bgColor: string; textColor: string }> = {
+  const statusConfig: Record<
+    string,
+    {
+      icon: any;
+      text: string;
+      className: string;
+      bgColor: string;
+      textColor: string;
+    }
+  > = {
     // Transaction statuses
-    'pending': { 
+    pending: {
       icon: Clock,
-      text: 'Ожидание',
-      className: 'bg-yellow-100 text-yellow-800 border-yellow-300',
-      bgColor: 'bg-yellow-500',
-      textColor: 'text-yellow-50'
+      text: "Ожидание",
+      className: "bg-yellow-100 text-yellow-800 border-yellow-300",
+      bgColor: "bg-yellow-500",
+      textColor: "text-yellow-50",
     },
-    'chat_started': { 
+    chat_started: {
       icon: MessageSquare,
-      text: 'Чат',
-      className: 'bg-blue-100 text-blue-800 border-blue-300',
-      bgColor: 'bg-blue-500',
-      textColor: 'text-blue-50'
+      text: "Чат",
+      className: "bg-blue-100 text-blue-800 border-blue-300",
+      bgColor: "bg-blue-500",
+      textColor: "text-blue-50",
     },
-    'waiting_payment': { 
+    waiting_payment: {
       icon: Clock,
-      text: 'Ожидание оплаты',
-      className: 'bg-orange-100 text-orange-800 border-orange-300',
-      bgColor: 'bg-orange-500',
-      textColor: 'text-orange-50'
+      text: "Ожидание оплаты",
+      className: "bg-orange-100 text-orange-800 border-orange-300",
+      bgColor: "bg-orange-500",
+      textColor: "text-orange-50",
     },
-    'payment_received': { 
+    payment_received: {
       icon: DollarSign,
-      text: 'Оплачено',
-      className: 'bg-purple-100 text-purple-800 border-purple-300',
-      bgColor: 'bg-purple-500',
-      textColor: 'text-purple-50'
+      text: "Оплачено",
+      className: "bg-purple-100 text-purple-800 border-purple-300",
+      bgColor: "bg-purple-500",
+      textColor: "text-purple-50",
     },
-    'completed': { 
+    completed: {
       icon: CheckCircle,
-      text: 'Завершено',
-      className: 'bg-green-100 text-green-800 border-green-300',
-      bgColor: 'bg-green-500',
-      textColor: 'text-green-50'
+      text: "Завершено",
+      className: "bg-green-100 text-green-800 border-green-300",
+      bgColor: "bg-green-500",
+      textColor: "text-green-50",
     },
-    'failed': { 
+    failed: {
       icon: XCircle,
-      text: 'Ошибка',
-      className: 'bg-red-100 text-red-800 border-red-300',
-      bgColor: 'bg-red-500',
-      textColor: 'text-red-50'
+      text: "Ошибка",
+      className: "bg-red-100 text-red-800 border-red-300",
+      bgColor: "bg-red-500",
+      textColor: "text-red-50",
     },
-    'cancelled': { 
+    cancelled: {
       icon: XCircle,
-      text: 'Отменено',
-      className: 'bg-gray-100 text-gray-800 border-gray-300',
-      bgColor: 'bg-gray-500',
-      textColor: 'text-gray-50'
+      text: "Отменено",
+      className: "bg-gray-100 text-gray-800 border-gray-300",
+      bgColor: "bg-gray-500",
+      textColor: "text-gray-50",
     },
-    'cancelled_by_counterparty': { 
+    cancelled_by_counterparty: {
       icon: AlertCircle,
-      text: 'Отменено контрагентом',
-      className: 'bg-orange-100 text-orange-800 border-orange-300',
-      bgColor: 'bg-orange-600',
-      textColor: 'text-orange-50'
+      text: "Отменено контрагентом",
+      className: "bg-orange-100 text-orange-800 border-orange-300",
+      bgColor: "bg-orange-600",
+      textColor: "text-orange-50",
     },
-    'check_received': { 
+    check_received: {
       icon: CheckCircle,
-      text: 'Чек получен',
-      className: 'bg-green-100 text-green-800 border-green-300',
-      bgColor: 'bg-teal-500',
-      textColor: 'text-teal-50'
+      text: "Чек получен",
+      className: "bg-green-100 text-green-800 border-green-300",
+      bgColor: "bg-teal-500",
+      textColor: "text-teal-50",
     },
-    'receipt_received': { 
+    receipt_received: {
       icon: FileText,
-      text: 'Квитанция получена',
-      className: 'bg-indigo-100 text-indigo-800 border-indigo-300',
-      bgColor: 'bg-indigo-500',
-      textColor: 'text-indigo-50'
+      text: "Квитанция получена",
+      className: "bg-indigo-100 text-indigo-800 border-indigo-300",
+      bgColor: "bg-indigo-500",
+      textColor: "text-indigo-50",
     },
-    'stupid': { 
+    stupid: {
       icon: XCircle,
-      text: 'Контрагент идиот',
-      className: 'bg-red-100 text-red-800 border-red-300',
-      bgColor: 'bg-red-600',
-      textColor: 'text-red-50'
+      text: "Контрагент идиот",
+      className: "bg-red-100 text-red-800 border-red-300",
+      bgColor: "bg-red-600",
+      textColor: "text-red-50",
     },
-    'release_money': { 
+    release_money: {
       icon: Send,
-      text: 'Отправка средств',
-      className: 'bg-blue-100 text-blue-800 border-blue-300',
-      bgColor: 'bg-cyan-500',
-      textColor: 'text-cyan-50'
+      text: "Отправка средств",
+      className: "bg-blue-100 text-blue-800 border-blue-300",
+      bgColor: "bg-cyan-500",
+      textColor: "text-cyan-50",
     },
     // Order statuses
-    'open': { 
+    open: {
       icon: ShoppingCart,
-      text: 'Открыт',
-      className: 'bg-green-500/10 text-green-500 border-green-500/20',
-      bgColor: 'bg-emerald-500',
-      textColor: 'text-emerald-50'
+      text: "Открыт",
+      className: "bg-green-500/10 text-green-500 border-green-500/20",
+      bgColor: "bg-emerald-500",
+      textColor: "text-emerald-50",
     },
-    'in_progress': { 
+    in_progress: {
       icon: Clock,
-      text: 'В процессе',
-      className: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
-      bgColor: 'bg-blue-500',
-      textColor: 'text-blue-50'
+      text: "В процессе",
+      className: "bg-blue-500/10 text-blue-500 border-blue-500/20",
+      bgColor: "bg-blue-500",
+      textColor: "text-blue-50",
     },
-    'closed': { 
+    closed: {
       icon: CheckCircle,
-      text: 'Закрыт',
-      className: 'bg-gray-500/10 text-gray-500 border-gray-500/20',
-      bgColor: 'bg-gray-500',
-      textColor: 'text-gray-50'
+      text: "Закрыт",
+      className: "bg-gray-500/10 text-gray-500 border-gray-500/20",
+      bgColor: "bg-gray-500",
+      textColor: "text-gray-50",
     },
     // Payout statuses (numeric)
-    '1': { 
+    "1": {
       icon: Clock,
-      text: 'Создано',
-      className: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20',
-      bgColor: 'bg-yellow-500',
-      textColor: 'text-yellow-50'
+      text: "Создано",
+      className: "bg-yellow-500/10 text-yellow-500 border-yellow-500/20",
+      bgColor: "bg-yellow-500",
+      textColor: "text-yellow-50",
     },
-    '2': { 
+    "2": {
       icon: Clock,
-      text: 'Обработка',
-      className: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
-      bgColor: 'bg-blue-500',
-      textColor: 'text-blue-50'
+      text: "Обработка",
+      className: "bg-blue-500/10 text-blue-500 border-blue-500/20",
+      bgColor: "bg-blue-500",
+      textColor: "text-blue-50",
     },
-    '3': { 
+    "3": {
       icon: CheckCircle,
-      text: 'Подтверждено',
-      className: 'bg-purple-500/10 text-purple-500 border-purple-500/20',
-      bgColor: 'bg-purple-500',
-      textColor: 'text-purple-50'
+      text: "Подтверждено",
+      className: "bg-purple-500/10 text-purple-500 border-purple-500/20",
+      bgColor: "bg-purple-500",
+      textColor: "text-purple-50",
     },
-    '4': { 
+    "4": {
       icon: Activity,
-      text: 'Взято в работу',
-      className: 'bg-orange-500/10 text-orange-500 border-orange-500/20',
-      bgColor: 'bg-orange-500',
-      textColor: 'text-orange-50'
+      text: "Взято в работу",
+      className: "bg-orange-500/10 text-orange-500 border-orange-500/20",
+      bgColor: "bg-orange-500",
+      textColor: "text-orange-50",
     },
-    '5': { 
+    "5": {
       icon: Activity,
-      text: 'В процессе',
-      className: 'bg-indigo-500/10 text-indigo-500 border-indigo-500/20',
-      bgColor: 'bg-indigo-500',
-      textColor: 'text-indigo-50'
+      text: "В процессе",
+      className: "bg-indigo-500/10 text-indigo-500 border-indigo-500/20",
+      bgColor: "bg-indigo-500",
+      textColor: "text-indigo-50",
     },
-    '6': { 
+    "6": {
       icon: XCircle,
-      text: 'Отменено',
-      className: 'bg-gray-500/10 text-gray-500 border-gray-500/20',
-      bgColor: 'bg-gray-500',
-      textColor: 'text-gray-50'
+      text: "Отменено",
+      className: "bg-gray-500/10 text-gray-500 border-gray-500/20",
+      bgColor: "bg-gray-500",
+      textColor: "text-gray-50",
     },
-    '7': { 
+    "7": {
       icon: CheckCircle,
-      text: 'Выполнено',
-      className: 'bg-green-500/10 text-green-500 border-green-500/20',
-      bgColor: 'bg-green-500',
-      textColor: 'text-green-50'
-    }
+      text: "Выполнено",
+      className: "bg-green-500/10 text-green-500 border-green-500/20",
+      bgColor: "bg-green-500",
+      textColor: "text-green-50",
+    },
   };
 
-  const handleStatusChange = async (transactionId: string, newStatus: string) => {
-    if (!currentUser || currentUser.role !== 'admin') {
+  const handleStatusChange = async (
+    transactionId: string,
+    newStatus: string,
+  ) => {
+    if (!currentUser || currentUser.role !== "admin") {
       toast({
         title: "Ошибка",
         description: "Только администраторы могут изменять статус",
@@ -765,7 +915,9 @@ export default function TransactionsPage() {
     }
 
     // Add to updating set
-    setUpdatingStatuses(prev => new Set(Array.from(prev).concat([transactionId])));
+    setUpdatingStatuses(
+      (prev) => new Set(Array.from(prev).concat([transactionId])),
+    );
 
     try {
       const socket = (window as any).socket;
@@ -774,16 +926,20 @@ export default function TransactionsPage() {
       }
 
       await new Promise((resolve, reject) => {
-        socket.emit('transactions:updateStatus', {
-          id: transactionId,
-          status: newStatus
-        }, (response: any) => {
-          if (response.error) {
-            reject(new Error(response.error));
-          } else {
-            resolve(response.data);
-          }
-        });
+        socket.emit(
+          "transactions:updateStatus",
+          {
+            id: transactionId,
+            status: newStatus,
+          },
+          (response: any) => {
+            if (response.error) {
+              reject(new Error(response.error));
+            } else {
+              resolve(response.data);
+            }
+          },
+        );
       });
 
       toast({
@@ -801,7 +957,7 @@ export default function TransactionsPage() {
       });
     } finally {
       // Remove from updating set
-      setUpdatingStatuses(prev => {
+      setUpdatingStatuses((prev) => {
         const newSet = new Set(prev);
         newSet.delete(transactionId);
         return newSet;
@@ -809,23 +965,28 @@ export default function TransactionsPage() {
     }
   };
 
-  const getStatusBadge = (status: string, type: 'transaction' | 'order' | 'payout' = 'transaction', useColoredBg: boolean = true) => {
-
+  const getStatusBadge = (
+    status: string,
+    type: "transaction" | "order" | "payout" = "transaction",
+    useColoredBg: boolean = true,
+  ) => {
     const config = statusConfig[status.toString()] || {
       icon: Clock,
       text: status,
-      className: 'bg-muted',
-      bgColor: 'bg-gray-500',
-      textColor: 'text-gray-50'
+      className: "bg-muted",
+      bgColor: "bg-gray-500",
+      textColor: "text-gray-50",
     };
     const Icon = config.icon;
 
     return (
-      <Badge 
+      <Badge
         variant={useColoredBg ? "default" : "outline"}
         className={cn(
           "text-xs whitespace-nowrap inline-flex items-center gap-1 px-2 py-0.5 font-medium border-0",
-          useColoredBg ? `${config.bgColor} ${config.textColor}` : config.className
+          useColoredBg
+            ? `${config.bgColor} ${config.textColor}`
+            : config.className,
         )}
       >
         <Icon size={12} className="flex-shrink-0" />
@@ -835,31 +996,42 @@ export default function TransactionsPage() {
   };
 
   // Convert statuses to MultiSelect options with icons
-  const statusOptions: MultiSelectOption[] = transactionStatuses.map(status => ({
-    value: status.value,
-    label: status.label,
-    icon: statusConfig[status.value]?.icon
-  }));
-
+  const statusOptions: MultiSelectOption[] = transactionStatuses.map(
+    (status) => ({
+      value: status.value,
+      label: status.label,
+      icon: statusConfig[status.value]?.icon,
+    }),
+  );
 
   // Calculate statistics
   const stats = {
     // Объем за сегодня - только успешно завершенные транзакции
-    totalVolume: transactions.filter(t => 
-      new Date(t.createdAt).toDateString() === new Date().toDateString() && 
-      t.status === 'completed'
-    ).reduce((sum, t) => sum + t.amount, 0),
+    totalVolume: transactions
+      .filter(
+        (t) =>
+          new Date(t.createdAt).toDateString() === new Date().toDateString() &&
+          t.status === "completed",
+      )
+      .reduce((sum, t) => sum + t.amount, 0),
     // Активные ордера - не завершены, не отменены и не ошибка
-    activeOrders: transactions.filter(t => 
-      !['completed', 'failed', 'cancelled', 'cancelled_by_counterparty'].includes(t.status)
+    activeOrders: transactions.filter(
+      (t) =>
+        ![
+          "completed",
+          "failed",
+          "cancelled",
+          "cancelled_by_counterparty",
+        ].includes(t.status),
     ).length,
     // Завершено сегодня
-    completedToday: transactions.filter(t => 
-      new Date(t.createdAt).toDateString() === new Date().toDateString() && 
-      t.status === 'completed'
+    completedToday: transactions.filter(
+      (t) =>
+        new Date(t.createdAt).toDateString() === new Date().toDateString() &&
+        t.status === "completed",
     ).length,
     // Ожидают выплаты - статусы 1, 2, 3
-    pendingPayouts: payouts.filter(p => [1, 2, 3].includes(p.status)).length
+    pendingPayouts: payouts.filter((p) => [1, 2, 3].includes(p.status)).length,
   };
 
   // Virtual Transactions Tab with compact table
@@ -899,27 +1071,34 @@ export default function TransactionsPage() {
       <Card className="p-3">
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex-1 min-w-[200px] relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" size={16} />
+            <Search
+              className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground"
+              size={16}
+            />
             <Input
               placeholder="Поиск..."
-              value={transactionsFilters.search || ''}
-              onChange={(e) => updateTransactionsFilters({ search: e.target.value })}
+              value={transactionsFilters.search || ""}
+              onChange={(e) =>
+                updateTransactionsFilters({ search: e.target.value })
+              }
               className="pl-9 h-8 text-sm"
             />
           </div>
-          
+
           <MultiSelect
             options={statusOptions}
             selected={transactionsFilters.statuses || []}
-            onChange={(values) => updateTransactionsFilters({ 
-              statuses: values.length > 0 ? values : undefined,
-              status: undefined // Clear single status when using multi-select
-            })}
+            onChange={(values) =>
+              updateTransactionsFilters({
+                statuses: values.length > 0 ? values : undefined,
+                status: undefined, // Clear single status when using multi-select
+              })
+            }
             placeholder="Все статусы"
             className="w-[180px]"
           />
 
-          <Button 
+          <Button
             variant="outline"
             size="sm"
             onClick={() => setShowFilters(!showFilters)}
@@ -929,8 +1108,16 @@ export default function TransactionsPage() {
             Фильтры
           </Button>
 
-          <Button variant="outline" size="sm" onClick={loadTransactions} className="h-8">
-            <RefreshCw size={14} className={cn("mr-1", transactionsLoading && "animate-spin")} />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={loadTransactions}
+            className="h-8"
+          >
+            <RefreshCw
+              size={14}
+              className={cn("mr-1", transactionsLoading && "animate-spin")}
+            />
             Обновить
           </Button>
         </div>
@@ -939,7 +1126,7 @@ export default function TransactionsPage() {
         {showFilters && (
           <motion.div
             initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
+            animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             className="mt-3 pt-3 border-t"
           >
@@ -947,20 +1134,32 @@ export default function TransactionsPage() {
               <Input
                 type="date"
                 placeholder="Дата от"
-                value={transactionsFilters.dateFrom || ''}
-                onChange={(e) => updateTransactionsFilters({ dateFrom: e.target.value || undefined })}
+                value={transactionsFilters.dateFrom || ""}
+                onChange={(e) =>
+                  updateTransactionsFilters({
+                    dateFrom: e.target.value || undefined,
+                  })
+                }
                 className="h-8 text-sm"
               />
               <Input
                 type="date"
                 placeholder="Дата до"
-                value={transactionsFilters.dateTo || ''}
-                onChange={(e) => updateTransactionsFilters({ dateTo: e.target.value || undefined })}
+                value={transactionsFilters.dateTo || ""}
+                onChange={(e) =>
+                  updateTransactionsFilters({
+                    dateTo: e.target.value || undefined,
+                  })
+                }
                 className="h-8 text-sm"
               />
               <Select
-                value={transactionsFilters.type || 'all'}
-                onValueChange={(value) => updateTransactionsFilters({ type: value === 'all' ? undefined : value })}
+                value={transactionsFilters.type || "all"}
+                onValueChange={(value) =>
+                  updateTransactionsFilters({
+                    type: value === "all" ? undefined : value,
+                  })
+                }
               >
                 <SelectTrigger className="h-8 text-sm">
                   <SelectValue placeholder="Тип операции" />
@@ -974,26 +1173,46 @@ export default function TransactionsPage() {
               <Input
                 type="number"
                 placeholder="Сумма от"
-                value={transactionsFilters.amountFrom || ''}
-                onChange={(e) => updateTransactionsFilters({ amountFrom: e.target.value ? Number(e.target.value) : undefined })}
+                value={transactionsFilters.amountFrom || ""}
+                onChange={(e) =>
+                  updateTransactionsFilters({
+                    amountFrom: e.target.value
+                      ? Number(e.target.value)
+                      : undefined,
+                  })
+                }
                 className="h-8 text-sm"
               />
               <Input
                 type="number"
                 placeholder="Сумма до"
-                value={transactionsFilters.amountTo || ''}
-                onChange={(e) => updateTransactionsFilters({ amountTo: e.target.value ? Number(e.target.value) : undefined })}
+                value={transactionsFilters.amountTo || ""}
+                onChange={(e) =>
+                  updateTransactionsFilters({
+                    amountTo: e.target.value
+                      ? Number(e.target.value)
+                      : undefined,
+                  })
+                }
                 className="h-8 text-sm"
               />
               <Input
                 placeholder="ID ордера"
-                value={transactionsFilters.orderId || ''}
-                onChange={(e) => updateTransactionsFilters({ orderId: e.target.value || undefined })}
+                value={transactionsFilters.orderId || ""}
+                onChange={(e) =>
+                  updateTransactionsFilters({
+                    orderId: e.target.value || undefined,
+                  })
+                }
                 className="h-8 text-sm"
               />
               <Select
-                value={transactionsFilters.bybitAccount || 'all'}
-                onValueChange={(value) => updateTransactionsFilters({ bybitAccount: value === 'all' ? undefined : value })}
+                value={transactionsFilters.bybitAccount || "all"}
+                onValueChange={(value) =>
+                  updateTransactionsFilters({
+                    bybitAccount: value === "all" ? undefined : value,
+                  })
+                }
               >
                 <SelectTrigger className="h-8 text-sm">
                   <SelectValue placeholder="Bybit аккаунт" />
@@ -1008,8 +1227,12 @@ export default function TransactionsPage() {
                 </SelectContent>
               </Select>
               <Select
-                value={transactionsFilters.gateAccount || 'all'}
-                onValueChange={(value) => updateTransactionsFilters({ gateAccount: value === 'all' ? undefined : value })}
+                value={transactionsFilters.gateAccount || "all"}
+                onValueChange={(value) =>
+                  updateTransactionsFilters({
+                    gateAccount: value === "all" ? undefined : value,
+                  })
+                }
               >
                 <SelectTrigger className="h-8 text-sm">
                   <SelectValue placeholder="Gate аккаунт" />
@@ -1058,21 +1281,30 @@ export default function TransactionsPage() {
                 <tr>
                   <td colSpan={10} className="text-center py-8">
                     <CreditCard className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
-                    <p className="text-sm text-muted-foreground">Нет транзакций</p>
+                    <p className="text-sm text-muted-foreground">
+                      Нет транзакций
+                    </p>
                   </td>
                 </tr>
               ) : (
                 transactions.map((transaction) => (
-                  <tr key={transaction.id} className="hover:bg-muted/50 transition-colors">
+                  <tr
+                    key={transaction.id}
+                    className="hover:bg-muted/50 transition-colors"
+                  >
                     <td className="px-3 py-2">
                       <div className="space-y-0.5">
                         <div className="flex items-center gap-1">
-                          <span className="font-mono text-xs">{transaction.id.slice(0, 6)}</span>
+                          <span className="font-mono text-xs">
+                            {transaction.id.slice(0, 6)}
+                          </span>
                           <Button
                             variant="ghost"
                             size="sm"
                             className="h-4 w-4 p-0"
-                            onClick={() => copyToClipboard(transaction.id, 'ID')}
+                            onClick={() =>
+                              copyToClipboard(transaction.id, "ID")
+                            }
                           >
                             <Copy size={10} />
                           </Button>
@@ -1091,13 +1323,18 @@ export default function TransactionsPage() {
                     </td>
                     <td className="px-3 py-2">
                       {transaction.advertisement && (
-                        <Badge variant="outline" className={cn(
-                          "text-xs",
-                          transaction.advertisement.type === 'buy' 
-                            ? 'bg-green-500/10 text-green-500 border-green-500/20' 
-                            : 'bg-red-500/10 text-red-500 border-red-500/20'
-                        )}>
-                          {transaction.advertisement.type === 'buy' ? 'ПОКУПКА' : 'ПРОДАЖА'}
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            "text-xs",
+                            transaction.advertisement.type === "buy"
+                              ? "bg-green-500/10 text-green-500 border-green-500/20"
+                              : "bg-red-500/10 text-red-500 border-red-500/20",
+                          )}
+                        >
+                          {transaction.advertisement.type === "buy"
+                            ? "ПОКУПКА"
+                            : "ПРОДАЖА"}
                         </Badge>
                       )}
                     </td>
@@ -1112,21 +1349,34 @@ export default function TransactionsPage() {
                       )}
                     </td>
                     <td className="px-3 py-2">
-                      {currentUser?.role === 'admin' ? (
+                      {currentUser?.role === "admin" ? (
                         <Select
                           value={transaction.status}
-                          onValueChange={(value) => handleStatusChange(transaction.id, value)}
+                          onValueChange={(value) =>
+                            handleStatusChange(transaction.id, value)
+                          }
                           disabled={updatingStatuses.has(transaction.id)}
                         >
-                          <SelectTrigger className={cn("h-7 w-[160px] text-xs border-0", updatingStatuses.has(transaction.id) && "opacity-50")}>
+                          <SelectTrigger
+                            className={cn(
+                              "h-7 w-[160px] text-xs border-0",
+                              updatingStatuses.has(transaction.id) &&
+                                "opacity-50",
+                            )}
+                          >
                             <SelectValue>
                               {updatingStatuses.has(transaction.id) ? (
                                 <div className="flex items-center gap-1">
-                                  <RefreshCw size={10} className="animate-spin" />
+                                  <RefreshCw
+                                    size={10}
+                                    className="animate-spin"
+                                  />
                                   <span>Обновление...</span>
                                 </div>
                               ) : (
-                                <div className="w-full">{getStatusBadge(transaction.status)}</div>
+                                <div className="w-full">
+                                  {getStatusBadge(transaction.status)}
+                                </div>
                               )}
                             </SelectValue>
                           </SelectTrigger>
@@ -1135,13 +1385,18 @@ export default function TransactionsPage() {
                               const statusInfo = statusConfig[status.value];
                               const Icon = statusInfo?.icon || Clock;
                               return (
-                                <SelectItem key={status.value} value={status.value}>
+                                <SelectItem
+                                  key={status.value}
+                                  value={status.value}
+                                >
                                   <div className="flex items-center gap-2">
-                                    <Badge 
+                                    <Badge
                                       variant="default"
                                       className={cn(
                                         "text-xs inline-flex items-center gap-1 px-2 py-0.5 font-medium border-0",
-                                        statusInfo ? `${statusInfo.bgColor} ${statusInfo.textColor}` : 'bg-gray-500 text-gray-50'
+                                        statusInfo
+                                          ? `${statusInfo.bgColor} ${statusInfo.textColor}`
+                                          : "bg-gray-500 text-gray-50",
                                       )}
                                     >
                                       <Icon size={12} />
@@ -1164,36 +1419,52 @@ export default function TransactionsPage() {
                             {transaction.advertisement.bybitAccount.accountId}
                           </Badge>
                           <div className="text-xs text-muted-foreground">
-                            {transaction.advertisement.bybitAccount.accountName || transaction.advertisement.bybitAccount.name || 'Без имени'}
+                            {transaction.advertisement.bybitAccount
+                              .accountName ||
+                              transaction.advertisement.bybitAccount.name ||
+                              "Без имени"}
                           </div>
                         </div>
-                      ) : '-'}
+                      ) : (
+                        "-"
+                      )}
                     </td>
                     <td className="px-3 py-2">
                       {transaction.payout?.gateAccount ? (
                         <Badge variant="outline" className="text-xs">
                           {transaction.payout.gateAccount}
                         </Badge>
-                      ) : '-'}
+                      ) : (
+                        "-"
+                      )}
                     </td>
                     <td className="px-3 py-2">
                       {transaction.payout ? (
                         <div className="flex items-center gap-1">
-                          <span className="text-xs font-mono">{transaction.payout.gatePayoutId}</span>
+                          <span className="text-xs font-mono">
+                            {transaction.payout.gatePayoutId}
+                          </span>
                           <Button
                             variant="ghost"
                             size="sm"
                             className="h-4 w-4 p-0"
-                            onClick={() => copyToClipboard(transaction.payout!.gatePayoutId!.toString(), 'Payout ID')}
+                            onClick={() =>
+                              copyToClipboard(
+                                transaction.payout!.gatePayoutId!.toString(),
+                                "Payout ID",
+                              )
+                            }
                           >
                             <Copy size={10} />
                           </Button>
                         </div>
-                      ) : '-'}
+                      ) : (
+                        "-"
+                      )}
                     </td>
                     <td className="px-3 py-2">
                       {transaction.payout?.id ? (
-                        <ReceiptPopover 
+                        <ReceiptPopover
                           payoutId={transaction.payout.id}
                           transactionId={transaction.id}
                         />
@@ -1215,14 +1486,16 @@ export default function TransactionsPage() {
                               variant="ghost"
                               size="sm"
                               className="h-6 w-6 p-0"
-                              onClick={() => setSelectedChatTransaction(transaction)}
+                              onClick={() =>
+                                setSelectedChatTransaction(transaction)
+                              }
                               title="Открыть чат"
                             >
                               <MessageSquare size={12} />
                             </Button>
                             {unreadCounts[transaction.id] > 0 && (
-                              <Badge 
-                                variant="destructive" 
+                              <Badge
+                                variant="destructive"
                                 className="absolute -top-2 -right-2 h-4 min-w-[16px] px-1 text-[10px] font-bold"
                               >
                                 {unreadCounts[transaction.id]}
@@ -1230,12 +1503,15 @@ export default function TransactionsPage() {
                             )}
                           </div>
                         )}
-                        {(currentUser?.role === 'admin' || currentUser?.role === 'operator') && (
+                        {(currentUser?.role === "admin" ||
+                          currentUser?.role === "operator") && (
                           <Button
                             variant="ghost"
                             size="sm"
                             className="h-6 w-6 p-0 text-orange-600"
-                            onClick={() => handleReissueAdvertisement(transaction.id)}
+                            onClick={() =>
+                              handleReissueAdvertisement(transaction.id)
+                            }
                             title="Перевыпустить объявление"
                           >
                             <RefreshCw size={12} />
@@ -1243,22 +1519,32 @@ export default function TransactionsPage() {
                         )}
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 w-6 p-0"
+                            >
                               <MoreVertical size={12} />
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => setSelectedItem(transaction)}>
+                            <DropdownMenuItem
+                              onClick={() => setSelectedItem(transaction)}
+                            >
                               <Eye size={14} className="mr-2" />
                               Подробности
                             </DropdownMenuItem>
                             {transaction.orderId && (
-                              <DropdownMenuItem onClick={() => setSelectedChatTransaction(transaction)}>
+                              <DropdownMenuItem
+                                onClick={() =>
+                                  setSelectedChatTransaction(transaction)
+                                }
+                              >
                                 <MessageSquare size={14} className="mr-2" />
                                 Открыть чат
                                 {unreadCounts[transaction.id] > 0 && (
-                                  <Badge 
-                                    variant="destructive" 
+                                  <Badge
+                                    variant="destructive"
                                     className="ml-auto h-4 min-w-[16px] px-1 text-[10px] font-bold"
                                   >
                                     {unreadCounts[transaction.id]}
@@ -1267,15 +1553,22 @@ export default function TransactionsPage() {
                               </DropdownMenuItem>
                             )}
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem onClick={() => copyToClipboard(transaction.id, 'ID транзакции')}>
+                            <DropdownMenuItem
+                              onClick={() =>
+                                copyToClipboard(transaction.id, "ID транзакции")
+                              }
+                            >
                               <Copy size={14} className="mr-2" />
                               Копировать ID
                             </DropdownMenuItem>
-                            {(currentUser?.role === 'admin' || currentUser?.role === 'operator') && (
+                            {(currentUser?.role === "admin" ||
+                              currentUser?.role === "operator") && (
                               <>
                                 <DropdownMenuSeparator />
-                                <DropdownMenuItem 
-                                  onClick={() => handleReissueAdvertisement(transaction.id)}
+                                <DropdownMenuItem
+                                  onClick={() =>
+                                    handleReissueAdvertisement(transaction.id)
+                                  }
                                   className="text-orange-600"
                                 >
                                   <RefreshCw size={14} className="mr-2" />
@@ -1283,6 +1576,25 @@ export default function TransactionsPage() {
                                 </DropdownMenuItem>
                               </>
                             )}
+                            {currentUser?.role === "admin" &&
+                              transaction.status !== "completed" &&
+                              transaction.status !== "failed" &&
+                              transaction.status !== "cancelled" &&
+                              transaction.status !==
+                                "cancelled_by_counterparty" && (
+                                <>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem
+                                    onClick={() =>
+                                      handleReleaseMoney(transaction.id)
+                                    }
+                                    className="text-green-600"
+                                  >
+                                    <DollarSign size={14} className="mr-2" />
+                                    Отпустить монеты
+                                  </DropdownMenuItem>
+                                </>
+                              )}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </div>
@@ -1300,39 +1612,54 @@ export default function TransactionsPage() {
             <p className="text-xs text-muted-foreground">
               Показано {transactions.length} из {transactionsTotalCount}
             </p>
-            
+
             <div className="flex items-center gap-2">
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => updateTransactionsFilters({ page: (transactionsFilters.page || 1) - 1 })}
+                onClick={() =>
+                  updateTransactionsFilters({
+                    page: (transactionsFilters.page || 1) - 1,
+                  })
+                }
                 disabled={transactionsFilters.page === 1}
                 className="h-7 px-2"
               >
                 <ChevronLeft size={14} />
               </Button>
-              
+
               <div className="flex items-center gap-1">
-                {Array.from({ length: Math.min(5, transactionsTotalPages) }, (_, i) => {
-                  const page = i + 1;
-                  return (
-                    <Button
-                      key={page}
-                      variant={transactionsFilters.page === page ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => updateTransactionsFilters({ page })}
-                      className="h-7 w-7 p-0 text-xs"
-                    >
-                      {page}
-                    </Button>
-                  );
-                })}
+                {Array.from(
+                  { length: Math.min(5, transactionsTotalPages) },
+                  (_, i) => {
+                    const page = i + 1;
+                    return (
+                      <Button
+                        key={page}
+                        variant={
+                          transactionsFilters.page === page
+                            ? "default"
+                            : "outline"
+                        }
+                        size="sm"
+                        onClick={() => updateTransactionsFilters({ page })}
+                        className="h-7 w-7 p-0 text-xs"
+                      >
+                        {page}
+                      </Button>
+                    );
+                  },
+                )}
               </div>
-              
+
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => updateTransactionsFilters({ page: (transactionsFilters.page || 1) + 1 })}
+                onClick={() =>
+                  updateTransactionsFilters({
+                    page: (transactionsFilters.page || 1) + 1,
+                  })
+                }
                 disabled={transactionsFilters.page === transactionsTotalPages}
                 className="h-7 px-2"
               >
@@ -1348,25 +1675,34 @@ export default function TransactionsPage() {
   // Similar compact designs for other tabs...
   const OrdersTab = () => {
     // Фильтруем транзакции, у которых есть orderId
-    const transactionsWithOrders = transactions.filter(t => t.orderId);
-    
+    const transactionsWithOrders = transactions.filter((t) => t.orderId);
+
     return (
       <div className="space-y-4">
         <Card className="p-3">
           <div className="flex items-center gap-2">
             <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" size={16} />
+              <Search
+                className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground"
+                size={16}
+              />
               <Input
                 placeholder="Поиск ордеров..."
-                value={transactionsFilters.search || ''}
-                onChange={(e) => updateTransactionsFilters({ search: e.target.value })}
+                value={transactionsFilters.search || ""}
+                onChange={(e) =>
+                  updateTransactionsFilters({ search: e.target.value })
+                }
                 className="pl-9 h-8 text-sm"
               />
             </div>
-            
+
             <Select
-              value={transactionsFilters.status || 'all'}
-              onValueChange={(value) => updateTransactionsFilters({ status: value === 'all' ? undefined : value })}
+              value={transactionsFilters.status || "all"}
+              onValueChange={(value) =>
+                updateTransactionsFilters({
+                  status: value === "all" ? undefined : value,
+                })
+              }
             >
               <SelectTrigger className="w-[140px] h-8 text-sm">
                 <SelectValue placeholder="Статус" />
@@ -1381,262 +1717,129 @@ export default function TransactionsPage() {
               </SelectContent>
             </Select>
 
-            <Button variant="outline" size="sm" onClick={loadTransactions} className="h-8">
-              <RefreshCw size={14} className={cn("mr-1", transactionsLoading && "animate-spin")} />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={loadTransactions}
+              className="h-8"
+            >
+              <RefreshCw
+                size={14}
+                className={cn("mr-1", transactionsLoading && "animate-spin")}
+              />
               Обновить
             </Button>
           </div>
         </Card>
 
-      <Card className="overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/50 text-xs uppercase">
-              <tr>
-                <th className="px-3 py-2 text-left">Ордер</th>
-                <th className="px-3 py-2 text-left">Время</th>
-                <th className="px-3 py-2 text-left">Тип</th>
-                <th className="px-3 py-2 text-right">Объем</th>
-                <th className="px-3 py-2 text-right">Цена</th>
-                <th className="px-3 py-2 text-left">Статус</th>
-                <th className="px-3 py-2 text-center">Действия</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {transactionsLoading ? (
+        <Card className="overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/50 text-xs uppercase">
                 <tr>
-                  <td colSpan={7} className="text-center py-8">
-                    <div className="flex items-center justify-center gap-2">
-                      <RefreshCw className="animate-spin" size={16} />
-                      <span className="text-muted-foreground">Загрузка ордеров...</span>
-                    </div>
-                  </td>
+                  <th className="px-3 py-2 text-left">Ордер</th>
+                  <th className="px-3 py-2 text-left">Время</th>
+                  <th className="px-3 py-2 text-left">Тип</th>
+                  <th className="px-3 py-2 text-right">Объем</th>
+                  <th className="px-3 py-2 text-right">Цена</th>
+                  <th className="px-3 py-2 text-left">Статус</th>
+                  <th className="px-3 py-2 text-center">Действия</th>
                 </tr>
-              ) : transactionsWithOrders.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="text-center py-8">
-                    <ShoppingCart className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
-                    <p className="text-sm text-muted-foreground">Нет ордеров</p>
-                  </td>
-                </tr>
-              ) : (
-                transactionsWithOrders.map((transaction) => (
-                  <tr key={transaction.id} className="hover:bg-muted/50">
-                    <td className="px-3 py-2 font-mono text-xs">{transaction.orderId}</td>
-                    <td className="px-3 py-2 text-xs">{formatDate(transaction.createdAt)}</td>
-                    <td className="px-3 py-2">
-                      {transaction.advertisement ? (
-                        <Badge variant="outline" className={cn(
-                          "text-xs",
-                          transaction.advertisement.type === 'buy' 
-                            ? 'bg-green-500/10 text-green-500 border-green-500/20' 
-                            : 'bg-red-500/10 text-red-500 border-red-500/20'
-                        )}>
-                          {transaction.advertisement.type === 'buy' ? 'ПОКУПКА' : 'ПРОДАЖА'}
-                        </Badge>
-                      ) : '-'}
-                    </td>
-                    <td className="px-3 py-2 text-right font-medium">{formatAmount(transaction.amount)} USDT</td>
-                    <td className="px-3 py-2 text-right">
-                      {transaction.advertisement ? `${transaction.advertisement.price} RUB` : '-'}
-                    </td>
-                    <td className="px-3 py-2">{getStatusBadge(transaction.status, 'transaction')}</td>
-                    <td className="px-3 py-2">
-                      <div className="flex items-center justify-center gap-1">
-                        <div className="relative">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-6 w-6 p-0"
-                            onClick={() => setSelectedChatTransaction(transaction)}
-                          >
-                            <MessageSquare size={12} />
-                          </Button>
-                          {unreadCounts[transaction.id] > 0 && (
-                            <Badge 
-                              variant="destructive" 
-                              className="absolute -top-2 -right-2 h-4 min-w-[16px] px-1 text-[10px] font-bold"
-                            >
-                              {unreadCounts[transaction.id]}
-                            </Badge>
-                          )}
-                        </div>
+              </thead>
+              <tbody className="divide-y">
+                {transactionsLoading ? (
+                  <tr>
+                    <td colSpan={7} className="text-center py-8">
+                      <div className="flex items-center justify-center gap-2">
+                        <RefreshCw className="animate-spin" size={16} />
+                        <span className="text-muted-foreground">
+                          Загрузка ордеров...
+                        </span>
                       </div>
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </Card>
-    </div>
+                ) : transactionsWithOrders.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="text-center py-8">
+                      <ShoppingCart className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+                      <p className="text-sm text-muted-foreground">
+                        Нет ордеров
+                      </p>
+                    </td>
+                  </tr>
+                ) : (
+                  transactionsWithOrders.map((transaction) => (
+                    <tr key={transaction.id} className="hover:bg-muted/50">
+                      <td className="px-3 py-2 font-mono text-xs">
+                        {transaction.orderId}
+                      </td>
+                      <td className="px-3 py-2 text-xs">
+                        {formatDate(transaction.createdAt)}
+                      </td>
+                      <td className="px-3 py-2">
+                        {transaction.advertisement ? (
+                          <Badge
+                            variant="outline"
+                            className={cn(
+                              "text-xs",
+                              transaction.advertisement.type === "buy"
+                                ? "bg-green-500/10 text-green-500 border-green-500/20"
+                                : "bg-red-500/10 text-red-500 border-red-500/20",
+                            )}
+                          >
+                            {transaction.advertisement.type === "buy"
+                              ? "ПОКУПКА"
+                              : "ПРОДАЖА"}
+                          </Badge>
+                        ) : (
+                          "-"
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-right font-medium">
+                        {formatAmount(transaction.amount)} USDT
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        {transaction.advertisement
+                          ? `${transaction.advertisement.price} RUB`
+                          : "-"}
+                      </td>
+                      <td className="px-3 py-2">
+                        {getStatusBadge(transaction.status, "transaction")}
+                      </td>
+                      <td className="px-3 py-2">
+                        <div className="flex items-center justify-center gap-1">
+                          <div className="relative">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 w-6 p-0"
+                              onClick={() =>
+                                setSelectedChatTransaction(transaction)
+                              }
+                            >
+                              <MessageSquare size={12} />
+                            </Button>
+                            {unreadCounts[transaction.id] > 0 && (
+                              <Badge
+                                variant="destructive"
+                                className="absolute -top-2 -right-2 h-4 min-w-[16px] px-1 text-[10px] font-bold"
+                              >
+                                {unreadCounts[transaction.id]}
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      </div>
     );
   };
-
-  const AdvertisementsTab = () => (
-    <div className="space-y-4">
-      {/* Filters Bar */}
-      <Card className="p-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <Select
-            value={advertisementsFilters.bybitAccount || 'all'}
-            onValueChange={(value) => updateAdvertisementsFilters({ bybitAccount: value === 'all' ? undefined : value })}
-          >
-            <SelectTrigger className="w-[180px] h-8 text-sm">
-              <SelectValue placeholder="Bybit аккаунт" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Все аккаунты</SelectItem>
-              {/* TODO: Load accounts dynamically */}
-            </SelectContent>
-          </Select>
-
-          <Select
-            value={advertisementsFilters.type || 'all'}
-            onValueChange={(value) => updateAdvertisementsFilters({ type: value === 'all' ? undefined : value })}
-          >
-            <SelectTrigger className="w-[140px] h-8 text-sm">
-              <SelectValue placeholder="Тип" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Все</SelectItem>
-              <SelectItem value="buy">Покупка</SelectItem>
-              <SelectItem value="sell">Продажа</SelectItem>
-            </SelectContent>
-          </Select>
-
-          <Select
-            value={advertisementsFilters.isActive?.toString() || 'all'}
-            onValueChange={(value) => updateAdvertisementsFilters({ isActive: value === 'all' ? undefined : value === 'true' })}
-          >
-            <SelectTrigger className="w-[140px] h-8 text-sm">
-              <SelectValue placeholder="Статус" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Все</SelectItem>
-              <SelectItem value="true">Активные</SelectItem>
-              <SelectItem value="false">Неактивные</SelectItem>
-            </SelectContent>
-          </Select>
-
-          <div className="flex gap-2 ml-auto">
-            <Button variant="default" size="sm" className="h-8" onClick={handleCreateAd}>
-              <Plus size={14} className="mr-1" />
-              Создать
-            </Button>
-            <Button variant="outline" size="sm" onClick={loadAdvertisements} className="h-8">
-              <RefreshCw size={14} className={cn("mr-1", advertisementsLoading && "animate-spin")} />
-              Обновить
-            </Button>
-          </div>
-        </div>
-      </Card>
-
-      <Card className="overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/50 text-xs uppercase">
-              <tr>
-                <th className="px-3 py-2 text-left">ID</th>
-                <th className="px-3 py-2 text-left">Аккаунт</th>
-                <th className="px-3 py-2 text-left">Тип</th>
-                <th className="px-3 py-2 text-left">Пара</th>
-                <th className="px-3 py-2 text-right">Цена</th>
-                <th className="px-3 py-2 text-right">Лимиты</th>
-                <th className="px-3 py-2 text-right">Доступно</th>
-                <th className="px-3 py-2 text-left">Статус</th>
-                <th className="px-3 py-2 text-center">Действия</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {advertisementsLoading ? (
-                <tr>
-                  <td colSpan={9} className="text-center py-8">
-                    <div className="flex items-center justify-center gap-2">
-                      <RefreshCw className="animate-spin" size={16} />
-                      <span className="text-muted-foreground">Загрузка объявлений...</span>
-                    </div>
-                  </td>
-                </tr>
-              ) : advertisements.length === 0 ? (
-                <tr>
-                  <td colSpan={9} className="text-center py-8 text-muted-foreground">
-                    Нет объявлений для отображения
-                  </td>
-                </tr>
-              ) : (
-                advertisements.map((ad) => (
-                <tr key={ad.id} className="hover:bg-muted/50">
-                  <td className="px-3 py-2 font-mono text-xs">{ad.bybitAdId || ad.id.slice(0, 8)}</td>
-                  <td className="px-3 py-2">
-                    {ad.bybitAccount ? (
-                      <Badge variant="outline" className="text-xs">
-                        {ad.bybitAccount.accountId}
-                      </Badge>
-                    ) : '-'}
-                  </td>
-                  <td className="px-3 py-2">
-                    <Badge variant="outline" className={cn(
-                      "text-xs",
-                      ad.type === 'buy' 
-                        ? 'bg-green-500/10 text-green-500 border-green-500/20' 
-                        : ad.type === 'sell'
-                        ? 'bg-red-500/10 text-red-500 border-red-500/20'
-                        : 'bg-gray-500/10 text-gray-500 border-gray-500/20'
-                    )}>
-                      {ad.type === 'buy' ? 'ПОКУПКА' : ad.type === 'sell' ? 'ПРОДАЖА' : 'N/A'}
-                    </Badge>
-                  </td>
-                  <td className="px-3 py-2 text-xs">{ad.currency}/{ad.fiat}</td>
-                  <td className="px-3 py-2 text-right font-medium">{ad.price}</td>
-                  <td className="px-3 py-2 text-right text-xs">{ad.minOrderAmount}-{ad.maxOrderAmount}</td>
-                  <td className="px-3 py-2 text-right">{ad.availableAmount}</td>
-                  <td className="px-3 py-2">
-                    <Badge variant={ad.isActive ? 'default' : 'secondary'} className="text-xs">
-                      {ad.isActive ? 'Активно' : 'Неактивно'}
-                    </Badge>
-                  </td>
-                  <td className="px-3 py-2">
-                    <div className="flex items-center justify-center gap-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 w-6 p-0"
-                        onClick={() => window.open(`https://www.bybit.com/fiat/trade/otc/?actionType=${ad.type}&token=${ad.currency}&fiat=${ad.fiat}`, '_blank')}
-                        title="Открыть на Bybit"
-                      >
-                        <ExternalLink size={12} />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 w-6 p-0"
-                        title="Редактировать"
-                        onClick={() => handleEditAd(ad)}
-                      >
-                        <Edit2 size={12} />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 w-6 p-0 text-red-500 hover:text-red-600"
-                        title="Удалить"
-                        onClick={() => handleDeleteAd(ad)}
-                      >
-                        <Trash2 size={12} />
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </Card>
-    </div>
-  );
 
   const PayoutsTab = () => (
     <div className="space-y-4">
@@ -1644,18 +1847,25 @@ export default function TransactionsPage() {
       <Card className="p-3">
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex-1 min-w-[200px] relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" size={16} />
+            <Search
+              className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground"
+              size={16}
+            />
             <Input
               placeholder="Поиск по всем полям..."
-              value={payoutsFilters.search || ''}
+              value={payoutsFilters.search || ""}
               onChange={(e) => updatePayoutsFilters({ search: e.target.value })}
               className="pl-9 h-8 text-sm"
             />
           </div>
-          
+
           <Select
-            value={payoutsFilters.status?.toString() || 'all'}
-            onValueChange={(value) => updatePayoutsFilters({ status: value === 'all' ? undefined : parseInt(value) })}
+            value={payoutsFilters.status?.toString() || "all"}
+            onValueChange={(value) =>
+              updatePayoutsFilters({
+                status: value === "all" ? undefined : parseInt(value),
+              })
+            }
           >
             <SelectTrigger className="w-[140px] h-8 text-sm">
               <SelectValue placeholder="Статус" />
@@ -1673,25 +1883,24 @@ export default function TransactionsPage() {
           </Select>
 
           <Select
-            value={payoutsFilters.method?.toString() || 'all'}
-            onValueChange={(value) => updatePayoutsFilters({ method: value === 'all' ? undefined : parseInt(value) })}
+            value={payoutsFilters.method?.toString() || "all"}
+            onValueChange={(value) =>
+              updatePayoutsFilters({
+                method: value === "all" ? undefined : parseInt(value),
+              })
+            }
           >
             <SelectTrigger className="w-[140px] h-8 text-sm">
               <SelectValue placeholder="Метод" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Все методы</SelectItem>
-              <SelectItem value="1">СБП</SelectItem>
-              <SelectItem value="2">Банковская карта</SelectItem>
-              <SelectItem value="3">Наличные</SelectItem>
-              <SelectItem value="4">Криптовалюта</SelectItem>
-              <SelectItem value="5">Электронный кошелек</SelectItem>
-              <SelectItem value="6">Банковский перевод</SelectItem>
-              <SelectItem value="7">Другое</SelectItem>
+              <SelectItem value="1">Банковская карта</SelectItem>
+              <SelectItem value="2">СБП</SelectItem>
             </SelectContent>
           </Select>
 
-          <Button 
+          <Button
             variant="outline"
             size="sm"
             onClick={() => setShowFilters(!showFilters)}
@@ -1701,8 +1910,16 @@ export default function TransactionsPage() {
             Фильтры
           </Button>
 
-          <Button variant="outline" size="sm" onClick={loadPayouts} className="h-8">
-            <RefreshCw size={14} className={cn("mr-1", payoutsLoading && "animate-spin")} />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={loadPayouts}
+            className="h-8"
+          >
+            <RefreshCw
+              size={14}
+              className={cn("mr-1", payoutsLoading && "animate-spin")}
+            />
             Обновить
           </Button>
         </div>
@@ -1711,7 +1928,7 @@ export default function TransactionsPage() {
         {showFilters && (
           <motion.div
             initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
+            animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             className="mt-3 pt-3 border-t"
           >
@@ -1719,34 +1936,56 @@ export default function TransactionsPage() {
               <Input
                 type="date"
                 placeholder="Дата от"
-                value={payoutsFilters.dateFrom || ''}
-                onChange={(e) => updatePayoutsFilters({ dateFrom: e.target.value || undefined })}
+                value={payoutsFilters.dateFrom || ""}
+                onChange={(e) =>
+                  updatePayoutsFilters({
+                    dateFrom: e.target.value || undefined,
+                  })
+                }
                 className="h-8 text-sm"
               />
               <Input
                 type="date"
                 placeholder="Дата до"
-                value={payoutsFilters.dateTo || ''}
-                onChange={(e) => updatePayoutsFilters({ dateTo: e.target.value || undefined })}
+                value={payoutsFilters.dateTo || ""}
+                onChange={(e) =>
+                  updatePayoutsFilters({ dateTo: e.target.value || undefined })
+                }
                 className="h-8 text-sm"
               />
               <Input
                 type="number"
                 placeholder="Сумма от"
-                value={payoutsFilters.amountFrom || ''}
-                onChange={(e) => updatePayoutsFilters({ amountFrom: e.target.value ? Number(e.target.value) : undefined })}
+                value={payoutsFilters.amountFrom || ""}
+                onChange={(e) =>
+                  updatePayoutsFilters({
+                    amountFrom: e.target.value
+                      ? Number(e.target.value)
+                      : undefined,
+                  })
+                }
                 className="h-8 text-sm"
               />
               <Input
                 type="number"
                 placeholder="Сумма до"
-                value={payoutsFilters.amountTo || ''}
-                onChange={(e) => updatePayoutsFilters({ amountTo: e.target.value ? Number(e.target.value) : undefined })}
+                value={payoutsFilters.amountTo || ""}
+                onChange={(e) =>
+                  updatePayoutsFilters({
+                    amountTo: e.target.value
+                      ? Number(e.target.value)
+                      : undefined,
+                  })
+                }
                 className="h-8 text-sm"
               />
               <Select
-                value={payoutsFilters.gateAccount || 'all'}
-                onValueChange={(value) => updatePayoutsFilters({ gateAccount: value === 'all' ? undefined : value })}
+                value={payoutsFilters.gateAccount || "all"}
+                onValueChange={(value) =>
+                  updatePayoutsFilters({
+                    gateAccount: value === "all" ? undefined : value,
+                  })
+                }
               >
                 <SelectTrigger className="h-8 text-sm">
                   <SelectValue placeholder="Gate аккаунт" />
@@ -1762,13 +2001,21 @@ export default function TransactionsPage() {
               </Select>
               <Input
                 placeholder="Gate Payout ID"
-                value={payoutsFilters.gatePayoutId || ''}
-                onChange={(e) => updatePayoutsFilters({ gatePayoutId: e.target.value || undefined })}
+                value={payoutsFilters.gatePayoutId || ""}
+                onChange={(e) =>
+                  updatePayoutsFilters({
+                    gatePayoutId: e.target.value || undefined,
+                  })
+                }
                 className="h-8 text-sm"
               />
               <Select
-                value={payoutsFilters.hasReceipt?.toString() || 'all'}
-                onValueChange={(value) => updatePayoutsFilters({ hasReceipt: value === 'all' ? undefined : value === 'true' })}
+                value={payoutsFilters.hasReceipt?.toString() || "all"}
+                onValueChange={(value) =>
+                  updatePayoutsFilters({
+                    hasReceipt: value === "all" ? undefined : value === "true",
+                  })
+                }
               >
                 <SelectTrigger className="h-8 text-sm">
                   <SelectValue placeholder="Наличие чека" />
@@ -1806,13 +2053,18 @@ export default function TransactionsPage() {
                   <td colSpan={9} className="text-center py-8">
                     <div className="flex items-center justify-center gap-2">
                       <RefreshCw className="animate-spin" size={16} />
-                      <span className="text-muted-foreground">Загрузка выплат...</span>
+                      <span className="text-muted-foreground">
+                        Загрузка выплат...
+                      </span>
                     </div>
                   </td>
                 </tr>
               ) : payouts.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="text-center py-8 text-muted-foreground">
+                  <td
+                    colSpan={9}
+                    className="text-center py-8 text-muted-foreground"
+                  >
                     Нет выплат для отображения
                   </td>
                 </tr>
@@ -1821,20 +2073,29 @@ export default function TransactionsPage() {
                   <tr key={payout.id} className="hover:bg-muted/50">
                     <td className="px-3 py-2">
                       <div className="flex items-center gap-1">
-                        <span className="font-mono text-xs">{payout.gatePayoutId || '-'}</span>
+                        <span className="font-mono text-xs">
+                          {payout.gatePayoutId || "-"}
+                        </span>
                         {payout.gatePayoutId && (
                           <Button
                             variant="ghost"
                             size="sm"
                             className="h-4 w-4 p-0"
-                            onClick={() => copyToClipboard(payout.gatePayoutId!.toString(), 'Gate ID')}
+                            onClick={() =>
+                              copyToClipboard(
+                                payout.gatePayoutId!.toString(),
+                                "Gate ID",
+                              )
+                            }
                           >
                             <Copy size={10} />
                           </Button>
                         )}
                       </div>
                     </td>
-                    <td className="px-3 py-2 text-xs">{formatDate(payout.createdAt)}</td>
+                    <td className="px-3 py-2 text-xs">
+                      {formatDate(payout.createdAt)}
+                    </td>
                     <td className="px-3 py-2">
                       <div className="flex items-center gap-1">
                         <span className="text-xs font-mono">
@@ -1845,7 +2106,9 @@ export default function TransactionsPage() {
                             variant="ghost"
                             size="sm"
                             className="h-4 w-4 p-0"
-                            onClick={() => copyToClipboard(payout.wallet!, 'Кошелек')}
+                            onClick={() =>
+                              copyToClipboard(payout.wallet!, "Кошелек")
+                            }
                           >
                             <Copy size={10} />
                           </Button>
@@ -1853,39 +2116,28 @@ export default function TransactionsPage() {
                       </div>
                     </td>
                     <td className="px-3 py-2 text-right font-medium">
-                      {payout.amountTrader && typeof payout.amountTrader === 'object' && payout.amountTrader['643'] 
-                        ? formatAmount(payout.amountTrader['643']) 
-                        : (payout.amount ? formatAmount(payout.amount) : '-')}
+                      {payout.amountTrader &&
+                      typeof payout.amountTrader === "object" &&
+                      payout.amountTrader["643"]
+                        ? formatAmount(payout.amountTrader["643"])
+                        : payout.amount
+                          ? formatAmount(payout.amount)
+                          : "-"}
                     </td>
-                    <td className="px-3 py-2 text-xs">{payout.gateAccount || '-'}</td>
+                    <td className="px-3 py-2 text-xs">
+                      {payout.gateAccount || "-"}
+                    </td>
                     <td className="px-3 py-2">
-                      {getStatusBadge(payout.status.toString(), 'payout')}
+                      {getStatusBadge(payout.status.toString(), "payout")}
                     </td>
                     <td className="px-3 py-2 text-xs">
                       {(() => {
-                        // Handle different method formats
-                        if (typeof payout.method === 'object' && payout.method !== null) {
-                          // If method is an object with name property
-                          if (payout.method.name) {
-                            return payout.method.name;
-                          }
-                          // If method is an object with id property
-                          if (payout.method.id) {
-                            return getPayoutMethodName(payout.method.id);
-                          }
-                          // If method is an object with value property
-                          if (payout.method.value) {
-                            return getPayoutMethodName(payout.method.value);
-                          }
-                        }
                         // Otherwise, treat as a simple value
-                        return getPayoutMethodName(payout.method);
+                        return payout.method.label;
                       })()}
                     </td>
                     <td className="px-3 py-2">
-                      <ReceiptPopover 
-                        payoutId={payout.id}
-                      />
+                      <ReceiptPopover payoutId={payout.id} />
                     </td>
                     <td className="px-3 py-2">
                       <div className="flex items-center justify-center gap-1">
@@ -1910,8 +2162,8 @@ export default function TransactionsPage() {
   );
 
   return (
-    <div className="w-full h-full">
-      <div className="p-6 space-y-4">
+    <div className="absolute inset-0 flex flex-col">
+      <div className="flex-shrink-0 p-4 sm:p-6 md:p-8 space-y-4">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
@@ -1920,18 +2172,48 @@ export default function TransactionsPage() {
               Полный контроль над всеми финансовыми операциями
             </p>
           </div>
-          
+
           <div className="flex items-center gap-2">
-            <Badge 
-              variant={isRealTimeActive ? "default" : "outline"} 
+            {activeTab === "transactions" && (
+              <ToggleGroup
+                type="single"
+                value={viewMode}
+                onValueChange={(value) => {
+                  if (value) {
+                    setViewMode(value as "table" | "kanban");
+                    // Save to localStorage
+                    localStorage.setItem("transactionsViewMode", value);
+                  }
+                }}
+              >
+                <ToggleGroupItem
+                  value="table"
+                  aria-label="Table view"
+                  className="px-3"
+                >
+                  <LayoutGrid className="h-4 w-4 mr-1" />
+                  Обычный
+                </ToggleGroupItem>
+                <ToggleGroupItem
+                  value="kanban"
+                  aria-label="Kanban view"
+                  className="px-3"
+                >
+                  <Kanban className="h-4 w-4 mr-1" />
+                  Kanban
+                </ToggleGroupItem>
+              </ToggleGroup>
+            )}
+            <Badge
+              variant={isRealTimeActive ? "default" : "outline"}
               className={cn(
                 "text-xs transition-colors",
-                isRealTimeActive && "bg-green-500 text-white border-green-500"
+                isRealTimeActive && "bg-green-500 text-white border-green-500",
               )}
             >
-              <Activity 
-                size={12} 
-                className={cn("mr-1", isRealTimeActive && "animate-pulse")} 
+              <Activity
+                size={12}
+                className={cn("mr-1", isRealTimeActive && "animate-pulse")}
               />
               {isRealTimeActive ? "Real-time" : "Offline"}
             </Badge>
@@ -1947,9 +2229,16 @@ export default function TransactionsPage() {
         </div>
 
         {/* Tabs */}
-        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as TabType)}>
-          <TabsList className="w-full grid grid-cols-4">
-            <TabsTrigger value="transactions" className="flex items-center gap-2 text-xs">
+        <Tabs
+          value={activeTab}
+          onValueChange={(value) => setActiveTab(value as TabType)}
+          className="flex-1 flex flex-col overflow-hidden"
+        >
+          <TabsList className="w-full grid grid-cols-4 flex-shrink-0">
+            <TabsTrigger
+              value="transactions"
+              className="flex items-center gap-2 text-xs"
+            >
               <CreditCard size={14} />
               <span className="hidden sm:inline">Транзакции</span>
               {transactionsTotalCount > 0 && (
@@ -1958,7 +2247,10 @@ export default function TransactionsPage() {
                 </Badge>
               )}
             </TabsTrigger>
-            <TabsTrigger value="orders" className="flex items-center gap-2 text-xs">
+            <TabsTrigger
+              value="orders"
+              className="flex items-center gap-2 text-xs"
+            >
               <ShoppingCart size={14} />
               <span className="hidden sm:inline">Ордера</span>
               {ordersTotalCount > 0 && (
@@ -1967,7 +2259,10 @@ export default function TransactionsPage() {
                 </Badge>
               )}
             </TabsTrigger>
-            <TabsTrigger value="advertisements" className="flex items-center gap-2 text-xs">
+            <TabsTrigger
+              value="advertisements"
+              className="flex items-center gap-2 text-xs"
+            >
               <TrendingUp size={14} />
               <span className="hidden sm:inline">Объявления</span>
               {advertisementsTotalCount > 0 && (
@@ -1976,7 +2271,10 @@ export default function TransactionsPage() {
                 </Badge>
               )}
             </TabsTrigger>
-            <TabsTrigger value="payouts" className="flex items-center gap-2 text-xs">
+            <TabsTrigger
+              value="payouts"
+              className="flex items-center gap-2 text-xs"
+            >
               <Wallet size={14} />
               <span className="hidden sm:inline">Выплаты</span>
               {payoutsTotalCount > 0 && (
@@ -1987,8 +2285,24 @@ export default function TransactionsPage() {
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="transactions" className="mt-4">
-            <TransactionsTab />
+          <TabsContent
+            value="transactions"
+            className="mt-4 flex-1 overflow-hidden"
+          >
+            {viewMode === "table" ? (
+              <TransactionsTab />
+            ) : (
+              <div className="h-full">
+                <KanbanBoard
+                  transactions={transactions}
+                  payouts={payouts}
+                  advertisements={advertisements}
+                  loading={transactionsLoading}
+                  onRefresh={loadTransactions}
+                  currentUser={currentUser}
+                />
+              </div>
+            )}
           </TabsContent>
 
           <TabsContent value="orders" className="mt-4">
@@ -2012,7 +2326,7 @@ export default function TransactionsPage() {
         onClose={() => setSelectedItem(null)}
         onOpenChat={(orderId) => {
           setSelectedItem(null);
-          const transaction = transactions.find(t => t.orderId === orderId);
+          const transaction = transactions.find((t) => t.orderId === orderId);
           if (transaction) {
             setSelectedChatTransaction(transaction);
           }
@@ -2032,19 +2346,6 @@ export default function TransactionsPage() {
 
       {/* Global Chat */}
       <GlobalChat />
-
-      {/* Advertisement Dialog */}
-      <AdvertisementDialog
-        isOpen={showAdDialog}
-        onClose={() => {
-          setShowAdDialog(false);
-          setSelectedAd(null);
-        }}
-        advertisement={selectedAd}
-        onSuccess={() => {
-          loadAdvertisements();
-        }}
-      />
     </div>
   );
 }

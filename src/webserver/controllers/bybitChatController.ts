@@ -289,7 +289,7 @@ export class BybitChatController {
         where: {
           transactionId: data.transactionId,
           sender: 'them',
-          isRead: false
+          readAt: null
         }
       });
 
@@ -316,10 +316,9 @@ export class BybitChatController {
         where: {
           transactionId: data.transactionId,
           sender: 'them',
-          isRead: false
+          readAt: null
         },
         data: {
-          isRead: true,
           readAt: new Date()
         }
       });
@@ -417,6 +416,91 @@ export class BybitChatController {
 
     } catch (error) {
       logger.error('Error sending chat image', error as Error);
+      handleError(error, callback);
+    }
+  }
+
+  /**
+   * Upload file to Bybit chat
+   */
+  static async uploadChatFile(
+    socket: AuthenticatedSocket,
+    data: { 
+      fileData: string; // Base64 encoded file
+      fileName: string;
+      mimeType: string;
+      transactionId: string;
+    },
+    callback: Function
+  ) {
+    try {
+      logger.info('Uploading chat file', { 
+        fileName: data.fileName,
+        mimeType: data.mimeType,
+        transactionId: data.transactionId
+      });
+
+      // Check user permissions
+      if (socket.user?.role !== 'admin' && socket.user?.role !== 'operator') {
+        throw new Error('Insufficient permissions to upload files');
+      }
+
+      // Получаем транзакцию и аккаунт
+      const transaction = await prisma.transaction.findUnique({
+        where: { id: data.transactionId },
+        include: {
+          advertisement: {
+            include: {
+              bybitAccount: true
+            }
+          }
+        }
+      });
+
+      if (!transaction) {
+        throw new Error('Transaction not found');
+      }
+
+      if (!transaction.advertisement?.bybitAccount) {
+        throw new Error('Bybit account not found for this transaction');
+      }
+
+      const bybitAccountId = transaction.advertisement.bybitAccount.accountId;
+
+      // Получаем BybitP2PManager
+      const { getBybitP2PManager } = require('../../app');
+      const bybitManager = getBybitP2PManager();
+      
+      if (!bybitManager) {
+        throw new Error('BybitP2PManager not initialized');
+      }
+
+      // Получаем клиент для аккаунта
+      const client = bybitManager.getClient(bybitAccountId);
+      if (!client) {
+        throw new Error(`Bybit client not found for account ${bybitAccountId}`);
+      }
+
+      // Конвертируем base64 в Buffer
+      const fileBuffer = Buffer.from(data.fileData, 'base64');
+
+      // Загружаем файл через Bybit API
+      const uploadResult = await client.uploadChatFile(fileBuffer, data.fileName, data.mimeType);
+
+      logger.info('File uploaded successfully', { 
+        url: uploadResult.url,
+        type: uploadResult.type,
+        fileName: data.fileName
+      });
+
+      handleSuccess({
+        url: uploadResult.url,
+        type: uploadResult.type,
+        fileName: data.fileName
+      }, 'File uploaded successfully', callback);
+
+    } catch (error) {
+      logger.error('Error uploading chat file', error as Error);
       handleError(error, callback);
     }
   }

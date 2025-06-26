@@ -110,7 +110,11 @@ export class P2PClient extends EventEmitter {
    * Get my advertisements
    * Note: This endpoint doesn't support pagination parameters
    */
-  async getMyAdvertisements(): Promise<PaginatedResponse<P2PAdvertisement>> {
+  async getMyAdvertisements(params?: {
+    side?: 'buy' | 'sell';
+    limit?: number;
+    offset?: number;
+  }): Promise<PaginatedResponse<P2PAdvertisement>> {
     const response = await this.httpClient.post<any>(
       "/v5/p2p/item/personal/list",
       {},
@@ -135,11 +139,30 @@ export class P2PClient extends EventEmitter {
     // Map Bybit's response structure to our expected format
     // Bybit returns { count, items, hiddenFlag } but we expect { list, page, pageSize, totalCount, totalPage }
     const result = response.result;
+    let items = result.items || [];
+    
+    // Debug logging for advertisement structure
+    if (this.config.debugMode && items.length > 0) {
+      console.log('[P2PClient] Raw Bybit API response for getMyAdvertisements:', JSON.stringify(result, null, 2));
+      console.log('[P2PClient] First advertisement raw data:', JSON.stringify(items[0], null, 2));
+    }
+    
+    // Apply client-side filtering if needed
+    if (params?.side) {
+      const sideFilter = params.side === 'buy' ? 0 : 1;
+      items = items.filter((item: any) => item.side === sideFilter);
+    }
+    
+    // Apply client-side pagination if needed
+    const limit = params?.limit || items.length;
+    const offset = params?.offset || 0;
+    const paginatedItems = items.slice(offset, offset + limit);
+    
     return {
-      list: result.items || [],
+      list: paginatedItems,
       page: 1,
-      pageSize: result.count || 0,
-      totalCount: result.count || 0,
+      pageSize: paginatedItems.length,
+      totalCount: items.length,
       totalPage: 1,
     };
   }
@@ -192,6 +215,21 @@ export class P2PClient extends EventEmitter {
   async deleteAdvertisement(itemId: string): Promise<void> {
     await this.httpClient.post("/v5/p2p/item/cancel", { itemId });
     this.emitEvent("AD_DELETED", { itemId });
+  }
+
+  /**
+   * Set advertisement status (enable/disable)
+   */
+  async setAdvertisementStatus(params: {
+    itemId: string;
+    status: 0 | 1; // 0 = disable, 1 = enable
+  }): Promise<any> {
+    const response = await this.httpClient.post<any>(
+      "/v5/p2p/item/status/set",
+      params
+    );
+    this.emitEvent("AD_STATUS_CHANGED", { itemId: params.itemId, status: params.status });
+    return response.result;
   }
 
   // ========== Order Methods ==========
@@ -416,18 +454,52 @@ export class P2PClient extends EventEmitter {
   /**
    * Upload file to chat
    */
-  async uploadFile(
-    orderId: string,
+  async uploadChatFile(
     fileData: Buffer,
     fileName: string,
-  ): Promise<any> {
-    // Note: This would require multipart/form-data upload
-    // Implementation depends on exact API requirements
-    const response = await this.httpClient.post<any>(
-      "/v5/p2p/order/file/upload",
-      { orderId, fileData, fileName },
+    mimeType: string = 'image/png'
+  ): Promise<{ url: string; type: string }> {
+    // Bybit's file upload endpoint
+    const FormData = require('form-data');
+    const form = new FormData();
+    form.append('upload_file', fileData, {
+      filename: fileName,
+      contentType: mimeType
+    });
+
+    // Make the request directly with custom headers
+    const axios = require('axios');
+    const timestamp = Date.now().toString();
+    const recvWindow = '5000';
+    
+    // For multipart/form-data, signature should be empty string
+    const signature = require('crypto')
+      .createHmac('sha256', this.config.apiSecret)
+      .update(timestamp + this.config.apiKey + recvWindow)
+      .digest('hex');
+
+    const response = await axios.post(
+      `${this.config.testnet ? 'https://api-testnet.bybit.com' : 'https://api.bybit.com'}/v5/p2p/oss/upload_file`,
+      form,
+      {
+        headers: {
+          ...form.getHeaders(),
+          'X-BAPI-API-KEY': this.config.apiKey,
+          'X-BAPI-SIGN': signature,
+          'X-BAPI-TIMESTAMP': timestamp,
+          'X-BAPI-RECV-WINDOW': recvWindow
+        }
+      }
     );
-    return response.result;
+
+    if (response.data.ret_code !== 0) {
+      throw new Error(`Failed to upload file: ${response.data.ret_msg}`);
+    }
+
+    return {
+      url: response.data.result.url,
+      type: response.data.result.type
+    };
   }
 
   // ========== Payment Methods ==========

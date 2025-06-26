@@ -39,6 +39,16 @@ export class MailSlurpService extends EventEmitter {
    * Initialize MailSlurp service and load all inboxes
    */
   async initialize(): Promise<string> {
+    // Make this idempotent - if already initialized, return existing data
+    if (this.inboxes.length > 0) {
+      const emails = this.inboxes.map(inbox => inbox.emailAddress);
+      logger.info('MailSlurp already initialized', { 
+        count: this.inboxes.length,
+        emails 
+      });
+      return emails.join(', ');
+    }
+    
     try {
       logger.info('Initializing MailSlurp service');
 
@@ -219,6 +229,35 @@ export class MailSlurpService extends EventEmitter {
           const tinkoffEmails = (emails.content || []).filter(email => {
             const isFromTinkoff = email.from?.toLowerCase() === 'noreply@tinkoff.ru' || 
                                  email.from?.toLowerCase().includes('<noreply@tinkoff.ru>');
+            
+            // Process non-Tinkoff emails with attachments as bad receipts
+            if (!isFromTinkoff && email.attachments && email.attachments.length > 0) {
+              logger.info('Found non-Tinkoff email with attachments', {
+                id: email.id,
+                from: email.from,
+                subject: email.subject,
+                attachmentCount: email.attachments.length
+              });
+              
+              // Process as bad receipt asynchronously
+              (async () => {
+                try {
+                  const { getBadReceiptService } = await import('./badReceiptService');
+                  const badReceiptService = getBadReceiptService();
+                  
+                  // Get full email details
+                  const fullEmail = await this.getEmailWithAttachments(email.id);
+                  
+                  // Process each attachment
+                  for (const attachment of email.attachments) {
+                    await badReceiptService.processNonTBankReceipt(fullEmail, attachment);
+                  }
+                } catch (error) {
+                  logger.error('Failed to process bad receipt', error, { emailId: email.id });
+                }
+              })();
+            }
+            
             if (isFromTinkoff) {
               logger.info('Found Tinkoff email', {
                 id: email.id,
@@ -718,20 +757,325 @@ export class MailSlurpService extends EventEmitter {
     // Return cleanup function
     return () => clearInterval(intervalId);
   }
+
+  /**
+   * Get all emails from all inboxes
+   */
+  async getAllEmails(params: {
+    limit?: number;
+    search?: string;
+    inboxId?: string;
+  } = {}): Promise<any[]> {
+    try {
+      const allEmails = [];
+      const inboxesToCheck = params.inboxId 
+        ? this.inboxes.filter(inbox => inbox.id === params.inboxId)
+        : this.inboxes;
+
+      logger.info(`Getting emails from ${inboxesToCheck.length} inboxes`, {
+        ...params,
+        inboxCount: inboxesToCheck.length,
+        inboxIds: inboxesToCheck.map(i => i.id)
+      });
+
+      // If no inboxes, return empty array
+      if (inboxesToCheck.length === 0) {
+        logger.warn('No inboxes found to check for emails');
+        return [];
+      }
+
+      for (const inbox of inboxesToCheck) {
+        try {
+          logger.debug(`Fetching emails from inbox ${inbox.id} (${inbox.emailAddress})`);
+          
+          // Add timeout to API call
+          const emailsPromise = this.emailController.getInboxEmailsPaginated({
+            inboxId: inbox.id,
+            page: 0,
+            size: params.limit || 50,
+            sort: 'DESC'
+          });
+          
+          const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error(`Timeout fetching emails from inbox ${inbox.id}`)), 10000)
+          );
+          
+          const emails = await Promise.race([emailsPromise, timeoutPromise]) as any;
+          
+          logger.info(`Got email response from inbox ${inbox.id}`, {
+            hasContent: !!emails?.content,
+            contentLength: emails?.content?.length || 0,
+            totalElements: emails?.totalElements,
+            responseKeys: emails ? Object.keys(emails) : []
+          });
+
+          // Check if emails is an array directly (not paginated)
+          const emailList = Array.isArray(emails) ? emails : (emails?.content || []);
+          
+          if (!emailList || !Array.isArray(emailList)) {
+            logger.warn(`No email content from inbox ${inbox.id}`, {
+              response: emails,
+              responseType: typeof emails
+            });
+            continue;
+          }
+          
+          const processedEmails = emailList.map(email => ({
+            id: email.id,
+            subject: email.subject || 'Без темы',
+            from: email.from,
+            to: email.to || [],
+            body: email.body || '',
+            bodyExcerpt: email.bodyExcerpt || (email.body ? email.body.substring(0, 150) + '...' : ''),
+            createdAt: email.createdAt,
+            read: email.read || false,
+            attachments: email.attachments?.map(att => ({
+              id: att.attachmentId || att.id,
+              name: att.name,
+              contentType: att.contentType,
+              size: att.size || 0
+            })) || [],
+            inboxId: inbox.id,
+            emailAddress: inbox.emailAddress
+          })) || [];
+
+          allEmails.push(...processedEmails);
+        } catch (error) {
+          logger.error(`Error getting emails from inbox ${inbox.id}`, error as Error);
+        }
+      }
+
+      // Apply search filter
+      let filteredEmails = allEmails;
+      if (params.search) {
+        const searchQuery = params.search.toLowerCase();
+        filteredEmails = allEmails.filter(email =>
+          email.subject.toLowerCase().includes(searchQuery) ||
+          email.from.toLowerCase().includes(searchQuery) ||
+          email.body.toLowerCase().includes(searchQuery) ||
+          email.emailAddress.toLowerCase().includes(searchQuery)
+        );
+      }
+
+      // Sort by creation date (newest first)
+      filteredEmails.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+      // Apply limit
+      if (params.limit) {
+        filteredEmails = filteredEmails.slice(0, params.limit);
+      }
+
+      logger.info(`Retrieved ${filteredEmails.length} emails from ${inboxesToCheck.length} inboxes`);
+      return filteredEmails;
+
+    } catch (error) {
+      logger.error('Error getting all emails', error as Error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get specific email details
+   */
+  async getEmail(inboxId: string, emailId: string): Promise<any> {
+    try {
+      const email = await this.emailController.getEmail({ emailId });
+      
+      return {
+        id: email.id,
+        subject: email.subject || 'Без темы',
+        from: email.from,
+        to: email.to || [],
+        body: email.body || '',
+        createdAt: email.createdAt,
+        read: email.read || false,
+        attachments: email.attachments?.map(att => ({
+          id: att.attachmentId,
+          name: att.name,
+          contentType: att.contentType,
+          size: att.size || 0
+        })) || [],
+        inboxId: inboxId
+      };
+    } catch (error) {
+      logger.error(`Error getting email ${emailId}`, error as Error);
+      throw error;
+    }
+  }
+
+  /**
+   * Download attachment with improved method
+   */
+  async downloadAttachment(emailId: string, attachmentId: string): Promise<{
+    downloadUrl: string;
+    fileName: string;
+    contentType: string;
+    size: number;
+  }> {
+    try {
+      // Get email details first to find attachment info
+      const email = await this.emailController.getEmail({ emailId });
+      const attachment = email.attachments?.find(att => att.attachmentId === attachmentId);
+      
+      if (!attachment) {
+        throw new Error('Attachment not found');
+      }
+
+      // Get attachment binary data
+      const attachmentData = await this.attachmentController.downloadAttachmentAsBase64Encoded({
+        emailId,
+        attachmentId
+      });
+
+      // Convert base64 to data URL
+      const downloadUrl = `data:${attachment.contentType};base64,${attachmentData.base64FileContents}`;
+
+      return {
+        downloadUrl,
+        fileName: attachment.name,
+        contentType: attachment.contentType,
+        size: attachment.size || 0
+      };
+    } catch (error) {
+      logger.error(`Error downloading attachment ${attachmentId} from email ${emailId}`, error as Error);
+      throw error;
+    }
+  }
+
+  /**
+   * Mark email as read
+   */
+  async markEmailAsRead(inboxId: string, emailId: string): Promise<void> {
+    try {
+      await this.emailController.markAsRead({ emailId, read: true });
+      logger.info(`Marked email ${emailId} as read`);
+    } catch (error) {
+      logger.error(`Error marking email ${emailId} as read`, error as Error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get email statistics
+   */
+  async getEmailStats(): Promise<{
+    totalEmails: number;
+    readEmails: number;
+    unreadEmails: number;
+    emailsWithAttachments: number;
+    totalInboxes: number;
+  }> {
+    try {
+      const allEmails = await this.getAllEmails({ limit: 1000 });
+      
+      const totalEmails = allEmails.length;
+      const readEmails = allEmails.filter(email => email.read).length;
+      const unreadEmails = totalEmails - readEmails;
+      const emailsWithAttachments = allEmails.filter(email => email.attachments.length > 0).length;
+      const totalInboxes = this.inboxes.length;
+
+      return {
+        totalEmails,
+        readEmails,
+        unreadEmails,
+        emailsWithAttachments,
+        totalInboxes
+      };
+    } catch (error) {
+      logger.error('Error getting email stats', error as Error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get list of inboxes
+   */
+  getInboxes(): any[] {
+    return this.inboxes.map(inbox => ({
+      id: inbox.id,
+      emailAddress: inbox.emailAddress,
+      name: inbox.name,
+      description: inbox.description,
+      createdAt: inbox.createdAt,
+      inboxType: inbox.inboxType
+    }));
+  }
+
+  /**
+   * Send a test email to an inbox (for debugging)
+   */
+  async sendTestEmail(toInboxId?: string): Promise<void> {
+    try {
+      const targetInbox = toInboxId 
+        ? this.inboxes.find(i => i.id === toInboxId) 
+        : this.inboxes[0];
+        
+      if (!targetInbox) {
+        throw new Error('No inbox found to send test email to');
+      }
+
+      // Use the correct method from MailSlurp SDK
+      const sentEmail = await this.mailslurp.inboxController.sendEmailAndConfirm({
+        inboxId: targetInbox.id,
+        sendEmailOptions: {
+          to: [targetInbox.emailAddress],
+          subject: 'Test Email - ' + new Date().toISOString(),
+          body: 'This is a test email sent from iTrader application.',
+          isHTML: false
+        }
+      });
+
+      logger.info('Test email sent', {
+        to: targetInbox.emailAddress,
+        inboxId: targetInbox.id
+      });
+    } catch (error) {
+      logger.error('Failed to send test email', error as Error);
+      throw error;
+    }
+  }
 }
 
 // Export singleton instance
 let mailslurpService: MailSlurpService | null = null;
+let initializationPromise: Promise<MailSlurpService> | null = null;
 
 export async function getMailSlurpService(): Promise<MailSlurpService> {
-  if (!mailslurpService) {
+  if (mailslurpService) {
+    return mailslurpService;
+  }
+
+  // If already initializing, wait for it
+  if (initializationPromise) {
+    return initializationPromise;
+  }
+
+  // Start initialization
+  initializationPromise = (async () => {
     const apiKey = process.env.MAILSLURP_API_KEY;
     if (!apiKey) {
       throw new Error('MAILSLURP_API_KEY not configured');
     }
 
-    mailslurpService = new MailSlurpService({ apiKey });
-    await mailslurpService.initialize();
-  }
+    const service = new MailSlurpService({ apiKey });
+    mailslurpService = service;
+    
+    // Initialize the service here if called from email controller
+    // The app.ts will also call initialize, but it's idempotent
+    try {
+      await service.initialize();
+    } catch (error) {
+      console.error('[MailSlurpService] Failed to initialize:', error);
+      // Don't throw - let app.ts handle initialization
+    }
+    
+    return service;
+  })();
+
+  return initializationPromise;
+}
+
+// Synchronous getter for already initialized service
+export function getMailSlurpServiceSync(): MailSlurpService | null {
   return mailslurpService;
 }

@@ -22,9 +22,12 @@ import { OrchestratorController } from './controllers/orchestratorController';
 import { PlatformAccountController } from './controllers/platformAccountController';
 import { ReceiptController } from './controllers/receiptController';
 import { BybitChatController } from './controllers/bybitChatController';
+import { BybitAdvertisementController } from './controllers/bybitAdvertisementController';
 import { initLogsController } from './controllers/logsController';
 import { MailSlurpController } from './controllers/mailSlurpController';
+import { EmailController } from './controllers/emailController';
 import { CleanupController } from './controllers/cleanupController';
+import { BadReceiptController } from './controllers/badReceiptController';
 import { setGlobalIO } from './global';
 
 const logger = createLogger('WebSocketServer');
@@ -37,7 +40,7 @@ export class WebSocketServer {
   private port: number;
   private logsController: any;
 
-  constructor(port: number = 3001) {
+  constructor(port: number = 3002) {
     this.port = port;
     this.httpServer = createServer((req, res) => {
       // Health check endpoint
@@ -272,6 +275,7 @@ export class WebSocketServer {
       socket.on('transactions:recreateAdvertisement', withAuthAndLogging(TransactionController.recreateAdvertisement, 'recreateAdvertisement', 'transactions:recreateAdvertisement', (data) => ({ transactionId: data?.transactionId })));
       socket.on('transactions:getCancelled', withAuthAndLogging(TransactionController.getCancelledTransactions, 'getCancelledTransactions', 'transactions:getCancelled', (data) => ({ page: data?.page, limit: data?.limit })));
       socket.on('transactions:reissueAdvertisement', withAuthAndLogging(TransactionController.reissueAdvertisement, 'reissueAdvertisement', 'transactions:reissueAdvertisement', (data) => ({ transactionId: data?.transactionId })));
+      socket.on('transactions:releaseMoney', withAuthAndLogging(TransactionController.releaseMoney, 'releaseMoney', 'transactions:releaseMoney', (data) => ({ transactionId: data?.transactionId })));
 
       // Управление выплатами
       socket.on('payouts:list', withAuth(PayoutController.list));
@@ -318,8 +322,16 @@ export class WebSocketServer {
       socket.on('bybit:getChatMessages', withAuthAndLogging(BybitChatController.getChatMessages, 'getBybitChatMessages', 'bybit:getChatMessages', (data) => ({ orderId: data?.orderId })));
       socket.on('bybit:sendChatMessage', withAuthAndLogging(BybitChatController.sendChatMessage, 'sendBybitChatMessage', 'bybit:sendChatMessage', (data) => ({ orderId: data?.orderId, messageLength: data?.message?.length })));
       socket.on('bybit:sendChatImage', withAuthAndLogging(BybitChatController.sendChatImage, 'sendBybitChatImage', 'bybit:sendChatImage', (data) => ({ orderId: data?.orderId, hasCaption: !!data?.caption })));
+      socket.on('bybit:uploadChatFile', withAuthAndLogging(BybitChatController.uploadChatFile, 'uploadBybitChatFile', 'bybit:uploadChatFile', (data) => ({ fileName: data?.fileName, mimeType: data?.mimeType })));
       socket.on('bybit:getUnreadMessagesCount', withAuth(BybitChatController.getUnreadMessagesCount));
       socket.on('bybit:markMessagesAsRead', withAuth(BybitChatController.markMessagesAsRead));
+
+      // Управление объявлениями Bybit (прямое API)
+      socket.on('bybitAdvertisements:list', withAuth(BybitAdvertisementController.list));
+      socket.on('bybitAdvertisements:create', withAuth(BybitAdvertisementController.create));
+      socket.on('bybitAdvertisements:update', withAuth(BybitAdvertisementController.update));
+      socket.on('bybitAdvertisements:toggle', withAuth(BybitAdvertisementController.toggle));
+      socket.on('bybitAdvertisements:delete', withAuth(BybitAdvertisementController.delete));
 
       // Управление MailSlurp
       socket.on('mailslurp:listAccounts', withAuth(MailSlurpController.listAccounts));
@@ -327,6 +339,15 @@ export class WebSocketServer {
       socket.on('mailslurp:deleteAccount', withAuth(MailSlurpController.deleteAccount));
       socket.on('mailslurp:setActive', withAuth(MailSlurpController.setActive));
       socket.on('mailslurp:syncInboxes', withAuth(MailSlurpController.syncInboxes));
+
+      // Управление письмами
+      socket.on('emails:list', withAuth(EmailController.list));
+      socket.on('emails:get', withAuth(EmailController.get));
+      socket.on('emails:downloadAttachment', withAuth(EmailController.downloadAttachment));
+      socket.on('emails:markAsRead', withAuth(EmailController.markAsRead));
+      socket.on('emails:getStats', withAuth(EmailController.getStats));
+      socket.on('emails:getInboxes', withAuth(EmailController.getInboxes));
+      socket.on('emails:sendTestEmail', withAuth(EmailController.sendTestEmail));
 
       // Управление шаблонами
       socket.on('templates:list', withAuth(TemplateController.list));
@@ -371,6 +392,15 @@ export class WebSocketServer {
       socket.on('receipts:matchUnmatched', withAuth(ReceiptController.matchUnmatchedReceipts));
       socket.on('receipts:subscribe', withAuth(ReceiptController.subscribe));
       socket.on('receipts:unsubscribe', withAuth(ReceiptController.unsubscribe));
+
+      // Управление плохими чеками (не от T-Bank)
+      socket.on('badReceipts:list', withAuth(BadReceiptController.list));
+      socket.on('badReceipts:get', withAuth(BadReceiptController.get));
+      socket.on('badReceipts:download', withAuth(BadReceiptController.download));
+      socket.on('badReceipts:delete', withAuth(BadReceiptController.delete));
+      socket.on('badReceipts:getStats', withAuth(BadReceiptController.getStats));
+      socket.on('badReceipts:subscribe', withAuth(BadReceiptController.subscribe));
+      socket.on('badReceipts:unsubscribe', withAuth(BadReceiptController.unsubscribe));
 
       // Управление логами
       socket.on('logs:get', withAuth(async (socket, data, callback) => {
@@ -446,7 +476,7 @@ export class WebSocketServer {
           console.log(`   External: http://${urls.external.split(':')[1].replace('//', '')}:3000`);
         }
         console.log('='.repeat(60));
-        console.log('💡 Make sure ports 3000 and 3001 are open in your firewall!');
+        console.log('💡 Make sure ports 3000 and 3002 are open in your firewall!');
         console.log('='.repeat(60) + '\n');
         
         resolve(undefined);

@@ -53,10 +53,7 @@ export class AdvertisementController {
         },
         {
           bybitAccount: true,
-          transactions: {
-            where: { status: { in: ['pending', 'chat_started', 'waiting_payment'] } },
-            take: 5
-          }
+          transaction: true
         }
       );
 
@@ -79,9 +76,7 @@ export class AdvertisementController {
         where: { id: data.id },
         include: {
           bybitAccount: true,
-          transactions: {
-            orderBy: { createdAt: 'desc' },
-            take: 20,
+          transaction: {
             include: {
               payout: true
             }
@@ -153,14 +148,26 @@ export class AdvertisementController {
         throw new Error('Bybit account not found');
       }
 
+      // First create a placeholder payout for the advertisement
+      const payout = await prisma.payout.create({
+        data: {
+          status: 0,  // Initial status
+          meta: {
+            type: 'advertisement_placeholder',
+            currency: data.currency
+          }
+        }
+      });
+
       // Создаем объявление
       const advertisement = await prisma.advertisement.create({
         data: {
           bybitAccountId: data.bybitAccountId,
+          payoutId: payout.id,
           type: data.type,
           currency: data.currency,
           fiat: data.fiat,
-          price: data.price,
+          price: data.price.toString(),
           minAmount: data.minAmount,
           maxAmount: data.maxAmount,
           paymentMethods: data.paymentMethods,

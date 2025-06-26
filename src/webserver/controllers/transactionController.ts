@@ -608,4 +608,99 @@ export class TransactionController {
       handleError(error, callback);
     }
   }
+
+  /**
+   * Manually release money for a transaction (admin only)
+   */
+  static async releaseMoney(
+    socket: AuthenticatedSocket,
+    data: { transactionId: string },
+    callback: Function
+  ) {
+    try {
+      // Only admins can manually release money
+      if (socket.role !== 'admin') {
+        throw new Error('Only admins can manually release money');
+      }
+
+      const transaction = await prisma.transaction.findUnique({
+        where: { id: data.transactionId },
+        include: {
+          advertisement: {
+            include: {
+              bybitAccount: true
+            }
+          }
+        }
+      });
+
+      if (!transaction) {
+        throw new Error('Transaction not found');
+      }
+
+      if (!transaction.orderId) {
+        throw new Error('No order ID found for this transaction');
+      }
+
+      // Get BybitP2PManager from global context
+      const bybitManager = (global as any).bybitP2PManager;
+      if (!bybitManager) {
+        throw new Error('BybitP2PManager not initialized');
+      }
+
+      // Get the Bybit client for this account
+      if (!transaction.advertisement?.bybitAccount) {
+        throw new Error('No Bybit account found for this transaction');
+      }
+
+      const client = bybitManager.getClient(transaction.advertisement.bybitAccount.accountId);
+      if (!client) {
+        throw new Error('Bybit client not found for account');
+      }
+
+      logger.info('Manually releasing money for transaction', {
+        transactionId: transaction.id,
+        orderId: transaction.orderId,
+        currentStatus: transaction.status
+      });
+
+      // Release assets on Bybit
+      const releaseResult = await client.releaseAssets(transaction.orderId);
+
+      if (releaseResult.success) {
+        // Update transaction status to completed
+        const updatedTransaction = await prisma.transaction.update({
+          where: { id: transaction.id },
+          data: {
+            status: 'completed',
+            completedAt: new Date(),
+            updatedAt: new Date()
+          }
+        });
+
+        logger.info('Money released successfully', {
+          transactionId: transaction.id,
+          orderId: transaction.orderId
+        });
+
+        // Emit event for real-time updates
+        socket.broadcast.emit('transaction:updated', {
+          id: updatedTransaction.id,
+          transaction: updatedTransaction
+        });
+
+        handleSuccess({
+          transaction: updatedTransaction,
+          releaseResult
+        }, 'Money released successfully', callback);
+      } else {
+        throw new Error(releaseResult.message || 'Failed to release money on Bybit');
+      }
+    } catch (error) {
+      logger.error('Failed to release money', error as Error, {
+        transactionId: data.transactionId
+      });
+      handleError(error, callback);
+    }
+  }
 }

@@ -59,11 +59,30 @@ export function TransactionChat({
   const [isLoading, setIsLoading] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [isUploadingFile, setIsUploadingFile] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const { socket, isConnected } = useSocket();
   const [autoRefresh, setAutoRefresh] = useState(true);
   const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const [currentUser, setCurrentUser] = useState<any>(null);
+
+  // Get current user role
+  useEffect(() => {
+    const authStorage = localStorage.getItem('auth-storage');
+    if (authStorage) {
+      try {
+        const authData = JSON.parse(authStorage);
+        const user = authData.state?.user;
+        if (user) {
+          setCurrentUser(user);
+        }
+      } catch (e) {
+        console.error('Failed to parse auth-storage:', e);
+      }
+    }
+  }, []);
 
   // Mark messages as read when chat is opened
   useEffect(() => {
@@ -229,6 +248,114 @@ export function TransactionChat({
       });
     } finally {
       setIsSending(false);
+    }
+  };
+
+  // Handle file upload
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !socket || !isConnected || !orderId) return;
+
+    // Check file size (max 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      toast({
+        title: "Ошибка",
+        description: "Файл слишком большой. Максимальный размер: 10MB",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Check file type
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'application/pdf', 'video/mp4'];
+    if (!allowedTypes.includes(file.type)) {
+      toast({
+        title: "Ошибка",
+        description: "Неподдерживаемый тип файла. Разрешены: JPG, PNG, PDF, MP4",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsUploadingFile(true);
+
+    try {
+      // Convert file to base64
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const base64 = reader.result as string;
+        const base64Data = base64.split(',')[1]; // Remove data:type;base64, prefix
+
+        // Upload file to Bybit
+        const uploadResponse = await new Promise<any>((resolve, reject) => {
+          socket.emit('bybit:uploadChatFile', {
+            fileData: base64Data,
+            fileName: file.name,
+            mimeType: file.type,
+            transactionId
+          }, (res: any) => {
+            if (res.error) {
+              reject(new Error(res.error.message || res.error));
+            } else {
+              resolve(res);
+            }
+          });
+        });
+
+        if (uploadResponse.success) {
+          // Send the file URL as a message
+          const fileUrl = uploadResponse.data.url;
+          const messageContent = uploadResponse.data.type === 'IMAGE' 
+            ? fileUrl 
+            : `[Файл: ${file.name}] ${fileUrl}`;
+
+          // Send message with file URL
+          await new Promise((resolve, reject) => {
+            socket.emit('bybit:sendChatMessage', {
+              orderId,
+              transactionId,
+              message: messageContent
+            }, (res: any) => {
+              if (res.error) {
+                reject(new Error(res.error.message || res.error));
+              } else {
+                resolve(res);
+              }
+            });
+          });
+
+          toast({
+            title: "Успешно",
+            description: "Файл отправлен",
+          });
+
+          // Reload messages
+          setTimeout(() => loadMessages(), 1000);
+        }
+      };
+
+      reader.onerror = () => {
+        toast({
+          title: "Ошибка",
+          description: "Не удалось прочитать файл",
+          variant: "destructive",
+        });
+      };
+
+      reader.readAsDataURL(file);
+    } catch (error: any) {
+      console.error('Failed to upload file:', error);
+      toast({
+        title: "Ошибка",
+        description: error.message || "Не удалось загрузить файл",
+        variant: "destructive",
+      });
+    } finally {
+      setIsUploadingFile(false);
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
   };
 
@@ -431,7 +558,7 @@ export function TransactionChat({
 
         <Separator />
 
-        <div className="p-4">
+        <div className="p-4 space-y-3">
           <form 
             onSubmit={(e) => {
               e.preventDefault();
@@ -439,6 +566,32 @@ export function TransactionChat({
             }}
             className="flex gap-2"
           >
+            {/* File upload button for operators and admins */}
+            {(currentUser?.role === 'admin' || currentUser?.role === 'operator') && (
+              <>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*,.pdf,.mp4"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isUploadingFile || !orderId}
+                  title="Прикрепить файл"
+                >
+                  {isUploadingFile ? (
+                    <RefreshCw className="animate-spin" size={16} />
+                  ) : (
+                    <Paperclip size={16} />
+                  )}
+                </Button>
+              </>
+            )}
             <Input
               value={inputMessage}
               onChange={(e) => setInputMessage(e.target.value)}

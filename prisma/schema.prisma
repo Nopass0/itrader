@@ -4,7 +4,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgres"
   url      = env("DATABASE_URL")
 }
 
@@ -45,10 +45,10 @@ model Payout {
 }
 
 model Advertisement {
-  id               String        @id @default(cuid())
-  bybitAdId        String?       @unique
+  id               String       @id @default(cuid())
+  bybitAdId        String?      @unique
   bybitAccountId   String
-  payoutId         String        @unique
+  payoutId         String       @unique
   type             String?
   currency         String?
   fiat             String?
@@ -57,11 +57,11 @@ model Advertisement {
   maxAmount        Float?
   paymentMethods   Json?
   description      String?
-  autoReply        Boolean       @default(false)
+  autoReply        Boolean      @default(false)
   autoReplyMessage String?
-  isActive         Boolean       @default(true)
-  createdAt        DateTime      @default(now())
-  updatedAt        DateTime      @updatedAt
+  isActive         Boolean      @default(true)
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
   side             String?
   asset            String?
   fiatCurrency     String?
@@ -70,8 +70,8 @@ model Advertisement {
   maxOrderAmount   String?
   paymentMethod    String?
   status           String?
-  bybitAccount     BybitAccount  @relation(fields: [bybitAccountId], references: [id])
-  payout           Payout        @relation(fields: [payoutId], references: [id])
+  bybitAccount     BybitAccount @relation(fields: [bybitAccountId], references: [id])
+  payout           Payout       @relation(fields: [payoutId], references: [id])
   transaction      Transaction?
 
   @@index([bybitAccountId])
@@ -80,27 +80,27 @@ model Advertisement {
 }
 
 model Transaction {
-  id               String           @id @default(cuid())
-  payoutId         String?          @unique
-  advertisementId  String           @unique
-  orderId          String?          @unique
-  amount           Float            @default(0)
-  counterpartyName String?
-  status           String
-  chatStep         Int              @default(0)
-  paymentSentAt    DateTime?
-  checkReceivedAt  DateTime?
+  id                String          @id @default(cuid())
+  payoutId          String?         @unique
+  advertisementId   String          @unique
+  orderId           String?         @unique
+  amount            Float           @default(0)
+  counterpartyName  String?
+  status            String
+  chatStep          Int             @default(0)
+  paymentSentAt     DateTime?
+  checkReceivedAt   DateTime?
   receiptReceivedAt DateTime?
-  approvedAt       DateTime?
-  completedAt      DateTime?
-  cancelledAt      DateTime?
-  failureReason    String?
-  createdAt        DateTime         @default(now())
-  updatedAt        DateTime         @updatedAt
-  chatMessages     ChatMessage[]
-  payout           Payout?          @relation(fields: [payoutId], references: [id])
-  advertisement    Advertisement    @relation(fields: [advertisementId], references: [id])
-  tinkoffReceipt   TinkoffReceipt?
+  approvedAt        DateTime?
+  completedAt       DateTime?
+  cancelledAt       DateTime?
+  failureReason     String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  chatMessages      ChatMessage[]
+  payout            Payout?         @relation(fields: [payoutId], references: [id])
+  advertisement     Advertisement   @relation(fields: [advertisementId], references: [id])
+  tinkoffReceipt    TinkoffReceipt?
 
   @@index([status])
   @@index([orderId])
@@ -386,27 +386,27 @@ model Receipt {
 }
 
 model SystemLog {
-  id           String   @id @default(cuid())
-  level        String
-  service      String
-  module       String?
-  message      String
-  timestamp    DateTime @default(now())
-  userId       String?
-  action       String?
-  method       String?
-  path         String?
-  statusCode   Int?
-  duration     Int?
-  ip           String?
-  userAgent    String?
-  requestId    String?
-  error        Json?
-  stack        String?
-  data         Json?
-  variables    Json?
-  isSystem     Boolean  @default(true)
-  createdAt    DateTime @default(now())
+  id         String   @id @default(cuid())
+  level      String
+  service    String
+  module     String?
+  message    String
+  timestamp  DateTime @default(now())
+  userId     String?
+  action     String?
+  method     String?
+  path       String?
+  statusCode Int?
+  duration   Int?
+  ip         String?
+  userAgent  String?
+  requestId  String?
+  error      Json?
+  stack      String?
+  data       Json?
+  variables  Json?
+  isSystem   Boolean  @default(true)
+  createdAt  DateTime @default(now())
 
   @@index([level])
   @@index([service])
@@ -419,16 +419,41 @@ model SystemLog {
 }
 
 model WebServerUser {
-  id         String   @id @default(cuid())
-  username   String   @unique
-  password   String
-  role       String   @default("operator")
-  isActive   Boolean  @default(true)
-  lastLogin  DateTime?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id        String    @id @default(cuid())
+  username  String    @unique
+  password  String
+  role      String    @default("operator")
+  isActive  Boolean   @default(true)
+  lastLogin DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
   @@index([username])
   @@index([role])
   @@index([isActive])
+}
+
+model BadReceipt {
+  id              String    @id @default(cuid())
+  emailId         String    @unique
+  emailFrom       String
+  emailSubject    String?
+  attachmentName  String?
+  filePath        String?
+  fileHash        String?   @unique
+  amount          Float?
+  parsedData      Json?
+  rawText         String?
+  rawEmailData    Json?
+  reason          String?   // Reason why it's a bad receipt (e.g., "Not from T-Bank", "Invalid format")
+  processed       Boolean   @default(false)
+  receivedAt      DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([emailId])
+  @@index([fileHash])
+  @@index([emailFrom])
+  @@index([processed])
+  @@index([createdAt])
 }

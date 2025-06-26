@@ -86,6 +86,22 @@ export class BybitP2PManagerService {
   }
 
   /**
+   * Get all account IDs
+   */
+  getAccounts(): string[] {
+    const accounts = this.manager.getAccounts();
+    logger.debug('Getting accounts list', { accountCount: accounts.length });
+    return accounts.map(account => account.accountId);
+  }
+
+  /**
+   * Get client for specific account
+   */
+  getClient(accountId: string) {
+    return this.manager.getClient(accountId);
+  }
+
+  /**
    * Setup event handlers for P2P events
    */
   private setupEventHandlers(): void {

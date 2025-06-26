@@ -150,6 +150,7 @@ async function main() {
       cancelledOrdersService,
       // cleanupAdvertisementsService,
       isManualMode: false,
+      mailslurpService: null, // Will be initialized later
     };
 
     const orchestrator = new Orchestrator({
@@ -280,73 +281,6 @@ async function main() {
         console.error("[Init] ❌ Failed to start MoneyReleaseService:", error);
       }
 
-      // Initialize MailSlurp (primary email service)
-      logger.info("📧 Initializing MailSlurp...");
-      console.log("[Init] 📧 Initializing MailSlurp...");
-      
-      const mailslurpApiKey = process.env.MAILSLURP_API_KEY;
-      if (mailslurpApiKey) {
-        try {
-          const { getMailSlurpService } = await import("./services/mailslurpService");
-          const { ensureMultipleMailslurpEmails } = await import("./services/enhancedMailslurpService");
-          
-          const mailslurpService = await getMailSlurpService();
-          const email = await mailslurpService.initialize();
-          
-          // Ensure we have multiple emails
-          // Commented out to prevent creating new emails on each startup
-          // await ensureMultipleMailslurpEmails(mailslurpService);
-          
-          const allEmails = mailslurpService.getEmailAddresses();
-          logger.info("✅ MailSlurp initialized successfully", { 
-            primaryEmail: email,
-            totalEmails: allEmails.length,
-            emails: allEmails 
-          });
-          console.log(`[Init] ✅ MailSlurp initialized with ${allEmails.length} emails: ${allEmails.join(', ')}`);
-          
-          // Store service in context for later use
-          context.mailslurpService = mailslurpService;
-          
-          // Set up event listeners for receipt processing
-          mailslurpService.on('receipt:new', async (receipt) => {
-            logger.info("📨 New receipt detected via MailSlurp", {
-              receiptId: receipt.id,
-              filename: receipt.filename
-            });
-            console.log(`[MailSlurp] 📨 New receipt: ${receipt.filename}`);
-          });
-
-          mailslurpService.on('receipt:matched', async (data) => {
-            logger.info("✅ Receipt matched to transaction!", {
-              receiptId: data.receipt.id,
-              transactionId: data.transactionId,
-              payoutId: data.payoutId
-            });
-            console.log(`[MailSlurp] ✅ Receipt matched! Transaction: ${data.transactionId}`);
-            
-            // Complete the transaction
-            try {
-              if (context.chatAutomation) {
-                await context.chatAutomation.completeTransaction(data.transactionId, data.receipt.id);
-              }
-            } catch (error) {
-              logger.error("Failed to complete transaction after receipt match", error);
-            }
-          });
-          
-          // Start monitoring for receipts
-          mailslurpService.startMonitoring(60000); // Check every 60 seconds to avoid rate limits
-          logger.info("📬 MailSlurp monitoring started");
-          console.log("[Init] 📬 MailSlurp monitoring started (checking every 60s)");
-        } catch (error) {
-          logger.error("Failed to initialize MailSlurp", error as Error);
-          console.error("[Init] Failed to initialize MailSlurp:", error);
-        }
-      } else {
-        logger.warn("MAILSLURP_API_KEY not configured");
-        console.log("[Init] ⚠️ MAILSLURP_API_KEY not configured. MailSlurp features disabled.");
-      }
 
       // Initialize Gmail (legacy, fallback)
       logger.info("🔐 Initializing Gmail...");
@@ -2044,6 +1978,74 @@ async function main() {
     // Store WebSocket server reference for later use
     context.webSocketServer = webSocketServer;
     
+    // Initialize MailSlurp (primary email service)
+    logger.info("📧 Initializing MailSlurp...");
+    console.log("📧 Initializing MailSlurp...");
+    
+    const mailslurpApiKey = process.env.MAILSLURP_API_KEY;
+    if (mailslurpApiKey) {
+      try {
+        const { getMailSlurpService } = await import("./services/mailslurpService");
+        const { ensureMultipleMailslurpEmails } = await import("./services/enhancedMailslurpService");
+        
+        const mailslurpService = await getMailSlurpService();
+        const email = await mailslurpService.initialize();
+        
+        // Ensure we have multiple emails
+        // Commented out to prevent creating new emails on each startup
+        // await ensureMultipleMailslurpEmails(mailslurpService);
+        
+        const allEmails = mailslurpService.getEmailAddresses();
+        logger.info("✅ MailSlurp initialized successfully", { 
+          primaryEmail: email,
+          totalEmails: allEmails.length,
+          emails: allEmails 
+        });
+        console.log(`✅ MailSlurp initialized with ${allEmails.length} emails: ${allEmails.join(', ')}`);
+        
+        // Store service in context for later use
+        context.mailslurpService = mailslurpService;
+        
+        // Set up event listeners for receipt processing
+        mailslurpService.on('receipt:new', async (receipt) => {
+          logger.info("📨 New receipt detected via MailSlurp", {
+            receiptId: receipt.id,
+            filename: receipt.filename
+          });
+          console.log(`[MailSlurp] 📨 New receipt: ${receipt.filename}`);
+        });
+
+        mailslurpService.on('receipt:matched', async (data) => {
+          logger.info("✅ Receipt matched to transaction!", {
+            receiptId: data.receipt.id,
+            transactionId: data.transactionId,
+            payoutId: data.payoutId
+          });
+          console.log(`[MailSlurp] ✅ Receipt matched! Transaction: ${data.transactionId}`);
+          
+          // Complete the transaction
+          try {
+            if (context.chatService) {
+              await context.chatService.completeTransaction(data.transactionId, data.receipt.id);
+            }
+          } catch (error) {
+            logger.error("Failed to complete transaction after receipt match", error);
+          }
+        });
+        
+        // Start monitoring for receipts
+        mailslurpService.startMonitoring(60000); // Check every 60 seconds to avoid rate limits
+        logger.info("📬 MailSlurp monitoring started");
+        console.log("📬 MailSlurp monitoring started (checking every 60s)");
+      } catch (error) {
+        logger.error("Failed to initialize MailSlurp", error as Error);
+        console.error("Failed to initialize MailSlurp:", error);
+      }
+    } else {
+      logger.warn("MAILSLURP_API_KEY not configured");
+      console.log("⚠️ MAILSLURP_API_KEY not configured. MailSlurp features disabled.");
+    }
+    
     // Start log cleanup service
     const { getLogCleanupService } = await import('./services/logCleanupService');
     const logCleanupService = getLogCleanupService();
@@ -2170,6 +2172,29 @@ export function getReceiptProcessor(): ReceiptProcessorService | null {
 // Export helper to get BybitP2PManager
 export function getBybitP2PManager(): BybitP2PManagerService | null {
   return globalContext?.bybitManager || null;
+}
+
+// Export helper to get MailSlurp service
+export function getMailSlurpService(): any {
+  // Try to get from context first
+  if (globalContext?.mailslurpService) {
+    return globalContext.mailslurpService;
+  }
+  
+  // Otherwise try to get the singleton instance
+  try {
+    const { getMailSlurpServiceSync } = require('./services/mailslurpService');
+    const service = getMailSlurpServiceSync();
+    logger.info('getMailSlurpService called', { 
+      hasGlobalContext: !!globalContext,
+      hasMailslurpService: !!globalContext?.mailslurpService,
+      hasSingletonService: !!service
+    });
+    return service;
+  } catch (error) {
+    logger.error('Failed to get MailSlurp service', error as Error);
+    return null;
+  }
 }
 
 // Check if running directly

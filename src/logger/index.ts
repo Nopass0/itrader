@@ -118,12 +118,43 @@ class Logger {
       isSystem
     };
 
-    try {
-      const savedLog = await this.prisma.systemLog.create({
-        data: logEntry
-      });
-      
-      // Emit to WebSocket clients
+    // Try to save to database with retry logic
+    let retries = 3;
+    let savedLog = null;
+    
+    while (retries > 0 && !savedLog) {
+      try {
+        savedLog = await this.prisma.systemLog.create({
+          data: logEntry
+        });
+        break;
+      } catch (dbError: any) {
+        retries--;
+        
+        // Check if it's a connection error
+        if (dbError.code === 'P1001' && retries > 0) {
+          // Wait a bit before retrying
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          continue;
+        }
+        
+        // For other errors or after all retries, just log to console
+        if (retries === 0 || dbError.code !== 'P1001') {
+          // Don't print full error object to avoid recursion
+          const errorInfo = {
+            message: dbError.message,
+            code: dbError.code,
+            meta: dbError.meta
+          };
+          console.error('Failed to write log to database:', errorInfo);
+          console.log(JSON.stringify(logEntry, null, 2));
+          break;
+        }
+      }
+    }
+    
+    // Emit to WebSocket clients if save was successful
+    if (savedLog) {
       try {
         // Lazy import to avoid circular dependency
         const globalModule = await import('../webserver/global');
@@ -142,9 +173,6 @@ class Logger {
       } catch (error) {
         // Ignore errors if WebSocket server is not initialized yet
       }
-    } catch (dbError) {
-      console.error('Failed to write log to database:', dbError);
-      console.log(JSON.stringify(logEntry, null, 2));
     }
   }
 

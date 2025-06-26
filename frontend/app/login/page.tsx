@@ -12,7 +12,7 @@ import { useForm } from 'react-hook-form';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { useToast } from '@/components/ui/use-toast';
+import { useToast } from '@/lib/toast';
 import { ParticlesContainer, DotPattern } from '@/components/ui/particles';
 import { RobotEmoji } from '@/components/ui/animated-emoji';
 import { ThemeToggle } from '@/components/ui/theme-toggle';

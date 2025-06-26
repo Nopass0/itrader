@@ -212,8 +212,8 @@ export class PayoutController {
         where: { id: data.id },
         data: updateData,
         include: {
-          gateAccount: true,
-          transaction: true
+          transaction: true,
+          gateAccountRef: true
         }
       });
 
@@ -265,8 +265,8 @@ export class PayoutController {
         where: { id: data.payoutId },
         data: { transactionId: data.transactionId },
         include: {
-          gateAccount: true,
-          transaction: true
+          transaction: true,
+          gateAccountRef: true
         }
       });
 
@@ -310,8 +310,8 @@ export class PayoutController {
           updatedAt: new Date()
         },
         include: {
-          gateAccount: true,
-          transaction: true
+          transaction: true,
+          gateAccountRef: true
         }
       });
 
@@ -521,8 +521,8 @@ export class PayoutController {
       const payouts = await prisma.payout.findMany({
         where,
         include: {
-          gateAccount: true,
-          transaction: true
+          transaction: true,
+          gateAccountRef: true
         },
         orderBy: { createdAt: 'desc' }
       });

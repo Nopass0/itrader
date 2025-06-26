@@ -24,7 +24,7 @@ import {
   DollarSign
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useToast } from '@/components/ui/use-toast';
+import { useToast } from '@/lib/toast';
 import { useSocket } from '@/hooks/useSocket';
 
 interface Receipt {

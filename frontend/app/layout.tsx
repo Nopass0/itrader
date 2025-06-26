@@ -4,7 +4,7 @@ import './globals.css'
 import { ThemeProvider } from '@/components/providers/theme-provider'
 import { AuthProvider } from '@/components/providers/auth-provider'
 import { SocketProvider } from '@/contexts/SocketContext'
-import { Toaster } from '@/components/ui/toaster'
+import { Toaster } from 'sonner'
 import { ConnectionDebug } from '@/components/ConnectionDebug'
 
 const inter = Inter({ subsets: ['latin', 'cyrillic'] })

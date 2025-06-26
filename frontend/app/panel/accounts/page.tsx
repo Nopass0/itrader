@@ -34,7 +34,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { ParticlesContainer, DotPattern, AnimatedText } from "@/components/ui/particles";
-import { useToast } from "@/components/ui/use-toast";
+import { useToast } from "@/lib/toast";
 import { useAuthStore } from "@/store/auth";
 import { RobotEmoji, MoneyBagEmoji, ChartIncreasingEmoji } from "@/components/ui/animated-emoji";
 import { AddAccountDialog } from "@/components/panel/AddAccountDialog";
