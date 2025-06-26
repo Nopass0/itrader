@@ -45,6 +45,7 @@ interface AppContext {
   receiptParsingService?: any;
   receiptPayoutLinker?: any;
   assetReleaseService?: any;
+  appealSyncService?: any;
 }
 
 async function promptUser(message: string): Promise<boolean> {
@@ -2046,6 +2047,27 @@ async function main() {
       console.log("⚠️ MAILSLURP_API_KEY not configured. MailSlurp features disabled.");
     }
     
+    // Initialize Bybit Appeal Sync Service
+    logger.info("⚖️ Initializing Bybit Appeal Sync Service...");
+    console.log("⚖️ Initializing Bybit Appeal Sync Service...");
+    
+    try {
+      const { BybitAppealSyncService } = await import("./services/bybitAppealSyncService");
+      const appealSyncService = new BybitAppealSyncService(context.bybitManager);
+      
+      // Start syncing every minute
+      appealSyncService.start(60000);
+      
+      // Store in context
+      context.appealSyncService = appealSyncService;
+      
+      logger.info("✅ Bybit Appeal Sync Service started");
+      console.log("✅ Bybit Appeal Sync Service started (checking every 60s)");
+    } catch (error) {
+      logger.error("Failed to initialize Bybit Appeal Sync Service", error as Error);
+      console.error("Failed to initialize Bybit Appeal Sync Service:", error);
+    }
+    
     // Start log cleanup service
     const { getLogCleanupService } = await import('./services/logCleanupService');
     const logCleanupService = getLogCleanupService();
@@ -2098,6 +2120,11 @@ async function main() {
         // Stop instant order monitor
         if (orchestrator.context.instantOrderMonitor) {
           orchestrator.context.instantOrderMonitor.stop();
+        }
+        
+        // Stop appeal sync service
+        if (orchestrator.context.appealSyncService) {
+          orchestrator.context.appealSyncService.stop();
         }
         
         // Stop cancelled order detector - DISABLED

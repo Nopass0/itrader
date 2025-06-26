@@ -30,7 +30,7 @@ export function MailSlurpAccountForm({ onSuccess }: MailSlurpAccountFormProps) {
           <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
           <div className="text-sm text-blue-800 dark:text-blue-200">
             <p className="mb-2">
-              Нажмите кнопку ниже, чтобы автоматически синхронизировать все доступные MailSlurp inbox'ы из вашего API аккаунта.
+              Нажмите кнопку ниже, чтобы автоматически синхронизировать все доступные MailSlurp inbox&apos;ы из вашего API аккаунта.
             </p>
             <p className="text-xs">
               Убедитесь, что переменная окружения MAILSLURP_API_KEY настроена корректно.

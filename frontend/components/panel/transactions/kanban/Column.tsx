@@ -28,9 +28,10 @@ interface KanbanColumnProps {
   };
   cards: any[];
   isDragging?: boolean;
+  currentUser?: any;
 }
 
-export function KanbanColumn({ column, cards, isDragging }: KanbanColumnProps) {
+export function KanbanColumn({ column, cards, isDragging, currentUser }: KanbanColumnProps) {
   const { setNodeRef, isOver } = useDroppable({
     id: column.id.toString(),
   });
@@ -206,6 +207,7 @@ export function KanbanColumn({ column, cards, isDragging }: KanbanColumnProps) {
                   key={card.id}
                   card={card}
                   columnId={column.id}
+                  currentUser={currentUser}
                 />
               ))}
             </div>

@@ -36,10 +36,12 @@ import {
   MapPin,
   Shield,
   Zap,
-  BarChart3
+  BarChart3,
+  Upload
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/components/ui/use-toast';
+import { ManualReceiptUpload } from '@/components/ManualReceiptUpload';
 
 interface DetailsDialogProps {
   item: any;
@@ -52,6 +54,7 @@ export function TransactionDetailsDialog({ item, isOpen, onClose, onOpenChat }: 
   const { toast } = useToast();
   const [isUpdatingStatus, setIsUpdatingStatus] = React.useState(false);
   const [currentUser, setCurrentUser] = React.useState<any>(null);
+  const [showManualUpload, setShowManualUpload] = React.useState(false);
   
   // Get current user role from localStorage
   React.useEffect(() => {
@@ -420,10 +423,22 @@ export function TransactionDetailsDialog({ item, isOpen, onClose, onOpenChat }: 
                     </div>
                   ) : item.amount !== undefined ? (
                     <div>
-                      <p className="text-xs text-muted-foreground">Сумма</p>
-                      <p className="text-lg font-bold">{formatAmount(item.amount, item.currency)}</p>
+                      <p className="text-xs text-muted-foreground">Сумма RUB</p>
+                      <p className="text-lg font-bold">{formatAmount(item.amount)}</p>
                     </div>
                   ) : null}
+                  {item.amount && item.advertisement?.price && (
+                    <div>
+                      <p className="text-xs text-muted-foreground">Сумма USDT (расчетная)</p>
+                      <p className="text-lg font-bold">{formatAmount(item.amount / parseFloat(item.advertisement.price), 'USDT')}</p>
+                    </div>
+                  )}
+                  {item.exchangeRate && (
+                    <div>
+                      <p className="text-xs text-muted-foreground">Курс</p>
+                      <p className="font-medium">{item.exchangeRate.toFixed(2)} RUB/USDT</p>
+                    </div>
+                  )}
                   {item.price && (
                     <div>
                       <p className="text-xs text-muted-foreground">Цена</p>
@@ -444,6 +459,78 @@ export function TransactionDetailsDialog({ item, isOpen, onClose, onOpenChat }: 
                   )}
                 </CardContent>
               </Card>
+
+              {/* Spread Calculation - for transactions with financial data */}
+              {itemType === 'transaction' && (item.payout || item.amount) && (
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      <BarChart3 size={16} />
+                      Расчет спреда
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {(() => {
+                      // Получаем сумму в USDT для Bybit (расход)
+                      // Используем курс из объявления или дефолтный
+                      const exchangeRate = item.advertisement?.price ? parseFloat(item.advertisement.price) : 95;
+                      const expenseUSDT = item.amount ? item.amount / exchangeRate : 0;
+                      
+                      // Получаем сумму в USDT для Gate (доход)
+                      let revenueUSDT = 0;
+                      if (item.payout?.amount) {
+                        // Прямая сумма в USDT из payout
+                        revenueUSDT = item.payout.amount;
+                      } else if (item.payout?.amountTrader && typeof item.payout.amountTrader === 'object') {
+                        // amountTrader объект с ключами валют: "000001" = USDT, "643" = RUB
+                        const amountTrader = item.payout.amountTrader as Record<string, number>;
+                        revenueUSDT = amountTrader['000001'] || 0;
+                      }
+                      
+                      const spreadUSDT = revenueUSDT - expenseUSDT;
+                      const spreadPercentage = expenseUSDT > 0 ? ((revenueUSDT * 100 / expenseUSDT) - 100) : 0;
+                      
+                      return (
+                        <>
+                          <div>
+                            <p className="text-xs text-muted-foreground">Расход (Bybit)</p>
+                            <p className="text-sm font-medium text-red-600">{formatAmount(expenseUSDT, 'USDT')}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground">Доход (Gate)</p>
+                            <p className="text-sm font-medium text-green-600">{formatAmount(revenueUSDT, 'USDT')}</p>
+                          </div>
+                          <Separator />
+                          <div>
+                            <p className="text-xs text-muted-foreground">Спред USDT</p>
+                            <p className={cn(
+                              "text-lg font-bold",
+                              spreadUSDT >= 0 ? "text-green-600" : "text-red-600"
+                            )}>
+                              {spreadUSDT >= 0 ? '+' : ''}{formatAmount(spreadUSDT, 'USDT')}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground">Спред %</p>
+                            <p className={cn(
+                              "text-lg font-bold",
+                              spreadPercentage >= 5 ? "text-green-600" : 
+                              spreadPercentage >= 3 ? "text-yellow-600" :
+                              spreadPercentage >= 0 ? "text-orange-600" :
+                              "text-red-600"
+                            )}>
+                              {spreadPercentage >= 0 ? '+' : ''}{spreadPercentage.toFixed(2)}%
+                            </p>
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            Формула: (Доход × 100 / Расход) - 100
+                          </div>
+                        </>
+                      );
+                    })()}
+                  </CardContent>
+                </Card>
+              )}
 
               {/* Time Information */}
               <Card>
@@ -691,7 +778,60 @@ export function TransactionDetailsDialog({ item, isOpen, onClose, onOpenChat }: 
             )}
           </div>
         </ScrollArea>
+        
+        {/* Action buttons */}
+        <div className="p-4 border-t bg-muted/30 flex items-center justify-between">
+          <div className="flex gap-2">
+            {/* Manual receipt upload for transactions with Gate payout */}
+            {itemType === 'transaction' && item.payout?.gatePayoutId && item.payout?.status === 5 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowManualUpload(true)}
+              >
+                <Upload size={16} className="mr-2" />
+                Загрузить чек
+              </Button>
+            )}
+            
+            {/* Open chat button */}
+            {item.orderId && onOpenChat && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => onOpenChat(item.orderId)}
+              >
+                <MessageSquare size={16} className="mr-2" />
+                Открыть чат
+              </Button>
+            )}
+          </div>
+          
+          <Button variant="ghost" size="sm" onClick={onClose}>
+            Закрыть
+          </Button>
+        </div>
       </DialogContent>
+      
+      {/* Manual Receipt Upload Dialog */}
+      {showManualUpload && item.payout && (
+        <ManualReceiptUpload
+          isOpen={showManualUpload}
+          onClose={() => setShowManualUpload(false)}
+          payoutId={item.payout.id}
+          transactionId={item.id}
+          expectedAmount={item.amount || item.payout.amount || 0}
+          recipientCard={item.payout.wallet}
+          recipientName={item.payout.meta?.recipientName}
+          onSuccess={(receiptId) => {
+            toast({
+              title: 'Успешно',
+              description: 'Чек загружен и привязан к транзакции'
+            });
+            setShowManualUpload(false);
+          }}
+        />
+      )}
     </Dialog>
   );
 }

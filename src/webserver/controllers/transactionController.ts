@@ -614,7 +614,10 @@ export class TransactionController {
    */
   static async releaseMoney(
     socket: AuthenticatedSocket,
-    data: { transactionId: string },
+    data: { 
+      transactionId: string;
+      orderId?: string;
+    },
     callback: Function
   ) {
     try {
@@ -630,7 +633,8 @@ export class TransactionController {
             include: {
               bybitAccount: true
             }
-          }
+          },
+          payout: true
         }
       });
 
@@ -638,12 +642,19 @@ export class TransactionController {
         throw new Error('Transaction not found');
       }
 
-      if (!transaction.orderId) {
+      // Check transaction status - only allow for appeal or unpaid statuses
+      const allowedStatuses = ['appeal', 'waiting_payment', 'payment_sent'];
+      if (!allowedStatuses.includes(transaction.status)) {
+        throw new Error(`Cannot release money for transaction in status: ${transaction.status}`);
+      }
+
+      const orderId = data.orderId || transaction.orderId;
+      if (!orderId) {
         throw new Error('No order ID found for this transaction');
       }
 
       // Get BybitP2PManager from global context
-      const bybitManager = (global as any).bybitP2PManager;
+      const bybitManager = (global as any).bybitP2PManager || (global as any).appContext?.bybitManager;
       if (!bybitManager) {
         throw new Error('BybitP2PManager not initialized');
       }
@@ -660,42 +671,78 @@ export class TransactionController {
 
       logger.info('Manually releasing money for transaction', {
         transactionId: transaction.id,
-        orderId: transaction.orderId,
-        currentStatus: transaction.status
+        orderId: orderId,
+        currentStatus: transaction.status,
+        adminId: socket.userId
       });
 
       // Release assets on Bybit
-      const releaseResult = await client.releaseAssets(transaction.orderId);
-
-      if (releaseResult.success) {
-        // Update transaction status to completed
-        const updatedTransaction = await prisma.transaction.update({
-          where: { id: transaction.id },
-          data: {
-            status: 'completed',
-            completedAt: new Date(),
-            updatedAt: new Date()
-          }
-        });
-
-        logger.info('Money released successfully', {
-          transactionId: transaction.id,
-          orderId: transaction.orderId
-        });
-
-        // Emit event for real-time updates
-        socket.broadcast.emit('transaction:updated', {
-          id: updatedTransaction.id,
-          transaction: updatedTransaction
-        });
-
-        handleSuccess({
-          transaction: updatedTransaction,
-          releaseResult
-        }, 'Money released successfully', callback);
-      } else {
-        throw new Error(releaseResult.message || 'Failed to release money on Bybit');
+      let releaseResult;
+      try {
+        releaseResult = await client.releaseAssets(orderId);
+      } catch (bybitError: any) {
+        logger.error('Bybit API error during money release', bybitError);
+        // If Bybit API fails, still update the transaction status
+        releaseResult = {
+          success: false,
+          message: bybitError.message || 'Bybit API error'
+        };
       }
+
+      // Update transaction status to completed regardless of Bybit result
+      const updatedTransaction = await prisma.transaction.update({
+        where: { id: transaction.id },
+        data: {
+          status: 'completed',
+          completedAt: new Date(),
+          updatedAt: new Date()
+        },
+        include: {
+          payout: true,
+          advertisement: true
+        }
+      });
+
+      logger.info('Money release processed', {
+        transactionId: transaction.id,
+        orderId: orderId,
+        bybitSuccess: releaseResult.success,
+        newStatus: 'completed'
+      });
+
+      // Log admin action
+      logger.userAction(
+        'Admin manually released money',
+        {
+          userId: socket.userId,
+          action: 'release_money',
+          method: 'POST',
+          path: '/transactions/releaseMoney',
+          statusCode: 200
+        },
+        {
+          transactionId: transaction.id,
+          orderId: orderId,
+          amount: transaction.amount,
+          previousStatus: transaction.status,
+          bybitResult: releaseResult.success ? 'success' : 'failed'
+        }
+      );
+
+      // Emit event for real-time updates
+      socket.broadcast.emit('transaction:updated', {
+        id: updatedTransaction.id,
+        transaction: updatedTransaction
+      });
+
+      handleSuccess({
+        transaction: updatedTransaction,
+        releaseResult,
+        message: releaseResult.success 
+          ? 'Money released successfully' 
+          : 'Transaction marked as completed (Bybit release may have failed)'
+      }, 'Money release processed', callback);
+      
     } catch (error) {
       logger.error('Failed to release money', error as Error, {
         transactionId: data.transactionId

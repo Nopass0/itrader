@@ -111,6 +111,7 @@ export default function SettingsPage() {
   const [currentRate, setCurrentRate] = useState<number>(0);
   const [lastUpdate, setLastUpdate] = useState<string>('');
   const [source, setSource] = useState<string>('');
+  const [rateSource, setRateSource] = useState<string>('');
   
   // Log cleanup settings
   const [cleanupEnabled, setCleanupEnabled] = useState(true);
@@ -133,6 +134,7 @@ export default function SettingsPage() {
         setConstantRate(data.constantRate.toString());
         setLastUpdate(data.lastUpdate);
         setSource(data.source || '');
+        setRateSource(data.source || '');
       }
     } catch (error) {
       toast({
@@ -177,20 +179,31 @@ export default function SettingsPage() {
     
     setSaving(true);
     try {
-      // Сохранение константного курса
+      // Сначала устанавливаем режим
+      const modeResponse = await socket.emitWithAck('rates:toggleMode', {
+        mode: rateMode
+      });
+      
+      if (!modeResponse.success) {
+        throw new Error(modeResponse.error?.message || 'Ошибка изменения режима');
+      }
+      
+      // Если режим константный, сохраняем курс
       if (rateMode === 'constant' && constantRate) {
         const response = await socket.emitWithAck('rates:setConstant', {
           rate: parseFloat(constantRate)
         });
         
         if (!response.success) {
-          throw new Error(response.error || 'Ошибка сохранения курса');
+          throw new Error(response.error?.message || 'Ошибка сохранения курса');
         }
       }
 
       toast({
         title: "Успешно",
-        description: "Настройки курса сохранены"
+        description: rateMode === 'automatic' 
+          ? "Включен автоматический режим курса" 
+          : "Настройки курса сохранены"
       });
       
       // Обновляем данные
@@ -506,118 +519,189 @@ export default function SettingsPage() {
               <Label className="text-base font-medium">Режим работы</Label>
               
               <div className="space-y-3">
-                {/* Автоматический режим - всегда заблокирован */}
+                {/* Автоматический режим */}
                 <motion.div
                   whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => setRateMode('automatic')}
                   className={cn(
-                    "flex items-center justify-between p-4 rounded-lg border transition-colors",
-                    "bg-muted/30 opacity-60 cursor-not-allowed"
+                    "flex items-center justify-between p-4 rounded-lg border transition-colors cursor-pointer",
+                    rateMode === 'automatic' 
+                      ? "bg-primary/10 border-primary/20" 
+                      : "hover:bg-muted/50 border-border"
                   )}
                 >
                   <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-full bg-secondary">
-                      <Zap className="h-5 w-5 text-secondary-foreground" />
+                    <div className={cn(
+                      "p-2 rounded-full transition-colors",
+                      rateMode === 'automatic' ? "bg-primary/20" : "bg-muted"
+                    )}>
+                      <TrendingUp className={cn(
+                        "h-5 w-5 transition-colors",
+                        rateMode === 'automatic' ? "text-primary" : "text-muted-foreground"
+                      )} />
                     </div>
                     <div>
                       <div className="font-medium flex items-center gap-2">
                         Автоматический курс
-                        <Lock className="h-4 w-4 text-muted-foreground" />
+                        {rateMode === 'automatic' && (
+                          <Badge variant="default" className="text-xs">
+                            Активно
+                          </Badge>
+                        )}
                       </div>
                       <p className="text-sm text-muted-foreground">
-                        Курс обновляется автоматически из внешних источников
+                        Курс обновляется автоматически каждые 5 минут
                       </p>
                     </div>
                   </div>
-                  <Switch
-                    checked={false}
-                    disabled={true}
-                    aria-label="Автоматический режим (заблокирован)"
-                  />
+                  <div className="flex items-center gap-2">
+                    {rateMode === 'automatic' && (
+                      <span className="text-sm font-medium">
+                        {currentRate.toFixed(2)} RUB
+                      </span>
+                    )}
+                  </div>
                 </motion.div>
 
-                {/* Константный режим - всегда включен */}
+                {/* Константный режим */}
                 <motion.div
                   whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => setRateMode('constant')}
                   className={cn(
-                    "flex items-center justify-between p-4 rounded-lg border transition-colors",
-                    "bg-primary/10 border-primary/20"
+                    "flex items-center justify-between p-4 rounded-lg border transition-colors cursor-pointer",
+                    rateMode === 'constant' 
+                      ? "bg-primary/10 border-primary/20" 
+                      : "hover:bg-muted/50 border-border"
                   )}
                 >
                   <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-full bg-primary/20">
-                      <Calculator className="h-5 w-5 text-primary" />
+                    <div className={cn(
+                      "p-2 rounded-full transition-colors",
+                      rateMode === 'constant' ? "bg-primary/20" : "bg-muted"
+                    )}>
+                      <Calculator className={cn(
+                        "h-5 w-5 transition-colors",
+                        rateMode === 'constant' ? "text-primary" : "text-muted-foreground"
+                      )} />
                     </div>
                     <div>
                       <div className="font-medium flex items-center gap-2">
                         Фиксированный курс
-                        <Badge variant="default" className="text-xs">
-                          Активно
-                        </Badge>
+                        {rateMode === 'constant' && (
+                          <Badge variant="default" className="text-xs">
+                            Активно
+                          </Badge>
+                        )}
                       </div>
                       <p className="text-sm text-muted-foreground">
-                        Использовать заданное значение курса
+                        Используется заданное значение курса для всех операций
                       </p>
                     </div>
                   </div>
-                  <Switch
-                    checked={true}
-                    disabled={true}
-                    aria-label="Константный режим (всегда включен)"
-                  />
                 </motion.div>
               </div>
             </div>
 
-            {/* Настройка константного курса */}
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              transition={{ duration: 0.3 }}
-              className="space-y-4"
-            >
-              <div className="space-y-2">
-                <Label htmlFor="constant-rate" className="text-base font-medium flex items-center gap-2">
-                  <ArrowRightLeft className="h-4 w-4" />
-                  Фиксированный курс
-                </Label>
-                <div className="flex gap-3">
-                  <div className="relative max-w-xs">
-                    <Input
-                      id="constant-rate"
-                      type="number"
-                      step="0.01"
-                      placeholder="Например: 95.50"
-                      value={constantRate}
-                      onChange={(e) => setConstantRate(e.target.value)}
-                      disabled={!isAdmin}
-                      className="pr-16 text-lg"
-                    />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
-                      RUB
-                    </span>
+            {/* Настройка курса в зависимости от режима */}
+            {rateMode === 'constant' ? (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                transition={{ duration: 0.3 }}
+                className="space-y-4"
+              >
+                <div className="space-y-2">
+                  <Label htmlFor="constant-rate" className="text-base font-medium flex items-center gap-2">
+                    <ArrowRightLeft className="h-4 w-4" />
+                    Фиксированный курс
+                  </Label>
+                  <div className="flex gap-3">
+                    <div className="relative max-w-xs">
+                      <Input
+                        id="constant-rate"
+                        type="number"
+                        step="0.01"
+                        placeholder="Например: 95.50"
+                        value={constantRate}
+                        onChange={(e) => setConstantRate(e.target.value)}
+                        disabled={!isAdmin}
+                        className="pr-16 text-lg"
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                        RUB
+                      </span>
+                    </div>
+                    {!isAdmin && (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Lock className="h-4 w-4" />
+                        <span>Только для администраторов</span>
+                      </div>
+                    )}
                   </div>
-                  {!isAdmin && (
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Lock className="h-4 w-4" />
-                      <span>Только для администраторов</span>
+                  <p className="text-sm text-muted-foreground">
+                    Этот курс будет использоваться для всех операций
+                  </p>
+                </div>
+              </motion.div>
+            ) : (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                transition={{ duration: 0.3 }}
+                className="space-y-4"
+              >
+                <div className="space-y-4">
+                  <div>
+                    <Label className="text-base font-medium flex items-center gap-2">
+                      <Activity className="h-4 w-4" />
+                      Текущий курс
+                    </Label>
+                    <div className="mt-2 p-4 bg-muted/50 rounded-lg">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-muted-foreground">USDT/RUB</span>
+                        <span className="text-2xl font-bold">{currentRate.toFixed(2)} ₽</span>
+                      </div>
+                      {lastUpdate && (
+                        <p className="text-xs text-muted-foreground mt-2">
+                          Обновлено: {new Date(lastUpdate).toLocaleString('ru-RU')}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {rateSource && (
+                    <div>
+                      <Label className="text-sm text-muted-foreground">Источник</Label>
+                      <p className="text-sm font-medium">{rateSource}</p>
                     </div>
                   )}
+                  
+                  {isAdmin && (
+                    <Button
+                      variant="outline"
+                      onClick={forceUpdateRate}
+                      className="w-full"
+                    >
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                      Обновить курс
+                    </Button>
+                  )}
                 </div>
-                <p className="text-sm text-muted-foreground">
-                  Этот курс будет использоваться для всех операций
-                </p>
-              </div>
-
-            </motion.div>
+              </motion.div>
+            )}
 
             {/* Информационный блок */}
             <div className="p-4 bg-blue-50 dark:bg-blue-950/30 rounded-lg flex gap-3">
               <Info className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
               <div className="text-sm text-blue-900 dark:text-blue-100">
-                <p className="font-medium mb-1">Информация о режимах</p>
+                <p className="font-medium mb-1">Управление курсом</p>
                 <p>
-                  В текущей версии системы доступен только фиксированный курс. 
-                  Автоматическое обновление курса временно отключено для стабильности работы.
+                  {rateMode === 'automatic' 
+                    ? 'В автоматическом режиме курс обновляется каждые 5 минут из внешних источников. Система автоматически выбирает наиболее выгодный курс.'
+                    : 'В режиме фиксированного курса используется заданное значение для всех операций. Изменение курса доступно только администраторам.'
+                  }
                 </p>
               </div>
             </div>
@@ -627,7 +711,7 @@ export default function SettingsPage() {
               <div className="flex gap-3 pt-4">
                 <Button
                   onClick={saveRateSettings}
-                  disabled={saving || !constantRate}
+                  disabled={saving || (rateMode === 'constant' && !constantRate)}
                   className="shadow-sm"
                 >
                   {saving ? (

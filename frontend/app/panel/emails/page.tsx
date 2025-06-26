@@ -83,9 +83,18 @@ export default function EmailsPage() {
 
   // Load emails from MailSlurp
   const loadEmails = async (retryCount = 0) => {
-    if (!socket?.connected) return;
+    if (!socket?.connected) {
+      console.log('Socket not connected, skipping email load');
+      return;
+    }
     
     setLoading(true);
+    console.log('Loading emails...', {
+      socketConnected: socket?.connected,
+      searchQuery,
+      retryCount
+    });
+    
     try {
       const response = await listEmails({
         limit: 100,
@@ -96,7 +105,9 @@ export default function EmailsPage() {
         response,
         hasEmails: !!response?.emails,
         emailCount: response?.emails?.length || 0,
-        firstEmail: response?.emails?.[0]
+        firstEmail: response?.emails?.[0],
+        responseType: typeof response,
+        responseKeys: response ? Object.keys(response) : []
       });
 
       if (!response || !response.emails) {
@@ -110,6 +121,12 @@ export default function EmailsPage() {
       } else {
         setEmails(response.emails);
         console.log(`Successfully loaded ${response.emails.length} emails`);
+        
+        // Log first few emails for debugging
+        if (response.emails.length > 0) {
+          console.log('First email details:', response.emails[0]);
+          console.log('Email subjects:', response.emails.slice(0, 5).map(e => e.subject));
+        }
       }
     } catch (error) {
       console.error('Failed to load emails:', error);
@@ -434,12 +451,16 @@ export default function EmailsPage() {
                           
                           <p className="text-sm text-muted-foreground mb-1">
                             <User size={12} className="inline mr-1" />
-                            {email.from}
+                            От: {email.from}
                           </p>
                           
-                          <p className="text-sm text-muted-foreground mb-2">
+                          <p className="text-sm text-muted-foreground mb-1">
                             <Mail size={12} className="inline mr-1" />
-                            {email.emailAddress}
+                            Кому: {email.emailAddress}
+                          </p>
+                          
+                          <p className="text-xs text-muted-foreground mb-2">
+                            ID: {email.id}
                           </p>
                           
                           {email.bodyExcerpt && (
@@ -558,11 +579,20 @@ export default function EmailsPage() {
               {/* Email Body */}
               <div>
                 <h4 className="font-medium mb-2">Содержимое письма:</h4>
-                <ScrollArea className="h-[300px] w-full border rounded-md p-4">
-                  <div 
-                    className="prose prose-sm max-w-none dark:prose-invert"
-                    dangerouslySetInnerHTML={{ __html: selectedEmail.body || 'Нет содержимого' }}
-                  />
+                <ScrollArea className="h-[400px] w-full border rounded-md p-4 bg-muted/30">
+                  {selectedEmail.body ? (
+                    <div 
+                      className="prose prose-sm max-w-none dark:prose-invert whitespace-pre-wrap"
+                      dangerouslySetInnerHTML={{ 
+                        __html: selectedEmail.body.includes('<') ? selectedEmail.body : selectedEmail.body.replace(/\n/g, '<br/>')
+                      }}
+                    />
+                  ) : (
+                    <div className="text-center text-muted-foreground py-8">
+                      <Mail size={32} className="mx-auto mb-2 opacity-50" />
+                      <p>Нет содержимого письма</p>
+                    </div>
+                  )}
                 </ScrollArea>
               </div>
             </div>

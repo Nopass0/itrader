@@ -27,6 +27,8 @@ export class P2PClient extends EventEmitter {
   private config: P2PConfig;
   private pollingIntervals: Map<string, NodeJS.Timeout> = new Map();
   private isConnected: boolean = false;
+  private balanceCache: { value: number; timestamp: number } | null = null;
+  private balanceCacheTTL = 60000; // 1 minute cache
 
   constructor(config: P2PConfig) {
     super();
@@ -689,5 +691,49 @@ export class P2PClient extends EventEmitter {
    */
   isConnected(): boolean {
     return this.isConnected;
+  }
+
+  /**
+   * Get account balance
+   */
+  async getAccountBalance(): Promise<number> {
+    try {
+      // Check cache first
+      if (this.balanceCache && Date.now() - this.balanceCache.timestamp < this.balanceCacheTTL) {
+        return this.balanceCache.value;
+      }
+
+      // Get balance from account info
+      const response = await this.httpClient.get<ApiResponse<any>>("/fiat/otc/configuration/queryAccountInfo");
+      
+      if (response.ret_code !== 0) {
+        throw new Error(`Failed to get account info: ${response.ret_msg}`);
+      }
+
+      // Extract RUB balance
+      const balance = response.result?.balance?.RUB || 0;
+      
+      // Cache the balance
+      this.balanceCache = {
+        value: balance,
+        timestamp: Date.now()
+      };
+
+      return balance;
+    } catch (error) {
+      console.error("[P2PClient] Failed to get account balance:", error);
+      // Return cached value if available
+      if (this.balanceCache) {
+        return this.balanceCache.value;
+      }
+      return 0;
+    }
+  }
+
+  /**
+   * Clear balance cache
+   */
+  clearBalanceCache(): void {
+    this.balanceCache = null;
   }
 }

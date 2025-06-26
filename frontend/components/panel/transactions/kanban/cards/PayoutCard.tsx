@@ -11,14 +11,18 @@ import {
   CreditCard,
   Building2,
   Clock,
-  CheckCircle
+  CheckCircle,
+  Upload,
+  FileText
 } from 'lucide-react';
 import { ReceiptPopover } from '@/components/ReceiptPopover';
+import { ManualReceiptUpload } from '@/components/ManualReceiptUpload';
 import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
 import { useSocket } from '@/hooks/useSocket';
 import { createLogger } from '@/services/logger';
 import { StageTimer } from '../StageTimer';
+import { useState } from 'react';
 
 const logger = createLogger('PayoutCard');
 
@@ -30,6 +34,7 @@ interface PayoutCardProps {
 export function PayoutCard({ payout, onViewDetails }: PayoutCardProps) {
   const { toast } = useToast();
   const { socket } = useSocket();
+  const [showManualUpload, setShowManualUpload] = useState(false);
 
   const copyToClipboard = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
@@ -265,9 +270,45 @@ export function PayoutCard({ payout, onViewDetails }: PayoutCardProps) {
           </Button>
         )}
         {payout.id && (
-          <ReceiptPopover payoutId={payout.id} />
+          <>
+            <ReceiptPopover payoutId={payout.id} />
+            {/* Manual receipt upload button for Gate payouts */}
+            {payout.gatePayoutId && payout.status === 5 && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 px-2 text-xs"
+                onClick={() => setShowManualUpload(true)}
+                title="Загрузить чек вручную"
+              >
+                <Upload size={12} className="mr-1" />
+                Чек
+              </Button>
+            )}
+          </>
         )}
       </div>
+
+      {/* Manual Receipt Upload Dialog */}
+      {showManualUpload && payout.transaction && (
+        <ManualReceiptUpload
+          isOpen={showManualUpload}
+          onClose={() => setShowManualUpload(false)}
+          payoutId={payout.id}
+          transactionId={payout.transaction.id}
+          expectedAmount={payout.amount || 0}
+          recipientCard={payout.wallet}
+          recipientName={payout.meta?.recipientName}
+          onSuccess={(receiptId) => {
+            toast({
+              title: 'Успешно',
+              description: 'Чек загружен и привязан к транзакции'
+            });
+            setShowManualUpload(false);
+            // Reload payout data if needed
+          }}
+        />
+      )}
     </Card>
   );
 }

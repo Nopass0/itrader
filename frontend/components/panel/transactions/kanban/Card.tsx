@@ -15,9 +15,10 @@ interface KanbanCardProps {
   card: any;
   columnId?: number;
   isDragging?: boolean;
+  currentUser?: any;
 }
 
-export function KanbanCard({ card, columnId, isDragging }: KanbanCardProps) {
+export function KanbanCard({ card, columnId, isDragging, currentUser }: KanbanCardProps) {
   const {
     attributes,
     listeners,
@@ -58,6 +59,7 @@ export function KanbanCard({ card, columnId, isDragging }: KanbanCardProps) {
             unreadCount={card.unreadCount}
             onViewDetails={() => setShowDetails(true)}
             onOpenChat={() => setShowChat(true)}
+            currentUser={currentUser}
           />
         );
 

@@ -784,60 +784,146 @@ export class MailSlurpService extends EventEmitter {
         return [];
       }
 
+      // Try to get all emails at once first
+      try {
+        logger.info('Attempting to get all emails from all inboxes at once...');
+        const allEmailsResponse = await this.emailController.getAllEmails({
+          page: 0,
+          size: params.limit || 200,
+          sort: 'DESC'
+        });
+
+        if (allEmailsResponse && (Array.isArray(allEmailsResponse) || allEmailsResponse.content)) {
+          const emailList = Array.isArray(allEmailsResponse) ? allEmailsResponse : (allEmailsResponse.content || []);
+          
+          logger.info(`Got ${emailList.length} emails from getAllEmails API`);
+          
+          // Process and return these emails
+          for (const email of emailList) {
+            allEmails.push({
+              id: email.id,
+              subject: email.subject || 'Без темы',
+              from: email.from || 'Неизвестный отправитель',
+              to: email.to || [],
+              body: email.body || '',
+              bodyExcerpt: email.bodyExcerpt || (email.body ? email.body.substring(0, 150) + '...' : ''),
+              createdAt: email.createdAt,
+              read: email.read || false,
+              attachments: email.attachments?.map(att => ({
+                id: att.attachmentId || att.id,
+                name: att.name,
+                contentType: att.contentType,
+                size: att.size || 0
+              })) || [],
+              inboxId: email.inboxId || inboxesToCheck[0]?.id,
+              emailAddress: email.recipients?.[0] || email.to?.[0] || inboxesToCheck[0]?.emailAddress
+            });
+          }
+
+          // Apply filters and return
+          let filteredEmails = allEmails;
+          if (params.search) {
+            const searchQuery = params.search.toLowerCase();
+            filteredEmails = allEmails.filter(email =>
+              email.subject.toLowerCase().includes(searchQuery) ||
+              email.from.toLowerCase().includes(searchQuery) ||
+              email.body.toLowerCase().includes(searchQuery) ||
+              email.emailAddress.toLowerCase().includes(searchQuery)
+            );
+          }
+
+          filteredEmails.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+          if (params.limit) {
+            filteredEmails = filteredEmails.slice(0, params.limit);
+          }
+
+          logger.info(`Returning ${filteredEmails.length} emails after filtering`);
+          return filteredEmails;
+        }
+      } catch (error) {
+        logger.warn('Failed to get all emails at once, falling back to per-inbox method', error);
+      }
+
       for (const inbox of inboxesToCheck) {
         try {
           logger.debug(`Fetching emails from inbox ${inbox.id} (${inbox.emailAddress})`);
           
-          // Add timeout to API call
+          // First get email list
           const emailsPromise = this.emailController.getInboxEmailsPaginated({
             inboxId: inbox.id,
             page: 0,
-            size: params.limit || 50,
+            size: params.limit || 100,
             sort: 'DESC'
           });
           
           const timeoutPromise = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error(`Timeout fetching emails from inbox ${inbox.id}`)), 10000)
+            setTimeout(() => reject(new Error(`Timeout fetching emails from inbox ${inbox.id}`)), 15000)
           );
           
-          const emails = await Promise.race([emailsPromise, timeoutPromise]) as any;
+          const emailsResponse = await Promise.race([emailsPromise, timeoutPromise]) as any;
           
           logger.info(`Got email response from inbox ${inbox.id}`, {
-            hasContent: !!emails?.content,
-            contentLength: emails?.content?.length || 0,
-            totalElements: emails?.totalElements,
-            responseKeys: emails ? Object.keys(emails) : []
+            hasContent: !!emailsResponse?.content,
+            contentLength: emailsResponse?.content?.length || 0,
+            totalElements: emailsResponse?.totalElements,
+            responseKeys: emailsResponse ? Object.keys(emailsResponse) : []
           });
 
           // Check if emails is an array directly (not paginated)
-          const emailList = Array.isArray(emails) ? emails : (emails?.content || []);
+          const emailList = Array.isArray(emailsResponse) ? emailsResponse : (emailsResponse?.content || []);
           
           if (!emailList || !Array.isArray(emailList)) {
             logger.warn(`No email content from inbox ${inbox.id}`, {
-              response: emails,
-              responseType: typeof emails
+              response: emailsResponse,
+              responseType: typeof emailsResponse
             });
             continue;
           }
           
-          const processedEmails = emailList.map(email => ({
-            id: email.id,
-            subject: email.subject || 'Без темы',
-            from: email.from,
-            to: email.to || [],
-            body: email.body || '',
-            bodyExcerpt: email.bodyExcerpt || (email.body ? email.body.substring(0, 150) + '...' : ''),
-            createdAt: email.createdAt,
-            read: email.read || false,
-            attachments: email.attachments?.map(att => ({
-              id: att.attachmentId || att.id,
-              name: att.name,
-              contentType: att.contentType,
-              size: att.size || 0
-            })) || [],
-            inboxId: inbox.id,
-            emailAddress: inbox.emailAddress
-          })) || [];
+          // Now fetch full details for each email
+          const processedEmails = [];
+          for (const emailSummary of emailList) {
+            try {
+              // Get full email with body
+              const fullEmail = await this.emailController.getEmail({ emailId: emailSummary.id });
+              
+              processedEmails.push({
+                id: fullEmail.id,
+                subject: fullEmail.subject || 'Без темы',
+                from: fullEmail.from || 'Неизвестный отправитель',
+                to: fullEmail.to || [],
+                body: fullEmail.body || '',
+                bodyExcerpt: fullEmail.bodyExcerpt || (fullEmail.body ? fullEmail.body.substring(0, 150) + '...' : ''),
+                createdAt: fullEmail.createdAt,
+                read: fullEmail.read || false,
+                attachments: fullEmail.attachments?.map(att => ({
+                  id: att.attachmentId || att.id,
+                  name: att.name,
+                  contentType: att.contentType,
+                  size: att.size || 0
+                })) || [],
+                inboxId: inbox.id,
+                emailAddress: inbox.emailAddress
+              });
+            } catch (detailError) {
+              logger.warn(`Failed to get full details for email ${emailSummary.id}`, detailError);
+              // Still include basic info if we can't get full details
+              processedEmails.push({
+                id: emailSummary.id,
+                subject: emailSummary.subject || 'Без темы',
+                from: emailSummary.from || 'Неизвестный отправитель',
+                to: emailSummary.to || [],
+                body: '',
+                bodyExcerpt: '',
+                createdAt: emailSummary.createdAt,
+                read: emailSummary.read || false,
+                attachments: [],
+                inboxId: inbox.id,
+                emailAddress: inbox.emailAddress
+              });
+            }
+          }
 
           allEmails.push(...processedEmails);
         } catch (error) {
@@ -881,21 +967,29 @@ export class MailSlurpService extends EventEmitter {
     try {
       const email = await this.emailController.getEmail({ emailId });
       
+      // If body is missing, try to get raw email
+      let body = email.body || '';
+      if (!body && email.rawEmail) {
+        body = email.rawEmail;
+      }
+      
       return {
         id: email.id,
         subject: email.subject || 'Без темы',
-        from: email.from,
+        from: email.from || 'Неизвестный отправитель',
         to: email.to || [],
-        body: email.body || '',
+        body: body,
+        bodyExcerpt: email.bodyExcerpt || (body ? body.substring(0, 150) + '...' : ''),
         createdAt: email.createdAt,
         read: email.read || false,
         attachments: email.attachments?.map(att => ({
-          id: att.attachmentId,
+          id: att.attachmentId || att.id,
           name: att.name,
           contentType: att.contentType,
           size: att.size || 0
         })) || [],
-        inboxId: inboxId
+        inboxId: inboxId,
+        rawEmail: email.rawEmail
       };
     } catch (error) {
       logger.error(`Error getting email ${emailId}`, error as Error);

@@ -474,4 +474,144 @@ export class BybitAdvertisementController {
       handleError(error, callback);
     }
   }
+
+  /**
+   * Get Bybit account balances
+   */
+  static async getBalances(
+    socket: AuthenticatedSocket,
+    data: {},
+    callback: Function
+  ) {
+    try {
+      logger.info('Getting Bybit account balances');
+
+      // Get bybitP2PManager from global context
+      const bybitManager = (global as any).appContext?.bybitManager;
+      
+      if (!bybitManager) {
+        throw new Error('Bybit P2P Manager not initialized');
+      }
+
+      const balances = [];
+      const accountIds = bybitManager.getAccounts();
+
+      for (const accountId of accountIds) {
+        try {
+          const client = bybitManager.getClient(accountId);
+          if (!client) {
+            logger.warn(`No client found for account ${accountId}`);
+            continue;
+          }
+          const balance = await client.getAccountBalance();
+          const accountInfo = await prisma.bybitAccount.findUnique({
+            where: { accountId },
+            select: { email: true, isActive: true }
+          });
+
+          balances.push({
+            accountId,
+            email: accountInfo?.email || accountId,
+            balance: balance || 0,
+            currency: 'RUB',
+            lastUpdate: new Date().toISOString(),
+            isActive: accountInfo?.isActive || false
+          });
+        } catch (error) {
+          logger.warn(`Failed to get balance for account ${accountId}`, error);
+          
+          const accountInfo = await prisma.bybitAccount.findUnique({
+            where: { accountId },
+            select: { email: true, isActive: true }
+          });
+
+          balances.push({
+            accountId,
+            email: accountInfo?.email || accountId,
+            balance: 0,
+            currency: 'RUB',
+            lastUpdate: new Date().toISOString(),
+            isActive: false,
+            error: 'Failed to fetch balance'
+          });
+        }
+      }
+
+      handleSuccess({
+        balances,
+        total: balances.reduce((sum, acc) => sum + acc.balance, 0)
+      }, 'Balances fetched successfully', callback);
+
+    } catch (error) {
+      logger.error('Error getting Bybit balances', error);
+      handleError(error, callback);
+    }
+  }
+
+  /**
+   * Refresh Bybit account balances
+   */
+  static async refreshBalances(
+    socket: AuthenticatedSocket,
+    data: {},
+    callback: Function
+  ) {
+    try {
+      logger.info('Refreshing Bybit account balances');
+
+      // Get bybitP2PManager from global context
+      const bybitManager = (global as any).appContext?.bybitManager;
+      
+      if (!bybitManager) {
+        throw new Error('Bybit P2P Manager not initialized');
+      }
+
+      // Force refresh balances
+      const balances = [];
+      const accountIds = bybitManager.getAccounts();
+
+      for (const accountId of accountIds) {
+        try {
+          const client = bybitManager.getClient(accountId);
+          if (!client) {
+            logger.warn(`No client found for account ${accountId}`);
+            continue;
+          }
+          // Force refresh by clearing cache if method exists
+          if (client.clearBalanceCache) {
+            await client.clearBalanceCache();
+          }
+          
+          const balance = await client.getAccountBalance();
+          const accountInfo = await prisma.bybitAccount.findUnique({
+            where: { accountId },
+            select: { email: true, isActive: true }
+          });
+
+          balances.push({
+            accountId,
+            email: accountInfo?.email || accountId,
+            balance: balance || 0,
+            currency: 'RUB',
+            lastUpdate: new Date().toISOString(),
+            isActive: accountInfo?.isActive || false
+          });
+        } catch (error) {
+          logger.warn(`Failed to refresh balance for account ${accountId}`, error);
+        }
+      }
+
+      // Emit balance update to all connected clients
+      socket.to('bybit:balances').emit('bybit:balanceUpdate', { balances });
+
+      handleSuccess({
+        balances,
+        total: balances.reduce((sum, acc) => sum + acc.balance, 0)
+      }, 'Balances refreshed successfully', callback);
+
+    } catch (error) {
+      logger.error('Error refreshing Bybit balances', error);
+      handleError(error, callback);
+    }
+  }
 }

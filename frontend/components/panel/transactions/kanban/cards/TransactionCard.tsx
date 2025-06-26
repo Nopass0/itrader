@@ -20,6 +20,7 @@ import { cn } from '@/lib/utils';
 import { Transaction } from '@/hooks/useTransactions';
 import { StageTimer } from '../StageTimer';
 import { getStageTimestamp } from '../utils/getStageTimestamp';
+import { ReleaseMoneyButton } from '@/components/ReleaseMoneyButton';
 
 interface TransactionCardProps {
   transaction: Transaction;
@@ -27,6 +28,7 @@ interface TransactionCardProps {
   unreadCount?: number;
   onViewDetails: () => void;
   onOpenChat?: () => void;
+  currentUser?: any;
 }
 
 export function TransactionCard({ 
@@ -34,7 +36,8 @@ export function TransactionCard({
   stage, 
   unreadCount = 0,
   onViewDetails,
-  onOpenChat 
+  onOpenChat,
+  currentUser
 }: TransactionCardProps) {
   const { toast } = useToast();
 
@@ -249,6 +252,18 @@ export function TransactionCard({
           <ReceiptPopover 
             payoutId={transaction.payout.id}
             transactionId={transaction.id}
+          />
+        )}
+        {currentUser?.role === 'admin' && 
+         (transaction.status === 'appeal' || transaction.status === 'waiting_payment' || transaction.status === 'payment_sent') && (
+          <ReleaseMoneyButton
+            transactionId={transaction.id}
+            orderId={transaction.orderId}
+            amount={transaction.amount || 0}
+            status={transaction.status}
+            size="sm"
+            variant="destructive"
+            className="h-7 px-2 text-xs flex-1"
           />
         )}
       </div>

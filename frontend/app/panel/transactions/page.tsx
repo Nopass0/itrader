@@ -91,6 +91,7 @@ import { ReceiptPopover } from "@/components/ReceiptPopover";
 import { AdvertisementsTab } from "@/components/panel/AdvertisementsTab";
 import { KanbanBoard } from "@/components/panel/transactions/kanban";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { ReleaseMoneyButton } from "@/components/ReleaseMoneyButton";
 
 // Tab types
 type TabType = "transactions" | "orders" | "advertisements" | "payouts";
@@ -729,6 +730,7 @@ export default function TransactionsPage() {
     { value: "cancelled", label: "Отменено" },
     { value: "cancelled_by_counterparty", label: "Отменено контрагентом" },
     { value: "stupid", label: "Контрагент идиот" },
+    { value: "appeal", label: "Апелляция" },
   ];
 
   // Status configuration with vibrant colors
@@ -826,6 +828,13 @@ export default function TransactionsPage() {
       className: "bg-blue-100 text-blue-800 border-blue-300",
       bgColor: "bg-cyan-500",
       textColor: "text-cyan-50",
+    },
+    appeal: {
+      icon: AlertCircle,
+      text: "Апелляция",
+      className: "bg-red-100 text-red-800 border-red-300",
+      bgColor: "bg-red-500",
+      textColor: "text-red-50",
     },
     // Order statuses
     open: {
@@ -1517,6 +1526,21 @@ export default function TransactionsPage() {
                             <RefreshCw size={12} />
                           </Button>
                         )}
+                        {currentUser?.role === "admin" &&
+                         (transaction.status === "appeal" || 
+                          transaction.status === "waiting_payment" || 
+                          transaction.status === "payment_sent") && (
+                          <ReleaseMoneyButton
+                            transactionId={transaction.id}
+                            orderId={transaction.orderId}
+                            amount={transaction.amount || 0}
+                            status={transaction.status}
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 px-2 text-green-600"
+                            onSuccess={() => loadTransactions()}
+                          />
+                        )}
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button
@@ -1577,21 +1601,22 @@ export default function TransactionsPage() {
                               </>
                             )}
                             {currentUser?.role === "admin" &&
-                              transaction.status !== "completed" &&
-                              transaction.status !== "failed" &&
-                              transaction.status !== "cancelled" &&
-                              transaction.status !==
-                                "cancelled_by_counterparty" && (
+                              (transaction.status === "appeal" || 
+                               transaction.status === "waiting_payment" || 
+                               transaction.status === "payment_sent") && (
                                 <>
                                   <DropdownMenuSeparator />
-                                  <DropdownMenuItem
-                                    onClick={() =>
-                                      handleReleaseMoney(transaction.id)
-                                    }
-                                    className="text-green-600"
-                                  >
-                                    <DollarSign size={14} className="mr-2" />
-                                    Отпустить монеты
+                                  <DropdownMenuItem className="p-0">
+                                    <ReleaseMoneyButton
+                                      transactionId={transaction.id}
+                                      orderId={transaction.orderId}
+                                      amount={transaction.amount || 0}
+                                      status={transaction.status}
+                                      size="sm"
+                                      variant="ghost"
+                                      className="w-full justify-start text-green-600 h-auto px-2 py-1.5"
+                                      onSuccess={() => loadTransactions()}
+                                    />
                                   </DropdownMenuItem>
                                 </>
                               )}

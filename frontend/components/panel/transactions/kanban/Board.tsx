@@ -390,6 +390,7 @@ export function KanbanBoard({
                     column={column}
                     cards={getColumnCards(column.id)}
                     isDragging={isDragging}
+                    currentUser={currentUser}
                   />
                 ))}
               </SortableContext>

@@ -45,6 +45,7 @@ import { useMailSlurpAccounts } from '@/hooks/useMailSlurpAccounts';
 import { SystemAccountsTab } from '@/components/panel/SystemAccountsTab';
 import { MailSlurpAccountCard } from '@/components/panel/MailSlurpAccountCard';
 import { MailSlurpAccountForm } from '@/components/panel/MailSlurpAccountForm';
+import { BybitBalances } from '@/components/BybitBalances';
 
 // Status badge component
 const StatusBadge: React.FC<{ status: string; errorMessage?: string }> = ({ status, errorMessage }) => {
@@ -1058,6 +1059,11 @@ export default function AccountsPage() {
               animate={{ opacity: 1 }}
               className="space-y-4"
             >
+              {/* Bybit Balances */}
+              {bybitAccounts.length > 0 && (
+                <BybitBalances className="mb-6" />
+              )}
+              
               {/* Action buttons */}
               {bybitAccounts.length > 0 && (
                 <div className="flex justify-end gap-2">

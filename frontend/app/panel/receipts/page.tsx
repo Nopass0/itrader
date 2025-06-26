@@ -116,11 +116,29 @@ export default function ReceiptsPage() {
 
   const getStatusBadge = (status: string) => {
     const statusConfig: Record<string, { variant: any; icon: any; text: string; className: string }> = {
+      'success': { 
+        variant: 'default', 
+        icon: CheckCircle,
+        text: 'Успешно',
+        className: 'bg-green-500/10 text-green-500 border-green-500/20'
+      },
       'SUCCESS': { 
         variant: 'default', 
         icon: CheckCircle,
         text: 'Успешно',
         className: 'bg-green-500/10 text-green-500 border-green-500/20'
+      },
+      'matched': { 
+        variant: 'default', 
+        icon: CheckCircle,
+        text: 'Сопоставлен',
+        className: 'bg-blue-500/10 text-blue-500 border-blue-500/20'
+      },
+      'pending': { 
+        variant: 'secondary', 
+        icon: Clock,
+        text: 'В обработке',
+        className: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20'
       },
       'PENDING': { 
         variant: 'secondary', 
@@ -128,15 +146,27 @@ export default function ReceiptsPage() {
         text: 'В обработке',
         className: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20'
       },
+      'failed': { 
+        variant: 'destructive', 
+        icon: XCircle,
+        text: 'Ошибка',
+        className: 'bg-red-500/10 text-red-500 border-red-500/20'
+      },
       'FAILED': { 
         variant: 'destructive', 
         icon: XCircle,
         text: 'Ошибка',
         className: 'bg-red-500/10 text-red-500 border-red-500/20'
+      },
+      'manual': { 
+        variant: 'secondary', 
+        icon: User,
+        text: 'Вручную',
+        className: 'bg-purple-500/10 text-purple-500 border-purple-500/20'
       }
     };
 
-    const config = statusConfig[status] || statusConfig['PENDING'];
+    const config = statusConfig[status] || statusConfig['pending'];
     const Icon = config.icon;
 
     return (

@@ -199,7 +199,10 @@ export function ReceiptPopover({ payoutId, transactionId, className }: ReceiptPo
             <div className="text-lg font-bold">{receipt.bank || 'Т-Банк'}</div>
             <Badge variant="secondary" className="bg-white/20 text-black border-0">
               {receipt.status === 'matched' ? 'Подтвержден' : 
-               receipt.parsedData?.status === 'SUCCESS' ? 'Успешно' : 'Обрабатывается'}
+               receipt.status === 'success' || receipt.parsedData?.status === 'SUCCESS' ? 'Успешно' : 
+               receipt.status === 'failed' ? 'Ошибка' :
+               receipt.status === 'manual' ? 'Вручную' :
+               'Обрабатывается'}
             </Badge>
           </div>
           <div className="text-2xl font-bold">

@@ -8,7 +8,10 @@ import { validatePaginationParams, paginatePrisma } from '../utils/pagination';
 import { PrismaClient } from '../../../generated/prisma';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import * as crypto from 'crypto';
+import { createLogger } from '../../logger';
 
+const logger = createLogger('ReceiptController');
 const prisma = new PrismaClient();
 
 export class ReceiptController {
@@ -449,6 +452,208 @@ export class ReceiptController {
         remainingUnmatched: unmatchedReceipts.length - matchedCount
       }, `Matched ${matchedCount} receipts`, callback);
     } catch (error) {
+      handleError(error, callback);
+    }
+  }
+
+  /**
+   * Upload and parse receipt manually
+   */
+  static async uploadManual(
+    socket: AuthenticatedSocket,
+    data: {
+      payoutId: string;
+      transactionId: string;
+      fileData: string;
+      fileName: string;
+      mimeType: string;
+    },
+    callback: Function
+  ) {
+    try {
+      logger.info('Manual receipt upload requested', {
+        payoutId: data.payoutId,
+        transactionId: data.transactionId,
+        fileName: data.fileName
+      });
+
+      // Validate inputs
+      if (!data.fileData || !data.fileName || data.mimeType !== 'application/pdf') {
+        throw new Error('Invalid file data or type');
+      }
+
+      // Get transaction and payout details
+      const transaction = await prisma.transaction.findUnique({
+        where: { id: data.transactionId },
+        include: {
+          payout: true
+        }
+      });
+
+      if (!transaction || !transaction.payout) {
+        throw new Error('Transaction or payout not found');
+      }
+
+      if (transaction.payout.id !== data.payoutId) {
+        throw new Error('Payout ID mismatch');
+      }
+
+      // Convert base64 to buffer
+      const buffer = Buffer.from(data.fileData, 'base64');
+      
+      // Generate file hash
+      const fileHash = crypto.createHash('sha256').update(buffer).digest('hex');
+      
+      // Check if receipt already exists
+      const existingReceipt = await prisma.receipt.findFirst({
+        where: {
+          OR: [
+            { transactionId: data.transactionId },
+            { payoutId: data.payoutId }
+          ]
+        }
+      });
+
+      if (existingReceipt) {
+        throw new Error('Receipt already exists for this transaction');
+      }
+
+      // Create receipts directory if not exists
+      const receiptsDir = path.join(process.cwd(), 'data', 'receipts', 'manual');
+      await fs.mkdir(receiptsDir, { recursive: true });
+
+      // Save file
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').substring(0, 19);
+      const filename = `manual_${timestamp}_${data.fileName}`.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const filepath = path.join(receiptsDir, filename);
+      await fs.writeFile(filepath, buffer);
+
+      logger.info('Receipt file saved', { filepath, size: buffer.length });
+
+      // Parse PDF using OCR
+      let parsedData: any = {};
+      try {
+        const { TinkoffReceiptParser } = await import('../../ocr');
+        const parser = new TinkoffReceiptParser();
+        parsedData = await parser.parseReceiptPDF(filepath);
+        
+        logger.info('Receipt parsed successfully', {
+          amount: parsedData.amount,
+          senderName: parsedData.senderName,
+          recipientCard: parsedData.recipientCard
+        });
+      } catch (parseError) {
+        logger.error('Failed to parse receipt', parseError);
+        parsedData = {
+          error: 'Failed to parse PDF',
+          rawText: ''
+        };
+      }
+
+      // Return parsed data for confirmation
+      handleSuccess({
+        parsedData: {
+          amount: parsedData.amount,
+          senderName: parsedData.senderName,
+          recipientName: parsedData.recipientName,
+          recipientCard: parsedData.recipientCard,
+          transactionDate: parsedData.transactionDate,
+          rawText: parsedData.rawText
+        },
+        tempFilePath: filepath,
+        fileHash
+      }, 'Receipt uploaded and parsed', callback);
+
+    } catch (error) {
+      logger.error('Error uploading manual receipt', error);
+      handleError(error, callback);
+    }
+  }
+
+  /**
+   * Confirm and save manually uploaded receipt
+   */
+  static async confirmManual(
+    socket: AuthenticatedSocket,
+    data: {
+      payoutId: string;
+      transactionId: string;
+      parsedData: any;
+    },
+    callback: Function
+  ) {
+    try {
+      logger.info('Confirming manual receipt', {
+        payoutId: data.payoutId,
+        transactionId: data.transactionId
+      });
+
+      // Get transaction and payout
+      const transaction = await prisma.transaction.findUnique({
+        where: { id: data.transactionId },
+        include: {
+          payout: true
+        }
+      });
+
+      if (!transaction || !transaction.payout) {
+        throw new Error('Transaction or payout not found');
+      }
+
+      // Create receipt record
+      const receipt = await prisma.receipt.create({
+        data: {
+          emailId: `manual_${Date.now()}_${data.transactionId}`,
+          filename: `manual_receipt_${data.transactionId}.pdf`,
+          filePath: `data/receipts/manual/confirmed_${data.transactionId}.pdf`,
+          emailFrom: 'manual@upload.local',
+          emailSubject: `Ручная загрузка чека для транзакции ${data.transactionId}`,
+          receivedAt: new Date(),
+          isProcessed: true,
+          amount: data.parsedData.amount || transaction.amount,
+          senderName: data.parsedData.senderName,
+          recipientName: data.parsedData.recipientName,
+          recipientCard: data.parsedData.recipientCard,
+          recipientPhone: transaction.payout.wallet,
+          transactionDate: data.parsedData.transactionDate ? new Date(data.parsedData.transactionDate) : new Date(),
+          status: 'matched',
+          parsedData: data.parsedData,
+          rawText: data.parsedData.rawText || '',
+          rawEmailData: {
+            source: 'manual_upload',
+            uploadedBy: socket.userId,
+            uploadedAt: new Date()
+          },
+          transactionId: data.transactionId,
+          payoutId: data.payoutId
+        }
+      });
+
+      logger.info('Receipt created', { receiptId: receipt.id });
+
+      // Update transaction status if needed
+      if (transaction.status === 'waiting_payment' || transaction.status === 'payment_sent') {
+        await prisma.transaction.update({
+          where: { id: data.transactionId },
+          data: {
+            status: 'payment_received',
+            checkReceivedAt: new Date()
+          }
+        });
+
+        logger.info('Transaction status updated to payment_received');
+      }
+
+      // Emit receipt update
+      socket.to('receipts:updates').emit('receipt:created', receipt);
+
+      handleSuccess({
+        receiptId: receipt.id,
+        receipt
+      }, 'Receipt confirmed and saved', callback);
+
+    } catch (error) {
+      logger.error('Error confirming manual receipt', error);
       handleError(error, callback);
     }
   }

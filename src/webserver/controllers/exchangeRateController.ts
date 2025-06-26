@@ -125,26 +125,21 @@ export class ExchangeRateController {
         throw new Error("Viewers cannot change exchange rate mode");
       }
 
-      const currentMode =
-        (await db.getSetting("exchangeRateMode")) || "automatic";
+      const { getExchangeRateManager } = await import(
+        "../../services/exchangeRateManager"
+      );
+      const manager = getExchangeRateManager();
+      const config = manager.getConfig();
+      
+      const currentMode = config.mode;
       const newMode = currentMode === "automatic" ? "constant" : "automatic";
 
-      await db.setSetting("exchangeRateMode", newMode);
-
-      // Если переключаем на автоматический, запускаем обновление
-      if (newMode === "automatic") {
-        // Здесь можно запустить обновление курса
-        const { ExchangeRateManager } = await import(
-          "../../services/exchangeRateManager"
-        );
-        const manager = ExchangeRateManager.getInstance();
-        await manager.updateRateAsync();
-      }
+      await manager.setMode(newMode);
 
       // Записываем в историю
       await prisma.exchangeRateHistory.create({
         data: {
-          rate: await db.getCurrentExchangeRate(),
+          rate: await manager.getRate(),
           source: "mode_change",
           metadata: JSON.stringify({
             changedBy: socket.userId,
@@ -156,15 +151,15 @@ export class ExchangeRateController {
 
       // Emit событие всем клиентам
       socket.server.emit("rate:changed", {
-        oldRate: await db.getCurrentExchangeRate(),
-        newRate: await db.getCurrentExchangeRate(),
+        oldRate: await manager.getRate(),
+        newRate: await manager.getRate(),
         mode: newMode,
       });
 
       handleSuccess(
         {
           mode: newMode,
-          currentRate: await db.getCurrentExchangeRate(),
+          currentRate: await manager.getRate(),
         },
         `Exchange rate mode switched to ${newMode}`,
         callback,
@@ -364,6 +359,220 @@ export class ExchangeRateController {
           })),
         },
         undefined,
+        callback,
+      );
+    } catch (error) {
+      handleError(error, callback);
+    }
+  }
+
+  /**
+   * Получение правил автоматического курса
+   */
+  static async getRules(socket: AuthenticatedSocket, callback: Function) {
+    try {
+      const { getExchangeRateManager } = await import(
+        "../../services/exchangeRateManager"
+      );
+      const manager = getExchangeRateManager();
+      const rules = await manager.getRules();
+
+      handleSuccess(rules, undefined, callback);
+    } catch (error) {
+      handleError(error, callback);
+    }
+  }
+
+  /**
+   * Создание правила автоматического курса
+   */
+  static async createRule(
+    socket: AuthenticatedSocket,
+    data: {
+      name: string;
+      priority: number;
+      timeStart?: string;
+      timeEnd?: string;
+      minAmount?: number;
+      maxAmount?: number;
+      pageNumber: number;
+      adIndex: number;
+      priceAdjustment: number;
+      enabled: boolean;
+    },
+    callback: Function,
+  ) {
+    try {
+      // Только админы могут создавать правила
+      if (socket.role !== "admin") {
+        throw new Error("Only admins can create rate rules");
+      }
+
+      const { getExchangeRateManager } = await import(
+        "../../services/exchangeRateManager"
+      );
+      const manager = getExchangeRateManager();
+      const rule = await manager.createRule(data);
+
+      handleSuccess(rule, "Rate rule created successfully", callback);
+    } catch (error) {
+      handleError(error, callback);
+    }
+  }
+
+  /**
+   * Обновление правила автоматического курса
+   */
+  static async updateRule(
+    socket: AuthenticatedSocket,
+    data: {
+      id: string;
+      updates: {
+        name?: string;
+        priority?: number;
+        timeStart?: string;
+        timeEnd?: string;
+        minAmount?: number;
+        maxAmount?: number;
+        pageNumber?: number;
+        adIndex?: number;
+        priceAdjustment?: number;
+        enabled?: boolean;
+      };
+    },
+    callback: Function,
+  ) {
+    try {
+      // Только админы могут обновлять правила
+      if (socket.role !== "admin") {
+        throw new Error("Only admins can update rate rules");
+      }
+
+      const { getExchangeRateManager } = await import(
+        "../../services/exchangeRateManager"
+      );
+      const manager = getExchangeRateManager();
+      const rule = await manager.updateRule(data.id, data.updates);
+
+      handleSuccess(rule, "Rate rule updated successfully", callback);
+    } catch (error) {
+      handleError(error, callback);
+    }
+  }
+
+  /**
+   * Удаление правила автоматического курса
+   */
+  static async deleteRule(
+    socket: AuthenticatedSocket,
+    data: { id: string },
+    callback: Function,
+  ) {
+    try {
+      // Только админы могут удалять правила
+      if (socket.role !== "admin") {
+        throw new Error("Only admins can delete rate rules");
+      }
+
+      const { getExchangeRateManager } = await import(
+        "../../services/exchangeRateManager"
+      );
+      const manager = getExchangeRateManager();
+      await manager.deleteRule(data.id);
+
+      handleSuccess(null, "Rate rule deleted successfully", callback);
+    } catch (error) {
+      handleError(error, callback);
+    }
+  }
+
+  /**
+   * Тестирование правила автоматического курса
+   */
+  static async testRule(
+    socket: AuthenticatedSocket,
+    data: {
+      name: string;
+      priority: number;
+      timeStart?: string;
+      timeEnd?: string;
+      minAmount?: number;
+      maxAmount?: number;
+      pageNumber: number;
+      adIndex: number;
+      priceAdjustment: number;
+      enabled: boolean;
+    },
+    callback: Function,
+  ) {
+    try {
+      // Только админы и операторы могут тестировать правила
+      if (socket.role === "viewer") {
+        throw new Error("Viewers cannot test rate rules");
+      }
+
+      const { getExchangeRateManager } = await import(
+        "../../services/exchangeRateManager"
+      );
+      const manager = getExchangeRateManager();
+      const result = await manager.testRule(data);
+
+      handleSuccess(result, undefined, callback);
+    } catch (error) {
+      handleError(error, callback);
+    }
+  }
+
+  /**
+   * Получение статистики курсов с Bybit P2P
+   */
+  static async getBybitStatistics(
+    socket: AuthenticatedSocket,
+    data: { pageNumber?: number },
+    callback: Function,
+  ) {
+    try {
+      const { getExchangeRateManager } = await import(
+        "../../services/exchangeRateManager"
+      );
+      const manager = getExchangeRateManager();
+      const statistics = await manager.getRateStatistics(data.pageNumber || 1);
+
+      handleSuccess(statistics, undefined, callback);
+    } catch (error) {
+      handleError(error, callback);
+    }
+  }
+
+  /**
+   * Обновление конфигурации
+   */
+  static async updateConfig(
+    socket: AuthenticatedSocket,
+    data: {
+      updateInterval?: number;
+      fallbackRate?: number;
+    },
+    callback: Function,
+  ) {
+    try {
+      // Только админы могут обновлять конфигурацию
+      if (socket.role !== "admin") {
+        throw new Error("Only admins can update configuration");
+      }
+
+      const { getExchangeRateManager } = await import(
+        "../../services/exchangeRateManager"
+      );
+      const manager = getExchangeRateManager();
+      await manager.updateConfig(data);
+
+      handleSuccess(
+        {
+          ...manager.getConfig(),
+          ...data,
+        },
+        "Configuration updated successfully",
         callback,
       );
     } catch (error) {

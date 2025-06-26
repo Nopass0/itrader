@@ -28,6 +28,7 @@ import { MailSlurpController } from './controllers/mailSlurpController';
 import { EmailController } from './controllers/emailController';
 import { CleanupController } from './controllers/cleanupController';
 import { BadReceiptController } from './controllers/badReceiptController';
+import { AppealController } from './controllers/appealController';
 import { setGlobalIO } from './global';
 
 const logger = createLogger('WebSocketServer');
@@ -277,6 +278,10 @@ export class WebSocketServer {
       socket.on('transactions:reissueAdvertisement', withAuthAndLogging(TransactionController.reissueAdvertisement, 'reissueAdvertisement', 'transactions:reissueAdvertisement', (data) => ({ transactionId: data?.transactionId })));
       socket.on('transactions:releaseMoney', withAuthAndLogging(TransactionController.releaseMoney, 'releaseMoney', 'transactions:releaseMoney', (data) => ({ transactionId: data?.transactionId })));
 
+      // Управление апелляциями
+      socket.on('appeals:sync', withAuthAndLogging(AppealController.syncAppeals, 'syncAppeals', 'appeals:sync', () => ({})));
+      socket.on('appeals:getStatus', withAuth(AppealController.getStatus));
+
       // Управление выплатами
       socket.on('payouts:list', withAuth(PayoutController.list));
       socket.on('payouts:get', withAuth(PayoutController.get));
@@ -307,6 +312,13 @@ export class WebSocketServer {
       socket.on('rates:setMarkup', withAuth(ExchangeRateController.setMarkup));
       socket.on('rates:forceUpdate', withAuth(ExchangeRateController.forceUpdate));
       socket.on('rates:getStatistics', withAuth(ExchangeRateController.getStatistics));
+      socket.on('rates:getRules', withAuth(ExchangeRateController.getRules));
+      socket.on('rates:createRule', withAuth(ExchangeRateController.createRule));
+      socket.on('rates:updateRule', withAuth(ExchangeRateController.updateRule));
+      socket.on('rates:deleteRule', withAuth(ExchangeRateController.deleteRule));
+      socket.on('rates:testRule', withAuth(ExchangeRateController.testRule));
+      socket.on('rates:getBybitStatistics', withAuth(ExchangeRateController.getBybitStatistics));
+      socket.on('rates:updateConfig', withAuth(ExchangeRateController.updateConfig));
 
       // Управление чатами
       socket.on('chats:list', withAuth(ChatController.listChats));
@@ -332,6 +344,8 @@ export class WebSocketServer {
       socket.on('bybitAdvertisements:update', withAuth(BybitAdvertisementController.update));
       socket.on('bybitAdvertisements:toggle', withAuth(BybitAdvertisementController.toggle));
       socket.on('bybitAdvertisements:delete', withAuth(BybitAdvertisementController.delete));
+      socket.on('bybit:getBalances', withAuth(BybitAdvertisementController.getBalances));
+      socket.on('bybit:refreshBalances', withAuth(BybitAdvertisementController.refreshBalances));
 
       // Управление MailSlurp
       socket.on('mailslurp:listAccounts', withAuth(MailSlurpController.listAccounts));
@@ -392,6 +406,8 @@ export class WebSocketServer {
       socket.on('receipts:matchUnmatched', withAuth(ReceiptController.matchUnmatchedReceipts));
       socket.on('receipts:subscribe', withAuth(ReceiptController.subscribe));
       socket.on('receipts:unsubscribe', withAuth(ReceiptController.unsubscribe));
+      socket.on('receipts:uploadManual', withAuth(ReceiptController.uploadManual));
+      socket.on('receipts:confirmManual', withAuth(ReceiptController.confirmManual));
 
       // Управление плохими чеками (не от T-Bank)
       socket.on('badReceipts:list', withAuth(BadReceiptController.list));
@@ -429,6 +445,48 @@ export class WebSocketServer {
       socket.on('cleanup:getStatus', withAuth(CleanupController.getStatus));
       socket.on('cleanup:forceCleanup', withAuthAndLogging(CleanupController.forceCleanup, 'forceCleanup', 'cleanup:forceCleanup', () => ({})));
       socket.on('cleanup:cleanupTransaction', withAuthAndLogging(CleanupController.cleanupTransaction, 'cleanupTransaction', 'cleanup:cleanupTransaction', (data) => ({ transactionId: data?.transactionId })));
+
+      // Управление аналитикой
+      socket.on('analytics:get', withAuth(async (socket, data, callback) => {
+        const { setupAnalyticsHandlers } = await import('./controllers/analyticsController');
+        const handlers = {
+          'analytics:get': async (data: any, cb: any) => {
+            try {
+              const { analyticsService } = await import('../services/analyticsService');
+              const startDate = new Date(data.startDate);
+              const endDate = new Date(data.endDate);
+              const analytics = await analyticsService.getAnalytics(startDate, endDate);
+              cb({ success: true, data: analytics });
+            } catch (error: any) {
+              cb({ success: false, error: { code: 'ANALYTICS_ERROR', message: error.message } });
+            }
+          }
+        };
+        await handlers['analytics:get'](data, callback);
+      }));
+      
+      socket.on('analytics:getHistorical', withAuth(async (socket, data, callback) => {
+        try {
+          const { analyticsService } = await import('../services/analyticsService');
+          const startDate = new Date(data.startDate);
+          const endDate = new Date(data.endDate);
+          const interval = data.interval || 'day';
+          const historicalData = await analyticsService.getHistoricalData(startDate, endDate, interval);
+          callback({ success: true, data: historicalData });
+        } catch (error: any) {
+          callback({ success: false, error: { code: 'HISTORICAL_ERROR', message: error.message } });
+        }
+      }));
+      
+      socket.on('analytics:getTransaction', withAuth(async (socket, data, callback) => {
+        try {
+          const { analyticsService } = await import('../services/analyticsService');
+          const analytics = await analyticsService.getTransactionAnalytics(data.transactionId);
+          callback({ success: true, data: analytics });
+        } catch (error: any) {
+          callback({ success: false, error: { code: 'TRANSACTION_ANALYTICS_ERROR', message: error.message } });
+        }
+      }));
 
       // Отключение
       socket.on('disconnect', () => {

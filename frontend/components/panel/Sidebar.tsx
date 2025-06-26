@@ -16,7 +16,8 @@ import {
   Bell,
   HelpCircle,
   Receipt,
-  Mail
+  Mail,
+  TrendingUp
 } from "lucide-react";
 
 import Logo from "@/components/Logo";
@@ -76,10 +77,10 @@ const menuItems = [
     label: "Почта"
   },
   {
-    href: "/panel/stats",
+    href: "/panel/analytics",
     icon: <BarChart4 size={20} />,
     emoji: <ChartIncreasingEmoji size={20} />,
-    label: "Статистика"
+    label: "Аналитика"
   }
 ];
 
