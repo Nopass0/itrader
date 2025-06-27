@@ -2,7 +2,7 @@
 
 ## Server Management
 
-The WebSocket server automatically starts with the main application on port 3001 (or the port specified in WEBSOCKET_PORT environment variable).
+The WebSocket server automatically starts with the main application on port 3002 (or the port specified in `WEBSOCKET_PORT` environment variable).
 
 ## Account Management
 
@@ -38,7 +38,7 @@ bun run manage-webserver-accounts.ts toggle john
 import { io } from 'socket.io-client';
 
 // Connect to server
-const socket = io('http://localhost:3001', {
+const socket = io('http://localhost:3002', {
   auth: {
     token: '' // Will get token after login
   }

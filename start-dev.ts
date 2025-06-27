@@ -38,8 +38,8 @@ async function main() {
   });
 
   // Kill processes on specific ports
-  log('DEV', colors.yellow, 'Killing processes on ports 3000, 3001, 3002...');
-  const ports = [3000, 3001, 3002];
+  log('DEV', colors.yellow, 'Killing processes on ports 3000, 3002...');
+  const ports = [3000, 3002];
   ports.forEach(port => {
     try {
       const pid = execSync(`lsof -ti:${port}`, { encoding: 'utf-8' }).trim();
@@ -57,7 +57,7 @@ async function main() {
   await new Promise(resolve => setTimeout(resolve, 2000));
 
   log('DEV', colors.cyan, '🚀 Development server starting...');
-  log('DEV', colors.cyan, '📝 Backend will run on port 3001 (WebSocket API)');
+  log('DEV', colors.cyan, '📝 Backend will run on port 3002 (WebSocket API)');
   log('DEV', colors.cyan, '🎨 Frontend will run on port 3000');
   log('DEV', colors.cyan, '🔥 Hot reload enabled for both frontend and backend');
 

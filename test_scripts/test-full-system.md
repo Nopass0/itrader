@@ -4,7 +4,7 @@
 
 ```bash
 # This will start both backend and frontend with hot reload
-# Backend: http://localhost:3001 (WebSocket API)
+# Backend: http://localhost:3002 (WebSocket API)
 # Frontend: http://localhost:3000
 ./start-dev.sh
 
@@ -150,7 +150,7 @@ Press `Ctrl+C` in the terminal where you ran `./start-dev.sh`
 ## Troubleshooting
 
 ### Port conflicts:
-- Backend runs on port 3001
+- Backend runs on port 3002
 - Frontend runs on port 3000
 - Make sure these ports are free
 

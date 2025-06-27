@@ -4,7 +4,7 @@ echo "Starting development server without cleanup..."
 cd /home/user/projects/itrader_project
 
 # Start backend
-echo "Starting backend on port 3001..."
+echo "Starting backend on port 3002..."
 bun --hot run src/app.ts &
 BACKEND_PID=$!
 

@@ -69,7 +69,7 @@ export function loadConfig(): ItraderConfig {
         },
       },
       webserver: {
-        port: 3001,
+        port: 3002,
       },
       automation: {
         mode: 'auto',

@@ -1,7 +1,7 @@
 import { io } from 'socket.io-client';
 
 console.log('Connecting to WebSocket server...');
-const socket = io('http://localhost:3001', {
+const socket = io('http://localhost:3002', {
   transports: ['websocket', 'polling']
 });
 

@@ -6,7 +6,7 @@
 
 import { io, Socket } from 'socket.io-client';
 
-const WS_URL = process.env.WS_URL || 'http://localhost:3001';
+const WS_URL = process.env.WS_URL || 'http://localhost:3002';
 
 // Admin credentials
 const ADMIN_USERNAME = 'admin';

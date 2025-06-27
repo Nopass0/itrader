@@ -11,7 +11,7 @@ cd itrader
 
 That's it! The application will be available at:
 - **Panel**: http://localhost:3000
-- **API**: http://localhost:3001
+ - **API**: http://localhost:3002
 
 ## Manual Start
 
@@ -66,7 +66,7 @@ nano .env
 #### Option C: Manual start
 ```bash
 # Terminal 1 - Backend
-WEBSOCKET_PORT=3001 bun run src/app.ts
+WEBSOCKET_PORT=3002 bun run src/app.ts
 
 # Terminal 2 - Frontend
 cd frontend && npm run dev
@@ -98,16 +98,16 @@ pkill -f "next dev"
 
 # Or find specific process
 lsof -i :3000
-lsof -i :3001
+lsof -i :3002
 ```
 
 ### Frontend Not Loading
 - Make sure both services are running
-- Check that ports 3000 and 3001 are not blocked
+- Check that ports 3000 and 3002 are not blocked
 - Try accessing http://localhost:3000 directly
 
 ### WebSocket Connection Failed
-- Ensure backend is running on port 3001
+- Ensure backend is running on port 3002
 - Check browser console for errors
 - Try clearing browser cache
 
@@ -126,14 +126,14 @@ For production deployment with external access:
 1. **Set Environment Variables**
    ```bash
    export NODE_ENV=production
-   export WEBSOCKET_PORT=3001
+   export WEBSOCKET_PORT=3002
    export EXTERNAL_IP=your.server.ip
    ```
 
 2. **Open Firewall Ports**
    ```bash
    sudo ufw allow 3000/tcp
-   sudo ufw allow 3001/tcp
+   sudo ufw allow 3002/tcp
    ```
 
 3. **Use Process Manager**

@@ -184,7 +184,7 @@ start_dev_server() {
     
     echo -e "${GREEN}Starting development server...${NC}"
     echo ""
-    echo -e "${CYAN}📝 Backend will run on port 3001 (WebSocket API)${NC}"
+    echo -e "${CYAN}📝 Backend will run on port 3002 (WebSocket API)${NC}"
     echo -e "${CYAN}🎨 Frontend will run on port 3000${NC}"
     echo -e "${CYAN}🔥 Hot reload enabled for both services${NC}"
     echo ""
@@ -196,7 +196,7 @@ start_dev_server() {
     fi
     
     # Start both services with concurrently
-    WEBSOCKET_PORT=3001 exec concurrently \
+    WEBSOCKET_PORT=3002 exec concurrently \
         --names "backend,frontend" \
         --prefix-colors "blue,green" \
         "bun run src/app.ts" \
@@ -223,7 +223,7 @@ start_prod_server() {
     echo -e "${YELLOW}Starting servers...${NC}"
     
     # Start backend
-    NODE_ENV=production WEBSOCKET_PORT=3001 bun run src/app.ts &
+    NODE_ENV=production WEBSOCKET_PORT=3002 bun run src/app.ts &
     BACKEND_PID=$!
     
     # Wait a bit for backend to start

@@ -1,6 +1,6 @@
 import { io } from 'socket.io-client';
 
-const wsUrl = 'http://localhost:3001';
+const wsUrl = 'http://localhost:3002';
 
 console.log('Connecting to WebSocket server at', wsUrl);
 

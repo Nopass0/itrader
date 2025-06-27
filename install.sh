@@ -170,7 +170,7 @@ if [ ! -f .env ]; then
     print_info "Creating .env file..."
     cat > .env << EOL
 # WebSocket Server Configuration
-WEBSOCKET_PORT=3001
+WEBSOCKET_PORT=3002
 JWT_SECRET=$(openssl rand -base64 32)
 
 # Frontend URL (for OAuth redirects)

@@ -23,8 +23,8 @@ echo -e "${GREEN}External IP: $EXTERNAL_IP${NC}"
 # Update frontend configuration
 echo -e "${YELLOW}Updating frontend configuration...${NC}"
 cat > frontend/.env.production.local << EOF
-NEXT_PUBLIC_WS_URL=http://$EXTERNAL_IP:3001
-NEXT_PUBLIC_API_URL=http://$EXTERNAL_IP:3001
+NEXT_PUBLIC_WS_URL=http://$EXTERNAL_IP:3002
+NEXT_PUBLIC_API_URL=http://$EXTERNAL_IP:3002
 EOF
 
 # Build frontend
@@ -35,7 +35,7 @@ cd ..
 
 # Start backend
 echo -e "${YELLOW}Starting backend...${NC}"
-NODE_ENV=production WEBSOCKET_PORT=3001 bun run src/app.ts &
+NODE_ENV=production WEBSOCKET_PORT=3002 bun run src/app.ts &
 BACKEND_PID=$!
 
 # Wait for backend to start
@@ -54,10 +54,10 @@ echo -e "${GREEN}🚀 iTrader Production Server Started!${NC}"
 echo -e "${GREEN}============================================================${NC}"
 echo -e "${BLUE}Access URLs:${NC}"
 echo "  Panel: http://$EXTERNAL_IP:3000"
-echo "  API: http://$EXTERNAL_IP:3001"
+echo "  API: http://$EXTERNAL_IP:3002"
 echo ""
 echo "  Local Panel: http://localhost:3000"
-echo "  Local API: http://localhost:3001"
+echo "  Local API: http://localhost:3002"
 echo -e "${GREEN}============================================================${NC}"
 echo ""
 echo -e "${YELLOW}PIDs:${NC}"
