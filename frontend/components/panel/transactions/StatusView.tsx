@@ -28,10 +28,10 @@ import {
   UserCheck,
   FileCheck,
   Send,
-  CircleCheckBig,
+  CheckCircle2,
   UserX,
   AlertTriangle,
-  HandCoins,
+  Coins,
   HelpCircle
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -101,7 +101,7 @@ const KANBAN_STAGES = {
   7: {
     id: 7,
     title: 'Завершено',
-    icon: CircleCheckBig,
+    icon: CheckCircle2,
     color: 'bg-teal-500',
     textColor: 'text-teal-500',
   },
@@ -122,7 +122,7 @@ const KANBAN_STAGES = {
   10: {
     id: 10,
     title: 'Оплата отмененной сделки',
-    icon: HandCoins,
+    icon: Coins,
     color: 'bg-amber-500',
     textColor: 'text-amber-500',
   },
