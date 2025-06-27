@@ -12,9 +12,10 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { KANBAN_STAGES } from './Board';
-import { ChevronDown, ChevronUp, Filter } from 'lucide-react';
+import { ChevronDown, ChevronUp, Filter, Search, X } from 'lucide-react';
 import { useGateAccounts, useBybitAccounts } from '@/hooks/useAccounts';
 
 interface KanbanColumnProps {
@@ -38,30 +39,62 @@ export function KanbanColumn({ column, cards, isDragging, currentUser }: KanbanC
   
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [filter, setFilter] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState<string>('');
   const { accounts: gateAccounts } = useGateAccounts();
   const { accounts: bybitAccounts } = useBybitAccounts();
 
   const stageConfig = KANBAN_STAGES[column.id as keyof typeof KANBAN_STAGES];
 
-  // Filter cards based on selected filter
+  // Filter cards based on selected filter and search query
   const filteredCards = useMemo(() => {
-    if (filter === 'all') return cards;
+    let filtered = cards;
     
-    return cards.filter(card => {
-      // Filter by Platform 1 account for payouts
-      if (column.id === 0 && card.type === 'payout') {
-        return card.gateAccount === filter || 
-               card.gateAccountRef?.email === filter ||
-               card.gateAccountId === filter;
-      }
-      // Filter by Bybit account for advertisements
-      if (column.id === 1 && card.type === 'advertisement') {
-        return card.bybitAccountId === filter;
-      }
-      // Add more filter logic as needed
-      return true;
-    });
-  }, [cards, filter, column.id]);
+    // Apply account filter
+    if (filter !== 'all') {
+      filtered = filtered.filter(card => {
+        // Filter by Platform 1 account for payouts
+        if (column.id === 0 && card.type === 'payout') {
+          return card.gateAccount === filter || 
+                 card.gateAccountRef?.email === filter ||
+                 card.gateAccountId === filter;
+        }
+        // Filter by Bybit account for advertisements
+        if (column.id === 1 && card.type === 'advertisement') {
+          return card.bybitAccountId === filter;
+        }
+        // Add more filter logic as needed
+        return true;
+      });
+    }
+    
+    // Apply search filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(card => {
+        // Search in all string fields of the card
+        const searchableFields = Object.entries(card).filter(([key, value]) => 
+          typeof value === 'string' || typeof value === 'number'
+        );
+        
+        return searchableFields.some(([key, value]) => {
+          const stringValue = String(value).toLowerCase();
+          return stringValue.includes(query);
+        }) || 
+        // Search in nested objects
+        (card.payout && Object.values(card.payout).some(v => 
+          String(v).toLowerCase().includes(query)
+        )) ||
+        (card.transaction && Object.values(card.transaction).some(v => 
+          String(v).toLowerCase().includes(query)
+        )) ||
+        (card.bybitAccount && Object.values(card.bybitAccount).some(v => 
+          String(v).toLowerCase().includes(query)
+        ));
+      });
+    }
+    
+    return filtered;
+  }, [cards, filter, column.id, searchQuery]);
 
   const cardIds = useMemo(() => filteredCards.map(card => card.id), [filteredCards]);
 
@@ -102,7 +135,7 @@ export function KanbanColumn({ column, cards, isDragging, currentUser }: KanbanC
                 stageConfig?.color ? 'bg-white/20 text-white' : ''
               )}
             >
-              {cards.length}
+              {filteredCards.length}{(cards.length !== filteredCards.length || searchQuery) && `/${cards.length}`}
             </Badge>
           </div>
         </div>
@@ -136,7 +169,7 @@ export function KanbanColumn({ column, cards, isDragging, currentUser }: KanbanC
                 stageConfig?.color ? 'bg-white/20 text-white' : ''
               )}
             >
-              {filteredCards.length}{cards.length !== filteredCards.length && `/${cards.length}`}
+              {filteredCards.length}{(cards.length !== filteredCards.length || searchQuery) && `/${cards.length}`}
             </Badge>
           </div>
           <Button
@@ -181,6 +214,26 @@ export function KanbanColumn({ column, cards, isDragging, currentUser }: KanbanC
             </SelectContent>
           </Select>
         )}
+        
+        {/* Search input */}
+        <div className="relative">
+          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-white/60" />
+          <Input
+            type="text"
+            placeholder="Поиск..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="h-7 pl-7 pr-7 text-xs bg-white/10 border-white/20 text-white placeholder:text-white/60 focus:bg-white/15 focus:border-white/30"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-white/60 hover:text-white"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          )}
+        </div>
         
         {column.description && (
           <p className="text-xs opacity-90">{column.description}</p>
