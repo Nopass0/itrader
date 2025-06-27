@@ -115,7 +115,7 @@ export class ExchangeRateController {
   /**
    * Переключение режима курса
    */
-  static async toggleMode(socket: AuthenticatedSocket, callback: Function) {
+  static async toggleMode(socket: AuthenticatedSocket, data: { mode?: 'automatic' | 'constant' }, callback: Function) {
     try {
       // Только админы и операторы могут менять режим
       if (socket.role === "viewer") {
@@ -129,7 +129,7 @@ export class ExchangeRateController {
       const config = manager.getConfig();
       
       const currentMode = config.mode;
-      const newMode = currentMode === "automatic" ? "constant" : "automatic";
+      const newMode = data.mode || (currentMode === "automatic" ? "constant" : "automatic");
 
       await manager.setMode(newMode);
 
