@@ -460,12 +460,6 @@ export class ReceiptPayoutLinkerService {
       const payouts = await prisma.payout.findMany({
         where: {
           amount: receipt.amount,
-          wallet: {
-            AND: [
-              { startsWith: firstSix },
-              { endsWith: lastFour }
-            ]
-          },
           createdAt: receipt.transactionDate
             ? {
                 gte: dayjs(receipt.transactionDate).subtract(1, "day").toDate(),
@@ -476,8 +470,16 @@ export class ReceiptPayoutLinkerService {
         orderBy: { createdAt: "desc" },
       });
 
-      // Check amountTrader field in application code
+      // Filter by card pattern and check amountTrader field in application code
       for (const payout of payouts) {
+        // Check if wallet matches the card pattern
+        if (payout.wallet) {
+          const wallet = payout.wallet.toString();
+          if (!wallet.startsWith(firstSix) || !wallet.endsWith(lastFour)) {
+            continue; // Skip if card doesn't match
+          }
+        }
+        
         if (payout.amount === receipt.amount) {
           return payout;
         }
