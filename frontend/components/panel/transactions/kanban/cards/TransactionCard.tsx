@@ -213,7 +213,7 @@ export function TransactionCard({
         {transaction.payout?.gateAccount && (
           <div className="flex items-center gap-1">
             <Building2 size={12} className="text-muted-foreground" />
-            <span>Gate: {transaction.payout.gateAccount}</span>
+            <span>Платформа 1: {transaction.payout.gateAccount}</span>
           </div>
         )}
       </div>

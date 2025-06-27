@@ -47,7 +47,7 @@ const logger = createLogger('KanbanBoard');
 export const KANBAN_STAGES = {
   0: {
     id: 0,
-    title: 'Выплаты из gate',
+    title: 'Выплаты',
     description: 'Выплаты со статусом < 7',
     color: 'bg-slate-500',
     textColor: 'text-slate-50',

@@ -207,7 +207,7 @@ export function PayoutCard({ payout, onViewDetails }: PayoutCardProps) {
         {getStatusBadge(payout.status)}
       </div>
 
-      {/* Gate Payout ID */}
+      {/* Platform 1 Payout ID */}
       {payout.gatePayoutId && (
         <div className="flex items-center gap-1 text-xs mb-2">
           <Hash size={12} className="text-muted-foreground" />
@@ -216,7 +216,7 @@ export function PayoutCard({ payout, onViewDetails }: PayoutCardProps) {
             variant="ghost"
             size="sm"
             className="h-4 w-4 p-0"
-            onClick={() => copyToClipboard(payout.gatePayoutId.toString(), 'Gate ID')}
+            onClick={() => copyToClipboard(payout.gatePayoutId.toString(), 'Platform 1 ID')}
           >
             <Copy size={10} />
           </Button>
@@ -239,11 +239,11 @@ export function PayoutCard({ payout, onViewDetails }: PayoutCardProps) {
         </div>
       )}
 
-      {/* Gate Account */}
+      {/* Platform 1 Account */}
       {(payout.gateAccount || payout.gateAccountRef?.email) && (
         <div className="flex items-center gap-1 text-xs mb-2">
           <Building2 size={12} className="text-muted-foreground" />
-          <span>Gate: {payout.gateAccount || payout.gateAccountRef?.email}</span>
+          <span>Платформа 1: {payout.gateAccount || payout.gateAccountRef?.email}</span>
         </div>
       )}
 
@@ -272,7 +272,7 @@ export function PayoutCard({ payout, onViewDetails }: PayoutCardProps) {
         {payout.id && (
           <>
             <ReceiptPopover payoutId={payout.id} />
-            {/* Manual receipt upload button for Gate payouts */}
+            {/* Manual receipt upload button for Platform 1 payouts */}
             {payout.gatePayoutId && payout.status === 5 && (
               <Button
                 variant="outline"

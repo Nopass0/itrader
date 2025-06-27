@@ -48,7 +48,7 @@ export function KanbanColumn({ column, cards, isDragging, currentUser }: KanbanC
     if (filter === 'all') return cards;
     
     return cards.filter(card => {
-      // Filter by Gate account for payouts
+      // Filter by Platform 1 account for payouts
       if (column.id === 0 && card.type === 'payout') {
         return card.gateAccount === filter || 
                card.gateAccountRef?.email === filter ||
