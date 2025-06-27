@@ -232,17 +232,40 @@ export class ReceiptProcessorService extends EventEmitter {
       }
 
       // Get emails from last check
-      const lastCheck = new Date(Date.now() - this.config.checkInterval - 60000); // Check last interval + 1 minute
-      await this.mailslurpService.processReceipts(lastCheck);
+      // On first run or if no recent receipts, check last 7 days
+      const lastReceipt = await prisma.receipt.findFirst({
+        orderBy: { createdAt: 'desc' }
+      });
+      
+      let checkSince: Date;
+      if (!lastReceipt || lastReceipt.createdAt < new Date(Date.now() - 24 * 60 * 60 * 1000)) {
+        // No recent receipts, check last 7 days
+        checkSince = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+        logger.info("No recent receipts found, checking emails from last 7 days");
+      } else {
+        // Check from last interval
+        checkSince = new Date(Date.now() - this.config.checkInterval - 60000);
+      }
+      
+      await this.mailslurpService.processReceipts(checkSince);
 
       // Also check for any receipts already in DB that need processing
       const unprocessedReceipts = await prisma.receipt.findMany({
         where: {
-          processed: false,
-          sender: { contains: '@tinkoff.ru' }
+          OR: [
+            { processed: false },
+            { 
+              AND: [
+                { isProcessed: true },
+                { processed: false },
+                { payoutId: null }
+              ]
+            }
+          ],
+          emailFrom: { contains: '@tinkoff.ru' }
         },
         orderBy: { receivedAt: 'desc' },
-        take: 10
+        take: 20
       });
 
       logger.info(`Found ${unprocessedReceipts.length} unprocessed receipts in DB`);
@@ -251,13 +274,17 @@ export class ReceiptProcessorService extends EventEmitter {
         try {
           // Parse receipt if not already parsed
           if (!receipt.parsedData || Object.keys(receipt.parsedData as any).length === 0) {
-            logger.info("Parsing receipt", { receiptId: receipt.id, filepath: receipt.filepath });
+            logger.info("Parsing receipt", { receiptId: receipt.id, filepath: receipt.filePath });
             
-            if (receipt.filepath) {
+            if (receipt.filePath) {
               try {
                 const parser = new TinkoffReceiptParser();
-                logger.info("Parsing PDF receipt", { filepath: receipt.filepath });
-                const parsedData = await parser.parseReceiptPDF(receipt.filepath);
+                // Convert relative path to absolute
+                const absolutePath = path.isAbsolute(receipt.filePath) 
+                  ? receipt.filePath 
+                  : path.join(process.cwd(), receipt.filePath);
+                logger.info("Parsing PDF receipt", { filepath: absolutePath });
+                const parsedData = await parser.parseReceiptPDF(absolutePath);
                 
                 logger.info("Successfully parsed receipt", { 
                   amount: parsedData.amount,
@@ -280,7 +307,7 @@ export class ReceiptProcessorService extends EventEmitter {
               } catch (parseError) {
                 logger.error("Failed to parse receipt PDF", { 
                   receiptId: receipt.id, 
-                  filepath: receipt.filepath,
+                  filepath: receipt.filePath,
                   error: parseError instanceof Error ? parseError.message : String(parseError)
                 });
                 
@@ -361,19 +388,34 @@ export class ReceiptProcessorService extends EventEmitter {
         return;
       }
 
-      // Ищем письма от Тинькофф за сегодня
-      const today = new Date();
-      const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      // Ищем письма от Тинькофф
+      // Check if we have recent receipts, otherwise search last 7 days
+      const lastGmailReceipt = await prisma.receipt.findFirst({
+        where: { emailFrom: { contains: '@tinkoff.ru' } },
+        orderBy: { createdAt: 'desc' }
+      });
+      
+      let searchAfter: Date;
+      if (!lastGmailReceipt || lastGmailReceipt.createdAt < new Date(Date.now() - 24 * 60 * 60 * 1000)) {
+        // No recent receipts, search last 7 days
+        searchAfter = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+        logger.info("No recent Gmail receipts, searching last 7 days");
+      } else {
+        // Search from today
+        const today = new Date();
+        searchAfter = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      }
+      
       logger.info("Searching for Tinkoff emails", {
         email: email,
-        after: startOfDay.toISOString(),
+        after: searchAfter.toISOString(),
         sender: "noreply@tinkoff.ru"
       });
       
       const searchResult = await gmailClient.getEmailsFromSender(
         "noreply@tinkoff.ru",
         {
-          after: startOfDay,
+          after: searchAfter,
           maxResults: 100,
         },
       );

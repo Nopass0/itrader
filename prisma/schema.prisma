@@ -34,9 +34,9 @@ model Payout {
   description     String?
   failureReason   String?
   completedAt     DateTime?
-  transaction     Transaction?
-  gateAccountRef  GateAccount?   @relation("GateAccountToPayouts", fields: [gateAccountId], references: [id])
   advertisement   Advertisement?
+  gateAccountRef  GateAccount?   @relation("GateAccountToPayouts", fields: [gateAccountId], references: [id])
+  transaction     Transaction?
 
   @@index([status])
   @@index([gateAccount])
@@ -93,14 +93,14 @@ model Transaction {
   receiptReceivedAt DateTime?
   approvedAt        DateTime?
   completedAt       DateTime?
-  cancelledAt       DateTime?
   failureReason     String?
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
+  cancelledAt       DateTime?
   chatMessages      ChatMessage[]
-  payout            Payout?         @relation(fields: [payoutId], references: [id])
-  advertisement     Advertisement   @relation(fields: [advertisementId], references: [id])
   tinkoffReceipt    TinkoffReceipt?
+  advertisement     Advertisement   @relation(fields: [advertisementId], references: [id])
+  payout            Payout?         @relation(fields: [payoutId], references: [id])
 
   @@index([status])
   @@index([orderId])
@@ -309,32 +309,32 @@ model ExchangeRateHistory {
 }
 
 model ExchangeRateRule {
-  id            String   @id @default(cuid())
-  name          String
-  priority      Int      @default(0)
-  timeStart     String?  // Time in HH:MM format
-  timeEnd       String?  // Time in HH:MM format
-  minAmount     Float?
-  maxAmount     Float?
-  pageNumber    Int      @default(1)
-  adIndex       Int      @default(0) // 0-based index on the page
-  priceAdjustment Float  @default(0) // Percentage adjustment to fetched price
-  enabled       Boolean  @default(true)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id              String   @id @default(cuid())
+  name            String
+  priority        Int      @default(0)
+  timeStart       String?
+  timeEnd         String?
+  minAmount       Float?
+  maxAmount       Float?
+  pageNumber      Int      @default(1)
+  adIndex         Int      @default(0)
+  priceAdjustment Float    @default(0)
+  enabled         Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   @@index([priority])
   @@index([enabled])
 }
 
 model ExchangeRateConfig {
-  id              String   @id @default("default")
-  mode            String   @default("constant") // "constant" or "automatic"
-  constantRate    Float    @default(78)
-  updateInterval  Int      @default(300000) // Update interval in milliseconds (default 5 minutes)
-  fallbackRate    Float    @default(78) // Fallback rate when no rules match
-  lastUpdate      DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id             String   @id @default("default")
+  mode           String   @default("constant")
+  constantRate   Float    @default(78)
+  updateInterval Int      @default(300000)
+  fallbackRate   Float    @default(78)
+  lastUpdate     DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 }
 
 model TinkoffReceipt {
@@ -463,22 +463,22 @@ model WebServerUser {
 }
 
 model BadReceipt {
-  id              String    @id @default(cuid())
-  emailId         String    @unique
-  emailFrom       String
-  emailSubject    String?
-  attachmentName  String?
-  filePath        String?
-  fileHash        String?   @unique
-  amount          Float?
-  parsedData      Json?
-  rawText         String?
-  rawEmailData    Json?
-  reason          String?   // Reason why it's a bad receipt (e.g., "Not from T-Bank", "Invalid format")
-  processed       Boolean   @default(false)
-  receivedAt      DateTime?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id             String    @id @default(cuid())
+  emailId        String    @unique
+  emailFrom      String
+  emailSubject   String?
+  attachmentName String?
+  filePath       String?
+  fileHash       String?   @unique
+  amount         Float?
+  parsedData     Json?
+  rawText        String?
+  rawEmailData   Json?
+  reason         String?
+  processed      Boolean   @default(false)
+  receivedAt     DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   @@index([emailId])
   @@index([fileHash])
