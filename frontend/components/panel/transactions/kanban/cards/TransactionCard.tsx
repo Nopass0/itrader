@@ -12,7 +12,8 @@ import {
   DollarSign,
   TrendingUp,
   TrendingDown,
-  User
+  User,
+  ArrowRightLeft
 } from 'lucide-react';
 import { ReceiptPopover } from '@/components/ReceiptPopover';
 import { useToast } from '@/components/ui/use-toast';
@@ -199,6 +200,14 @@ export function TransactionCard({
         <div className="flex items-center gap-1 text-xs mb-2">
           <User size={12} className="text-muted-foreground" />
           <span>{transaction.counterpartyName}</span>
+        </div>
+      )}
+
+      {/* Exchange Rate from payout meta */}
+      {transaction.payout?.meta?.courses?.trader && (
+        <div className="flex items-center gap-1 text-xs mb-2 text-muted-foreground">
+          <ArrowRightLeft size={12} />
+          <span>Курс захода: {(transaction.payout.meta.courses.trader * 0.979).toFixed(2)} RUB/USDT</span>
         </div>
       )}
 

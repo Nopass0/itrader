@@ -13,7 +13,8 @@ import {
   Clock,
   CheckCircle,
   Upload,
-  FileText
+  FileText,
+  ArrowRightLeft
 } from 'lucide-react';
 import { ReceiptPopover } from '@/components/ReceiptPopover';
 import { ManualReceiptUpload } from '@/components/ManualReceiptUpload';
@@ -201,6 +202,14 @@ export function PayoutCard({ payout, onViewDetails }: PayoutCardProps) {
           ? formatAmount(payout.amountTrader['643']) 
           : (payout.amount ? formatAmount(payout.amount) : '-')}
       </div>
+
+      {/* Exchange Rate from meta */}
+      {payout.meta?.courses?.trader && (
+        <div className="flex items-center gap-1 text-xs mb-2 text-muted-foreground">
+          <ArrowRightLeft size={12} />
+          <span>Курс захода: {(payout.meta.courses.trader * 0.979).toFixed(2)} RUB/USDT</span>
+        </div>
+      )}
 
       {/* Status */}
       <div className="mb-2">
