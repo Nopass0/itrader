@@ -15,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { KANBAN_STAGES } from './Board';
-import { ChevronDown, ChevronUp, Filter, Search, X } from 'lucide-react';
+import { ChevronDown, ChevronUp, ChevronRight, Filter, Search, X } from 'lucide-react';
 import { useGateAccounts, useBybitAccounts } from '@/hooks/useAccounts';
 
 interface KanbanColumnProps {
@@ -113,29 +113,30 @@ export function KanbanColumn({ column, cards, isDragging, currentUser }: KanbanC
     return (
       <div
         className={cn(
-          "flex flex-col h-auto bg-muted/30 rounded-lg transition-all duration-300 w-[240px]",
+          "flex flex-col h-full bg-muted/30 rounded-lg transition-all duration-300 w-12 cursor-pointer hover:bg-muted/40",
           stageConfig?.color || 'bg-gray-500'
         )}
+        onClick={() => setIsCollapsed(false)}
+        style={{ maxHeight: 'calc(100vh - 240px)' }}
       >
         <div className={cn(
-          "p-4 rounded-lg cursor-pointer",
+          "p-2 rounded-t-lg h-full flex flex-col items-center justify-start gap-3 pt-4",
           stageConfig?.textColor || 'text-white'
-        )}
-        onClick={() => setIsCollapsed(false)}
-        >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <ChevronUp size={16} />
-              <h3 className="font-semibold text-sm">{column.title}</h3>
+        )}>
+          <ChevronRight size={16} />
+          <div className="flex flex-col items-center gap-2">
+            {/* Vertical title */}
+            <div className="writing-mode-vertical text-xs font-semibold whitespace-nowrap" style={{ writingMode: 'vertical-rl', textOrientation: 'mixed' }}>
+              {column.title}
             </div>
             <Badge 
               variant="secondary" 
               className={cn(
-                "text-xs",
+                "text-xs px-1 py-0.5",
                 stageConfig?.color ? 'bg-white/20 text-white' : ''
               )}
             >
-              {filteredCards.length}{(cards.length !== filteredCards.length || searchQuery) && `/${cards.length}`}
+              {filteredCards.length}
             </Badge>
           </div>
         </div>

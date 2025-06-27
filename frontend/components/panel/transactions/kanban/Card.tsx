@@ -10,6 +10,7 @@ import { PayoutCard } from './cards/PayoutCard';
 import { TransactionCard } from './cards/TransactionCard';
 import { AdvertisementCard } from './cards/AdvertisementCard';
 import { AppealCard } from './cards/AppealCard';
+import { OrderCard } from './cards/OrderCard';
 
 interface KanbanCardProps {
   card: any;
@@ -75,6 +76,14 @@ export function KanbanCard({ card, columnId, isDragging, currentUser }: KanbanCa
         return (
           <AdvertisementCard
             advertisement={card}
+            onViewDetails={() => setShowDetails(true)}
+          />
+        );
+
+      case 'order':
+        return (
+          <OrderCard
+            order={card}
             onViewDetails={() => setShowDetails(true)}
           />
         );
