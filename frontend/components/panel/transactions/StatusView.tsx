@@ -478,6 +478,13 @@ export function StatusView({
     return methodMap[payout.method] || payout.method || '-';
   };
 
+  // Get column count based on active status
+  const getColumnCount = () => {
+    if (activeStatus === 'stage_0') return 10;
+    if (activeStatus === 'stage_1' || activeStatus === 'stage_2') return 7;
+    return 8;
+  };
+
   return (
     <div className="h-full flex flex-col">
       <Tabs value={activeStatus} onValueChange={handleStatusChange} className="h-full flex flex-col">
@@ -570,13 +577,13 @@ export function StatusView({
                   <tbody>
                     {loading ? (
                       <tr>
-                        <td colSpan={activeStatus === 'stage_0' ? 10 : activeStatus === 'stage_1' || activeStatus === 'stage_2' ? 7 : 8} className="text-center py-8">
+                        <td colSpan={getColumnCount()} className="text-center py-8">
                           <div className="text-muted-foreground">Загрузка...</div>
                         </td>
                       </tr>
                     ) : paginatedItems.length === 0 ? (
                       <tr>
-                        <td colSpan={activeStatus === 'stage_0' ? 10 : activeStatus === 'stage_1' || activeStatus === 'stage_2' ? 7 : 8} className="text-center py-8">
+                        <td colSpan={getColumnCount()} className="text-center py-8">
                           <div className="text-muted-foreground">
                             Нет транзакций
                             {activeStatus !== 'all' && ` со статусом "${TRANSACTION_STATUSES.find(s => s.id === activeStatus)?.label}"`}
@@ -636,7 +643,7 @@ export function StatusView({
                               // Payouts columns
                               <>
                                 <td className="px-3 py-2">
-                                  {item.amountTrader ? (
+                                  {isPayout && item.amountTrader ? (
                                     <>
                                       {item.amountTrader['000001'] || '-'}
                                     </>
@@ -644,24 +651,24 @@ export function StatusView({
                                 </td>
                                 <td className="px-3 py-2 text-right">
                                   <div className="font-medium">
-                                    {item.amountTrader && item.amountTrader['643'] 
+                                    {isPayout && item.amountTrader && item.amountTrader['643'] 
                                       ? formatAmount(item.amountTrader['643'])
                                       : formatAmount(item.amount)}
                                   </div>
                                 </td>
                                 <td className="px-3 py-2">
-                                  {item.meta?.courses?.trader ? (
+                                  {isPayout && item.meta?.courses?.trader ? (
                                     <div>
                                       {(item.meta.courses.trader * 0.979).toFixed(2)} ₽/USDT
                                     </div>
                                   ) : '-'}
                                 </td>
                                 <td className="px-3 py-2">
-                                  {getPayoutMethodLabel(item)}
+                                  {isPayout ? getPayoutMethodLabel(item) : '-'}
                                 </td>
                                 <td className="px-3 py-2">
                                   <div className="font-mono text-xs">
-                                    {item.wallet || '-'}
+                                    {isPayout ? (item.wallet || '-') : '-'}
                                   </div>
                                 </td>
                                 <td className="px-3 py-2">
