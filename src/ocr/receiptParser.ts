@@ -143,7 +143,9 @@ export class TinkoffReceiptParser {
    * Парсит чек из буфера PDF
    */
   async parseFromBuffer(pdfBuffer: Buffer): Promise<ParsedReceipt> {
+    console.log('[TinkoffReceiptParser] Starting parse from buffer, size:', pdfBuffer.length);
     const text = await extractTextFromPdfBuffer(pdfBuffer);
+    console.log('[TinkoffReceiptParser] Extracted text length:', text.length);
     this.lastExtractedText = text;
     return this.parseReceiptText(text);
   }
@@ -152,31 +154,41 @@ export class TinkoffReceiptParser {
    * Парсит текст чека
    */
   private parseReceiptText(text: string): ParsedReceipt {
+    console.log('[TinkoffReceiptParser] Parsing text, first 200 chars:', text.substring(0, 200));
+    
     // Проверяем статус - обязательно должно быть "Успешно"
     if (!text.includes("Успешно")) {
+      console.error('[TinkoffReceiptParser] Receipt rejected: no "Успешно" status found');
       throw new ReceiptParseError("Чек бракованный: не найден статус 'Успешно'");
     }
 
     // Определяем формат чека
     const receiptFormat = this.detectReceiptFormat(text);
+    console.log('[TinkoffReceiptParser] Detected format:', receiptFormat);
     
     // Извлекаем дату и время
     const datetime = this.extractDateTime(text);
     if (!datetime) {
+      console.error('[TinkoffReceiptParser] Failed to extract datetime');
       throw new ReceiptParseError("Не удалось извлечь дату и время из чека");
     }
+    console.log('[TinkoffReceiptParser] Extracted datetime:', datetime);
 
     // Извлекаем сумму (не Итого!)
     const amount = this.extractAmount(text);
     if (!amount) {
+      console.error('[TinkoffReceiptParser] Failed to extract amount');
       throw new ReceiptParseError("Не удалось извлечь сумму из чека");
     }
+    console.log('[TinkoffReceiptParser] Extracted amount:', amount);
 
     // Извлекаем отправителя с учетом формата
     const sender = this.extractSenderV2(text, receiptFormat);
     if (!sender) {
+      console.error('[TinkoffReceiptParser] Failed to extract sender');
       throw new ReceiptParseError("Не удалось извлечь отправителя из чека");
     }
+    console.log('[TinkoffReceiptParser] Extracted sender:', sender);
 
     // Определяем тип перевода
     const transferType = this.detectTransferType(text);

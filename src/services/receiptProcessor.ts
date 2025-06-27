@@ -254,21 +254,47 @@ export class ReceiptProcessorService extends EventEmitter {
             logger.info("Parsing receipt", { receiptId: receipt.id, filepath: receipt.filepath });
             
             if (receipt.filepath) {
-              const parser = new TinkoffReceiptParser();
-              const parsedData = await parser.parseReceiptPDF(receipt.filepath);
-              
-              await prisma.receipt.update({
-                where: { id: receipt.id },
-                data: {
+              try {
+                const parser = new TinkoffReceiptParser();
+                logger.info("Parsing PDF receipt", { filepath: receipt.filepath });
+                const parsedData = await parser.parseReceiptPDF(receipt.filepath);
+                
+                logger.info("Successfully parsed receipt", { 
                   amount: parsedData.amount,
                   senderName: parsedData.senderName,
-                  recipientName: parsedData.recipientName,
-                  recipientCard: parsedData.recipientCard,
-                  transactionDate: parsedData.transactionDate ? new Date(parsedData.transactionDate) : undefined,
-                  parsedData: parsedData as any,
-                  rawText: parsedData.rawText
-                }
-              });
+                  recipientName: parsedData.recipientName
+                });
+                
+                await prisma.receipt.update({
+                  where: { id: receipt.id },
+                  data: {
+                    amount: parsedData.amount,
+                    senderName: parsedData.senderName,
+                    recipientName: parsedData.recipientName,
+                    recipientCard: parsedData.recipientCard,
+                    transactionDate: parsedData.transactionDate ? new Date(parsedData.transactionDate) : undefined,
+                    parsedData: parsedData as any,
+                    rawText: parsedData.rawText
+                  }
+                });
+              } catch (parseError) {
+                logger.error("Failed to parse receipt PDF", { 
+                  receiptId: receipt.id, 
+                  filepath: receipt.filepath,
+                  error: parseError instanceof Error ? parseError.message : String(parseError)
+                });
+                
+                // Mark receipt as failed to parse
+                await prisma.receipt.update({
+                  where: { id: receipt.id },
+                  data: {
+                    parsedData: { error: parseError instanceof Error ? parseError.message : String(parseError) } as any,
+                    processed: true, // Mark as processed to avoid retrying
+                    isProcessed: true
+                  }
+                });
+                continue; // Skip to next receipt
+              }
             }
           }
 
