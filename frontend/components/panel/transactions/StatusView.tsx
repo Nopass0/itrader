@@ -5,7 +5,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { 
   Clock,
   CheckCircle,
@@ -47,102 +46,116 @@ interface StatusViewProps {
   onOpenChat?: (transaction: Transaction) => void;
 }
 
-// Kanban stages from Board.tsx
-const KANBAN_STAGES = {
-  0: {
-    id: 0,
-    title: 'Выплаты',
+
+// Define all possible statuses - kanban stages first, then regular statuses, then "all" at the end
+const TRANSACTION_STATUSES = [
+  {
+    id: 'stage_0',
+    label: 'Выплаты',
     icon: Wallet,
     color: 'bg-slate-500',
     textColor: 'text-slate-500',
+    isKanbanStage: true,
+    stageId: 0,
   },
-  1: {
-    id: 1,
-    title: 'Объявления',
+  {
+    id: 'stage_1',
+    label: 'Объявления',
     icon: FileText,
     color: 'bg-blue-500',
     textColor: 'text-blue-500',
+    isKanbanStage: true,
+    stageId: 1,
   },
-  2: {
-    id: 2,
-    title: 'Ордер',
+  {
+    id: 'stage_2',
+    label: 'Ордер',
     icon: ShoppingCart,
     color: 'bg-indigo-500',
     textColor: 'text-indigo-500',
+    isKanbanStage: true,
+    stageId: 2,
   },
-  3: {
-    id: 3,
-    title: 'Чат',
+  {
+    id: 'stage_3',
+    label: 'Чат',
     icon: MessageSquare,
     color: 'bg-purple-500',
     textColor: 'text-purple-500',
+    isKanbanStage: true,
+    stageId: 3,
   },
-  4: {
-    id: 4,
-    title: 'Оплачено контрагентом',
+  {
+    id: 'stage_4',
+    label: 'Оплачено контрагентом',
     icon: UserCheck,
     color: 'bg-violet-500',
     textColor: 'text-violet-500',
+    isKanbanStage: true,
+    stageId: 4,
   },
-  5: {
-    id: 5,
-    title: 'Чек подтверждён',
+  {
+    id: 'stage_5',
+    label: 'Чек подтверждён',
     icon: FileCheck,
     color: 'bg-green-500',
     textColor: 'text-green-500',
+    isKanbanStage: true,
+    stageId: 5,
   },
-  6: {
-    id: 6,
-    title: 'Отпуск средств',
+  {
+    id: 'stage_6',
+    label: 'Отпуск средств',
     icon: Send,
     color: 'bg-emerald-500',
     textColor: 'text-emerald-500',
+    isKanbanStage: true,
+    stageId: 6,
   },
-  7: {
-    id: 7,
-    title: 'Завершено',
+  {
+    id: 'stage_7',
+    label: 'Завершено',
     icon: CheckCircle2,
     color: 'bg-teal-500',
     textColor: 'text-teal-500',
+    isKanbanStage: true,
+    stageId: 7,
   },
-  8: {
-    id: 8,
-    title: 'Отменено контрагентом',
+  {
+    id: 'stage_8',
+    label: 'Отменено контрагентом',
     icon: UserX,
     color: 'bg-orange-500',
     textColor: 'text-orange-500',
+    isKanbanStage: true,
+    stageId: 8,
   },
-  9: {
-    id: 9,
-    title: 'Апелляция',
+  {
+    id: 'stage_9',
+    label: 'Апелляция',
     icon: AlertTriangle,
     color: 'bg-red-500',
     textColor: 'text-red-500',
+    isKanbanStage: true,
+    stageId: 9,
   },
-  10: {
-    id: 10,
-    title: 'Оплата отмененной сделки',
+  {
+    id: 'stage_10',
+    label: 'Оплата отмененной сделки',
     icon: Coins,
     color: 'bg-amber-500',
     textColor: 'text-amber-500',
+    isKanbanStage: true,
+    stageId: 10,
   },
-  11: {
-    id: 11,
-    title: 'Прочее',
+  {
+    id: 'stage_11',
+    label: 'Прочее',
     icon: HelpCircle,
     color: 'bg-gray-500',
     textColor: 'text-gray-500',
-  },
-};
-
-// Define all possible statuses
-const TRANSACTION_STATUSES = [
-  {
-    id: 'all',
-    label: 'Все',
-    icon: FileText,
-    color: 'bg-gray-500',
-    textColor: 'text-gray-500',
+    isKanbanStage: true,
+    stageId: 11,
   },
   {
     id: 'pending',
@@ -159,34 +172,6 @@ const TRANSACTION_STATUSES = [
     textColor: 'text-blue-500',
   },
   {
-    id: 'chat_started',
-    label: 'Чат начат',
-    icon: MessageSquare,
-    color: 'bg-purple-500',
-    textColor: 'text-purple-500',
-  },
-  {
-    id: 'payment_received',
-    label: 'Оплачено',
-    icon: DollarSign,
-    color: 'bg-green-500',
-    textColor: 'text-green-500',
-  },
-  {
-    id: 'check_received',
-    label: 'Чек получен',
-    icon: FileText,
-    color: 'bg-indigo-500',
-    textColor: 'text-indigo-500',
-  },
-  {
-    id: 'release_money',
-    label: 'Отпуск средств',
-    icon: Banknote,
-    color: 'bg-pink-500',
-    textColor: 'text-pink-500',
-  },
-  {
     id: 'completed',
     label: 'Завершено',
     icon: CheckCircle,
@@ -201,22 +186,21 @@ const TRANSACTION_STATUSES = [
     textColor: 'text-red-500',
   },
   {
-    id: 'failed',
-    label: 'Ошибка',
-    icon: AlertCircle,
-    color: 'bg-red-600',
-    textColor: 'text-red-600',
+    id: 'all',
+    label: 'Все',
+    icon: FileText,
+    color: 'bg-gray-500',
+    textColor: 'text-gray-500',
   },
 ];
 
 export function StatusView({ transactions, loading = false, onRefresh, onViewDetails, onOpenChat }: StatusViewProps) {
   const [activeStatus, setActiveStatus] = useState('all');
-  const [activeKanbanStage, setActiveKanbanStage] = useState<number | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
   const { toast } = useToast();
 
-  // Group transactions by status
+  // Group transactions by status and kanban stages
   const transactionsByStatus = useMemo(() => {
     const grouped: Record<string, Transaction[]> = {};
     
@@ -225,17 +209,55 @@ export function StatusView({ transactions, loading = false, onRefresh, onViewDet
       grouped[status.id] = [];
     });
 
+    // Helper function to map transaction to kanban stage
+    const mapToKanbanStage = (transaction: Transaction): number => {
+      switch (transaction.status) {
+        case 'pending':
+          if (!transaction.advertisementId) return 11;
+          if (!transaction.orderId) return 1;
+          return 2;
+        case 'order_created':
+        case 'order_pending':
+          return 2;
+        case 'chat_started':
+          return 3;
+        case 'payment_received':
+        case 'waiting_payment':
+          return 4;
+        case 'check_received':
+        case 'receipt_received':
+          return 5;
+        case 'release_money':
+          return 6;
+        case 'completed':
+          return 7;
+        case 'cancelled_by_counterparty':
+          return 8;
+        case 'failed':
+        case 'cancelled':
+          if (transaction.customStatuses?.some(s => s.includes('dispute'))) {
+            return 9;
+          }
+          return 10;
+        default:
+          return 11;
+      }
+    };
+
     // Group transactions
     transactions.forEach(transaction => {
       const status = transaction.status || 'pending';
+      
+      // Add to status groups
       if (grouped[status]) {
         grouped[status].push(transaction);
-      } else {
-        // If status doesn't exist in our list, add to 'other'
-        if (!grouped['other']) {
-          grouped['other'] = [];
-        }
-        grouped['other'].push(transaction);
+      }
+      
+      // Add to kanban stage groups
+      const stage = mapToKanbanStage(transaction);
+      const stageId = `stage_${stage}`;
+      if (grouped[stageId]) {
+        grouped[stageId].push(transaction);
       }
       
       // Also add to 'all'
@@ -245,75 +267,10 @@ export function StatusView({ transactions, loading = false, onRefresh, onViewDet
     return grouped;
   }, [transactions]);
 
-  // Group transactions by kanban stage
-  const transactionsByKanbanStage = useMemo(() => {
-    const grouped: Record<number, Transaction[]> = {};
-    
-    // Initialize all stages
-    Object.values(KANBAN_STAGES).forEach(stage => {
-      grouped[stage.id] = [];
-    });
 
-    // Map status to kanban stage (simplified version of mapStatusToStage)
-    transactions.forEach(transaction => {
-      let stage: number;
-      switch (transaction.status) {
-        case 'pending':
-          if (!transaction.advertisementId) stage = 11;
-          else if (!transaction.orderId) stage = 1;
-          else stage = 2;
-          break;
-        case 'order_created':
-        case 'order_pending':
-          stage = 2;
-          break;
-        case 'chat_started':
-          stage = 3;
-          break;
-        case 'payment_received':
-        case 'waiting_payment':
-          stage = 4;
-          break;
-        case 'check_received':
-        case 'receipt_received':
-          stage = 5;
-          break;
-        case 'release_money':
-          stage = 6;
-          break;
-        case 'completed':
-          stage = 7;
-          break;
-        case 'cancelled_by_counterparty':
-          stage = 8;
-          break;
-        case 'failed':
-        case 'cancelled':
-          stage = transaction.customStatuses?.some(s => s.includes('dispute')) ? 9 : 10;
-          break;
-        default:
-          stage = 11;
-      }
-      
-      if (grouped[stage]) {
-        grouped[stage].push(transaction);
-      }
-    });
-
-    return grouped;
-  }, [transactions]);
-
-  let filteredTransactions = activeStatus === 'all' 
+  const filteredTransactions = activeStatus === 'all' 
     ? transactions 
     : transactionsByStatus[activeStatus] || [];
-
-  // Additional filter by kanban stage if selected
-  if (activeKanbanStage !== null) {
-    filteredTransactions = filteredTransactions.filter(transaction => {
-      const transactionsInStage = transactionsByKanbanStage[activeKanbanStage] || [];
-      return transactionsInStage.some(t => t.id === transaction.id);
-    });
-  }
 
   // Pagination
   const totalPages = Math.ceil(filteredTransactions.length / itemsPerPage);
@@ -373,35 +330,34 @@ export function StatusView({ transactions, loading = false, onRefresh, onViewDet
   };
 
   return (
-    <div className="h-full flex">
-      <div className="flex-1 flex flex-col">
-        <Tabs value={activeStatus} onValueChange={handleStatusChange} className="h-full flex flex-col">
-          <TabsList className="w-full justify-start overflow-x-auto flex-nowrap flex-shrink-0">
-            {TRANSACTION_STATUSES.map(status => {
-              const Icon = status.icon;
-              const count = transactionsByStatus[status.id]?.length || 0;
-              
-              return (
-                <TabsTrigger 
-                  key={status.id} 
-                  value={status.id}
-                  className="flex items-center gap-2 whitespace-nowrap"
+    <div className="h-full flex flex-col">
+      <Tabs value={activeStatus} onValueChange={handleStatusChange} className="h-full flex flex-col">
+        <TabsList className="w-full justify-start overflow-x-auto flex-nowrap flex-shrink-0">
+          {TRANSACTION_STATUSES.map(status => {
+            const Icon = status.icon;
+            const count = transactionsByStatus[status.id]?.length || 0;
+            
+            return (
+              <TabsTrigger 
+                key={status.id} 
+                value={status.id}
+                className="flex items-center gap-2 whitespace-nowrap"
+              >
+                <Icon size={16} className={status.textColor} />
+                <span>{status.label}</span>
+                <Badge 
+                  variant="secondary" 
+                  className={cn(
+                    "ml-1 text-xs",
+                    activeStatus === status.id && status.color + ' text-white'
+                  )}
                 >
-                  <Icon size={16} className={status.textColor} />
-                  <span>{status.label}</span>
-                  <Badge 
-                    variant="secondary" 
-                    className={cn(
-                      "ml-1 text-xs",
-                      activeStatus === status.id && status.color + ' text-white'
-                    )}
-                  >
-                    {count}
-                  </Badge>
-                </TabsTrigger>
-              );
-            })}
-          </TabsList>
+                  {count}
+                </Badge>
+              </TabsTrigger>
+            );
+          })}
+        </TabsList>
 
           <TabsContent value={activeStatus} className="flex-1 mt-4 flex flex-col">
             <Card className="flex-1 overflow-hidden flex flex-col">
@@ -431,7 +387,6 @@ export function StatusView({ transactions, loading = false, onRefresh, onViewDet
                           <div className="text-muted-foreground">
                             Нет транзакций
                             {activeStatus !== 'all' && ` со статусом "${TRANSACTION_STATUSES.find(s => s.id === activeStatus)?.label}"`}
-                            {activeKanbanStage !== null && ` на этапе "${KANBAN_STAGES[activeKanbanStage]?.title}"`}
                           </div>
                         </td>
                       </tr>
@@ -605,67 +560,9 @@ export function StatusView({ transactions, loading = false, onRefresh, onViewDet
                   </div>
                 </div>
               )}
-            </Card>
-          </TabsContent>
-        </Tabs>
-      </div>
-
-      {/* Right sidebar with kanban stages */}
-      <div className="w-64 border-l bg-muted/20 p-4">
-        <h3 className="font-semibold mb-4 text-sm">Этапы канбана</h3>
-        <ScrollArea className="h-full">
-          <div className="space-y-2">
-            <Button
-              variant={activeKanbanStage === null ? "secondary" : "ghost"}
-              className="w-full justify-start text-xs"
-              onClick={() => {
-                setActiveKanbanStage(null);
-                setCurrentPage(1);
-              }}
-            >
-              <FileText size={14} className="mr-2" />
-              Все этапы
-              <Badge variant="secondary" className="ml-auto">
-                {filteredTransactions.length}
-              </Badge>
-            </Button>
-            
-            {Object.values(KANBAN_STAGES).map(stage => {
-              const Icon = stage.icon;
-              const count = transactionsByKanbanStage[stage.id]?.filter(t => 
-                activeStatus === 'all' || t.status === activeStatus
-              ).length || 0;
-              
-              return (
-                <Button
-                  key={stage.id}
-                  variant={activeKanbanStage === stage.id ? "secondary" : "ghost"}
-                  className={cn(
-                    "w-full justify-start text-xs",
-                    activeKanbanStage === stage.id && stage.color + '/20'
-                  )}
-                  onClick={() => {
-                    setActiveKanbanStage(stage.id);
-                    setCurrentPage(1);
-                  }}
-                >
-                  <Icon size={14} className={cn("mr-2", stage.textColor)} />
-                  <span className="truncate">{stage.title}</span>
-                  <Badge 
-                    variant="secondary" 
-                    className={cn(
-                      "ml-auto",
-                      activeKanbanStage === stage.id && stage.color + ' text-white'
-                    )}
-                  >
-                    {count}
-                  </Badge>
-                </Button>
-              );
-            })}
-          </div>
-        </ScrollArea>
-      </div>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
