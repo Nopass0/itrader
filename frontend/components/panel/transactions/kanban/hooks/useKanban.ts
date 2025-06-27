@@ -122,6 +122,8 @@ export function useKanban(
         const card = {
           ...ad,
           type: 'advertisement',
+          // Ensure we have itemId for Bybit API compatibility
+          itemId: ad.itemId || ad.bybitAdId || ad.id,
         };
         grouped[1].push(card);
       });

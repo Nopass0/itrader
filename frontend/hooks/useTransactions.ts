@@ -319,6 +319,8 @@ export function useTransactions() {
       console.log('Advertisements response:', response);
       
       if (response.success) {
+        console.log('Advertisements loaded from server:', response.data.data?.length || 0);
+        console.log('Advertisement IDs from server:', response.data.data?.map((ad: any) => ad.id));
         setAdvertisements(response.data.data || []);
         setAdvertisementsTotalCount(response.data.total || 0);
         setAdvertisementsTotalPages(response.data.totalPages || 0);
@@ -499,9 +501,24 @@ export function useTransactions() {
     const handleAdvertisementCreated = (data: { advertisement: Advertisement }) => {
       console.log('New advertisement created:', data);
       
-      // Add to the beginning of the list
-      setAdvertisements(prev => [data.advertisement, ...prev]);
-      setAdvertisementsTotalCount(prev => prev + 1);
+      // Check if advertisement already exists in the list to prevent duplicates
+      let wasAdded = false;
+      
+      setAdvertisements(prev => {
+        const exists = prev.some(a => a.id === data.advertisement.id);
+        if (exists) {
+          console.log('Advertisement already exists in list, skipping duplicate');
+          return prev;
+        }
+        // Add to the beginning of the list
+        wasAdded = true;
+        return [data.advertisement, ...prev];
+      });
+      
+      // Only increment count if advertisement was actually added
+      if (wasAdded) {
+        setAdvertisementsTotalCount(prev => prev + 1);
+      }
     };
 
     // Handle advertisement deletions

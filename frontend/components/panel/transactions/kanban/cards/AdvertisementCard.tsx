@@ -300,7 +300,8 @@ export function AdvertisementCard({ advertisement, onViewDetails }: Advertisemen
 
                 setIsUpdating(true);
                 socket.emit('bybitAdvertisements:update', {
-                  itemId: advertisement.itemId,
+                  itemId: advertisement.itemId || advertisement.bybitAdId || advertisement.id,
+                  bybitAccountId: advertisement.bybitAccountId || advertisement.bybitAccount?.id,
                   updates: { price }
                 }, (response: any) => {
                   setIsUpdating(false);
@@ -342,8 +343,8 @@ export function AdvertisementCard({ advertisement, onViewDetails }: Advertisemen
               onClick={async () => {
                 setIsDeleting(true);
                 socket.emit('bybitAdvertisements:delete', {
-                  itemId: advertisement.itemId,
-                  bybitAccountId: advertisement.bybitAccountId
+                  itemId: advertisement.itemId || advertisement.bybitAdId || advertisement.id,
+                  bybitAccountId: advertisement.bybitAccountId || advertisement.bybitAccount?.id
                 }, (response: any) => {
                   setIsDeleting(false);
                   if (response.success) {
