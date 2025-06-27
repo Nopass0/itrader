@@ -157,15 +157,19 @@ export default function SettingsPage() {
     if (!socket) return;
 
     const handleRateChange = (data: { oldRate: number; newRate: number; mode: string }) => {
+      console.log('[Settings] Received rate:changed event:', data);
       // Обновляем текущий курс при получении события
       setCurrentRate(data.newRate);
       setRateMode(data.mode as 'automatic' | 'constant');
       setLastUpdate(new Date().toISOString());
       
-      toast({
-        title: "Курс обновлен",
-        description: `Новый курс: ${data.newRate.toFixed(2)} RUB за 1 USDT`
-      });
+      // Не показываем toast если мы сами инициировали изменение
+      if (!saving) {
+        toast({
+          title: "Курс обновлен",
+          description: `Новый курс: ${data.newRate.toFixed(2)} RUB за 1 USDT`
+        });
+      }
     };
 
     const unsubscribe = socket.on('rate:changed', handleRateChange);
@@ -177,12 +181,15 @@ export default function SettingsPage() {
   const saveRateSettings = async () => {
     if (!socket) return;
     
+    console.log('[Settings] Starting saveRateSettings', { rateMode, constantRate });
     setSaving(true);
     try {
       // Сначала устанавливаем режим
+      console.log('[Settings] Calling rates:toggleMode with mode:', rateMode);
       const modeResponse = await socket.emitWithAck('rates:toggleMode', {
         mode: rateMode
       });
+      console.log('[Settings] toggleMode response:', modeResponse);
       
       if (!modeResponse.success) {
         throw new Error(modeResponse.error?.message || 'Ошибка изменения режима');
@@ -190,9 +197,11 @@ export default function SettingsPage() {
       
       // Если режим константный, сохраняем курс
       if (rateMode === 'constant' && constantRate) {
+        console.log('[Settings] Calling rates:setConstant with rate:', constantRate);
         const response = await socket.emitWithAck('rates:setConstant', {
           rate: parseFloat(constantRate)
         });
+        console.log('[Settings] setConstant response:', response);
         
         if (!response.success) {
           throw new Error(response.error?.message || 'Ошибка сохранения курса');
@@ -206,15 +215,17 @@ export default function SettingsPage() {
           : "Настройки курса сохранены"
       });
       
-      // Обновляем данные
-      fetchSettings();
+      // Данные обновятся автоматически через событие rate:changed
+      console.log('[Settings] Settings saved successfully');
     } catch (error) {
+      console.error('[Settings] Error in saveRateSettings:', error);
       toast({
         title: "Ошибка",
         description: error instanceof Error ? error.message : "Не удалось сохранить настройки",
         variant: "destructive"
       });
     } finally {
+      console.log('[Settings] Setting saving to false');
       setSaving(false);
     }
   };
