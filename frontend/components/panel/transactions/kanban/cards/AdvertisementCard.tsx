@@ -95,6 +95,7 @@ export function AdvertisementCard({ advertisement, onViewDetails }: Advertisemen
   };
 
   return (
+    <>
     <Card className="p-3 hover:shadow-md transition-all hover:border-primary/50">
       {/* Header */}
       <div className="flex items-center justify-between mb-2">
