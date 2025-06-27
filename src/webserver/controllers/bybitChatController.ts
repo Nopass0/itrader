@@ -105,33 +105,58 @@ export class BybitChatController {
       logger.info('Extracted messages:', { count: messages.length });
 
       // Получаем детали ордера для определения нашего userId
-      const httpClient = (client as any).httpClient;
-      const orderInfo = await httpClient.post("/v5/p2p/order/info", {
-        orderId: data.orderId
-      });
-      
       let ourUserId: string | null = null;
-      if (orderInfo.retCode === 0 && orderInfo.result) {
-        ourUserId = orderInfo.result.userId;
+      try {
+        const orderDetails = await client.getOrderDetails(data.orderId);
+        logger.info('Order details:', { 
+          orderId: data.orderId,
+          orderDetails: orderDetails 
+        });
+        
+        if (orderDetails) {
+          // Try to get userId from various possible locations
+          ourUserId = orderDetails.userId || 
+                     orderDetails.buyerId || 
+                     orderDetails.sellerId ||
+                     orderDetails.makerUserId ||
+                     orderDetails.takerUserId;
+          
+          // If we're the seller in a sell order, use sellerId
+          if (orderDetails.side === 'sell' && orderDetails.sellerId) {
+            ourUserId = orderDetails.sellerId;
+          }
+          // If we're the buyer in a buy order, use buyerId
+          else if (orderDetails.side === 'buy' && orderDetails.buyerId) {
+            ourUserId = orderDetails.buyerId;
+          }
+        }
+      } catch (error) {
+        logger.error('Error getting order details', error as Error);
       }
 
       // Форматируем сообщения
       const formattedMessages = messages.map((msg: any) => {
         // Определяем отправителя
         let sender = 'them';
-        if (msg.userId === ourUserId) {
-          // Проверяем, является ли это системным сообщением
-          if (msg.msgType === 0 || 
-              msg.message?.includes("Be careful not to be fooled") ||
-              msg.message?.includes("A buyer has submitted an order") ||
-              msg.message?.includes("‼️ЧИТАЕМ‼️")) {
-            sender = 'system';
-          } else {
-            sender = 'us';
-          }
-        } else if (msg.msgType === 0) {
+        
+        // Check roleType first (more reliable)
+        if (msg.roleType === 'sys' || msg.msgType === 0) {
+          sender = 'system';
+        } else if (ourUserId && msg.userId === ourUserId) {
+          sender = 'us';
+        } else if (msg.userId && msg.userId !== ourUserId) {
+          sender = 'them';
+        }
+        
+        // Override for known system messages
+        if (msg.message?.includes("Be careful not to be fooled") ||
+            msg.message?.includes("A buyer has submitted an order") ||
+            msg.message?.includes("‼️ЧИТАЕМ‼️")) {
           sender = 'system';
         }
+
+        // Parse timestamp correctly
+        const timestamp = msg.createDate ? new Date(parseInt(msg.createDate)) : new Date();
 
         return {
           id: msg.id,
@@ -139,11 +164,16 @@ export class BybitChatController {
           message: msg.message || '',
           content: msg.message || '',  // Keep for backwards compatibility with frontend
           sender: sender,
-          timestamp: new Date(parseInt(msg.createDate || '0')),
-          type: msg.contentType === 'pic' || msg.message?.includes('/fiat/p2p/oss/') ? 'image' : 'text',
-          imageUrl: msg.imageUrl || (msg.message?.includes('/fiat/p2p/oss/') ? msg.message : undefined),
+          timestamp: timestamp,
+          type: msg.contentType === 'pic' ? 'image' : 
+                msg.contentType === 'pdf' ? 'pdf' : 
+                msg.contentType === 'video' ? 'video' : 'text',
+          imageUrl: msg.contentType === 'pic' && msg.message ? msg.message : undefined,
           userId: msg.userId,
-          nickName: msg.nickName
+          nickName: msg.nickName,
+          msgType: msg.msgType,
+          contentType: msg.contentType,
+          isRead: msg.isRead || msg.read || 0
         };
       });
 

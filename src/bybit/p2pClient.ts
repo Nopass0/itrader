@@ -420,6 +420,16 @@ export class P2PClient extends EventEmitter {
       "/v5/p2p/order/message/listpage",
       params,
     );
+    
+    if (this.config.debugMode) {
+      console.log('[P2PClient] getChatMessages response:', {
+        hasResult: !!response.result,
+        resultIsArray: Array.isArray(response.result),
+        resultLength: response.result?.length,
+        sampleMessage: response.result?.[0]
+      });
+    }
+    
     // Return the result array directly
     return response.result || [];
   }
