@@ -554,7 +554,7 @@ export function AdvertisementsTab() {
                 </div>
                 <div className="flex items-center gap-1">
                   <Badge variant={isAdvertisementActive(ad) ? 'default' : 'secondary'}>
-                    {isAdvertisementActive(ad) ? 'Активно' : 'Неактивно'}
+                    {ad.statusDisplay || (isAdvertisementActive(ad) ? 'Listed' : 'Not Listed')}
                   </Badge>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>

@@ -335,21 +335,27 @@ export class BybitAdvertisementController {
         throw new Error(`Advertisement ${data.itemId} not found`);
       }
 
-      // Подготавливаем данные для обновления согласно API Bybit
+      // Подготавливаем данные для обновления согласно API Bybit (UpdateAdvertisementParams)
       const updateData: any = {
-        id: data.itemId,
-        priceType: data.updates.priceType !== undefined ? data.updates.priceType : (currentAd.priceType || "0"),
-        premium: data.updates.premium !== undefined ? data.updates.premium : (currentAd.premium || ""),
-        price: data.updates.price !== undefined ? data.updates.price.toString() : (currentAd.price || "0"),
-        minAmount: data.updates.minAmount !== undefined ? data.updates.minAmount.toString() : (currentAd.minAmount || currentAd.minOrderAmount || "0"),
-        maxAmount: data.updates.maxAmount !== undefined ? data.updates.maxAmount.toString() : (currentAd.maxAmount || currentAd.maxOrderAmount || "0"),
-        remark: data.updates.remarks !== undefined ? data.updates.remarks : (currentAd.remark || currentAd.remarks || ""),
-        tradingPreferenceSet: currentAd.tradingPreferenceSet || {},
-        paymentIds: currentAd.paymentIds || currentAd.payments || ["-1"],
-        actionType: data.actionType || "MODIFY", // MODIFY для изменения, ACTIVE для релистинга
-        quantity: data.updates.quantity !== undefined ? data.updates.quantity.toString() : (currentAd.quantity || "0"),
-        paymentPeriod: data.updates.paymentPeriod !== undefined ? data.updates.paymentPeriod.toString() : (currentAd.paymentPeriod || "15")
+        itemId: data.itemId,
+        price: data.updates.price !== undefined ? data.updates.price.toString() : undefined,
+        quantity: data.updates.quantity !== undefined ? data.updates.quantity.toString() : undefined,
+        minOrderAmount: data.updates.minAmount !== undefined ? data.updates.minAmount.toString() : undefined,
+        maxOrderAmount: data.updates.maxAmount !== undefined ? data.updates.maxAmount.toString() : undefined,
+        remarks: data.updates.remarks !== undefined ? data.updates.remarks : undefined
       };
+
+      // Удаляем undefined поля
+      Object.keys(updateData).forEach(key => {
+        if (updateData[key] === undefined) {
+          delete updateData[key];
+        }
+      });
+
+      logger.info('Sending update to Bybit API', { 
+        itemId: data.itemId,
+        updateData 
+      });
 
       const result = await client.updateAdvertisement(updateData);
 
