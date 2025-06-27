@@ -2340,6 +2340,9 @@ export default function TransactionsPage() {
             ) : (
               <StatusView
                 transactions={transactions}
+                payouts={payouts}
+                advertisements={advertisements}
+                orders={orders}
                 loading={transactionsLoading}
                 onRefresh={loadTransactions}
                 onViewDetails={(transaction) => setSelectedItem(transaction)}

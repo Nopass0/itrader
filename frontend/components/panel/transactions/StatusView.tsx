@@ -40,6 +40,9 @@ import { useToast } from '@/components/ui/use-toast';
 
 interface StatusViewProps {
   transactions: Transaction[];
+  payouts?: any[];
+  advertisements?: any[];
+  orders?: any[];
   loading?: boolean;
   onRefresh?: () => void;
   onViewDetails?: (transaction: Transaction) => void;
@@ -194,15 +197,24 @@ const TRANSACTION_STATUSES = [
   },
 ];
 
-export function StatusView({ transactions, loading = false, onRefresh, onViewDetails, onOpenChat }: StatusViewProps) {
+export function StatusView({ 
+  transactions, 
+  payouts = [], 
+  advertisements = [], 
+  orders = [], 
+  loading = false, 
+  onRefresh, 
+  onViewDetails, 
+  onOpenChat 
+}: StatusViewProps) {
   const [activeStatus, setActiveStatus] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
   const { toast } = useToast();
 
-  // Group transactions by status and kanban stages
-  const transactionsByStatus = useMemo(() => {
-    const grouped: Record<string, Transaction[]> = {};
+  // Group all items by status and kanban stages
+  const itemsByStatus = useMemo(() => {
+    const grouped: Record<string, any[]> = {};
     
     // Initialize all statuses with empty arrays
     TRANSACTION_STATUSES.forEach(status => {
@@ -210,7 +222,13 @@ export function StatusView({ transactions, loading = false, onRefresh, onViewDet
     });
 
     // Helper function to map transaction to kanban stage
-    const mapToKanbanStage = (transaction: Transaction): number => {
+    const mapTransactionToKanbanStage = (transaction: Transaction): number => {
+      // Check if this transaction has a payout with status < 7
+      const payout = payouts.find(p => p.transactionId === transaction.id);
+      if (payout && payout.status < 7) {
+        return 0; // Stage 0: Payouts
+      }
+
       switch (transaction.status) {
         case 'pending':
           if (!transaction.advertisementId) return 11;
@@ -244,6 +262,9 @@ export function StatusView({ transactions, loading = false, onRefresh, onViewDet
       }
     };
 
+    // Add all items to 'all' group
+    const allItems: any[] = [];
+
     // Group transactions
     transactions.forEach(transaction => {
       const status = transaction.status || 'pending';
@@ -254,27 +275,66 @@ export function StatusView({ transactions, loading = false, onRefresh, onViewDet
       }
       
       // Add to kanban stage groups
-      const stage = mapToKanbanStage(transaction);
+      const stage = mapTransactionToKanbanStage(transaction);
       const stageId = `stage_${stage}`;
       if (grouped[stageId]) {
         grouped[stageId].push(transaction);
       }
       
-      // Also add to 'all'
-      grouped['all'].push(transaction);
+      allItems.push(transaction);
     });
 
+    // Add payouts with status < 7 to stage 0
+    payouts
+      .filter(payout => payout.status < 7)
+      .forEach(payout => {
+        const item = {
+          ...payout,
+          type: 'payout',
+        };
+        grouped['stage_0'].push(item);
+        allItems.push(item);
+      });
+
+    // Add active advertisements to stage 1
+    advertisements
+      .filter(ad => ad.isActive)
+      .forEach(ad => {
+        const item = {
+          ...ad,
+          type: 'advertisement',
+        };
+        grouped['stage_1'].push(item);
+        allItems.push(item);
+      });
+
+    // Add orders to stage 2
+    if (orders) {
+      orders.forEach(order => {
+        const item = {
+          ...order,
+          type: 'order',
+          id: order.orderId || order.id,
+          amount: order.amount || 0,
+          createdAt: order.createdAt || order.orderMtime || new Date().toISOString(),
+        };
+        grouped['stage_2'].push(item);
+        allItems.push(item);
+      });
+    }
+
+    // Add all items to 'all' group
+    grouped['all'] = allItems;
+
     return grouped;
-  }, [transactions]);
+  }, [transactions, payouts, advertisements, orders]);
 
 
-  const filteredTransactions = activeStatus === 'all' 
-    ? transactions 
-    : transactionsByStatus[activeStatus] || [];
+  const filteredItems = itemsByStatus[activeStatus] || [];
 
   // Pagination
-  const totalPages = Math.ceil(filteredTransactions.length / itemsPerPage);
-  const paginatedTransactions = filteredTransactions.slice(
+  const totalPages = Math.ceil(filteredItems.length / itemsPerPage);
+  const paginatedItems = filteredItems.slice(
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
   );
@@ -335,7 +395,7 @@ export function StatusView({ transactions, loading = false, onRefresh, onViewDet
         <TabsList className="w-full justify-start overflow-x-auto flex-nowrap flex-shrink-0">
           {TRANSACTION_STATUSES.map(status => {
             const Icon = status.icon;
-            const count = transactionsByStatus[status.id]?.length || 0;
+            const count = itemsByStatus[status.id]?.length || 0;
             
             return (
               <TabsTrigger 
@@ -381,7 +441,7 @@ export function StatusView({ transactions, loading = false, onRefresh, onViewDet
                           <div className="text-muted-foreground">Загрузка...</div>
                         </td>
                       </tr>
-                    ) : paginatedTransactions.length === 0 ? (
+                    ) : paginatedItems.length === 0 ? (
                       <tr>
                         <td colSpan={7} className="text-center py-8">
                           <div className="text-muted-foreground">
@@ -391,114 +451,197 @@ export function StatusView({ transactions, loading = false, onRefresh, onViewDet
                         </td>
                       </tr>
                     ) : (
-                      paginatedTransactions.map((transaction) => (
-                        <tr key={transaction.id} className="hover:bg-muted/50 transition-colors border-b">
-                          <td className="px-3 py-2">
-                            <div className="space-y-0.5">
-                              <div className="flex items-center gap-1">
-                                <span className="font-mono text-xs">
-                                  {transaction.id.slice(0, 6)}...
-                                </span>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-4 w-4 p-0"
-                                  onClick={() => handleCopyToClipboard(transaction.id, "ID")}
+                      paginatedItems.map((item) => {
+                        // Handle different item types
+                        const isTransaction = item.type !== 'payout' && item.type !== 'advertisement' && item.type !== 'order';
+                        const isPayout = item.type === 'payout';
+                        const isAdvertisement = item.type === 'advertisement';
+                        const isOrder = item.type === 'order';
+
+                        return (
+                          <tr key={item.id} className="hover:bg-muted/50 transition-colors border-b">
+                            <td className="px-3 py-2">
+                              <div className="space-y-0.5">
+                                <div className="flex items-center gap-1">
+                                  <span className="font-mono text-xs">
+                                    {item.id.slice(0, 6)}...
+                                  </span>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-4 w-4 p-0"
+                                    onClick={() => handleCopyToClipboard(item.id, "ID")}
+                                  >
+                                    <Copy size={10} />
+                                  </Button>
+                                </div>
+                                {(item.orderId || item.orderNo) && (
+                                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                    <Hash size={10} />
+                                    {item.orderId || item.orderNo}
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-3 py-2">
+                              <div className="text-xs">
+                                {formatDate(item.createdAt || item.lastModifyTime || item.createdTime)}
+                              </div>
+                            </td>
+                            <td className="px-3 py-2">
+                              {isTransaction && item.advertisement && (
+                                <Badge
+                                  variant="outline"
+                                  className={cn(
+                                    "text-xs",
+                                    item.advertisement.type === "buy"
+                                      ? "bg-green-500/10 text-green-500 border-green-500/20"
+                                      : "bg-red-500/10 text-red-500 border-red-500/20"
+                                  )}
                                 >
-                                  <Copy size={10} />
-                                </Button>
+                                  {item.advertisement.type === "buy" ? (
+                                    <>
+                                      <TrendingDown size={12} className="mr-1" />
+                                      ПОКУПКА
+                                    </>
+                                  ) : (
+                                    <>
+                                      <TrendingUp size={12} className="mr-1" />
+                                      ПРОДАЖА
+                                    </>
+                                  )}
+                                </Badge>
+                              )}
+                              {isPayout && (
+                                <Badge variant="outline" className="text-xs bg-slate-500/10 text-slate-500">
+                                  <Wallet size={12} className="mr-1" />
+                                  ВЫПЛАТА
+                                </Badge>
+                              )}
+                              {isAdvertisement && (
+                                <Badge
+                                  variant="outline"
+                                  className={cn(
+                                    "text-xs",
+                                    item.type === "buy"
+                                      ? "bg-green-500/10 text-green-500 border-green-500/20"
+                                      : "bg-red-500/10 text-red-500 border-red-500/20"
+                                  )}
+                                >
+                                  {item.type === "buy" ? (
+                                    <>
+                                      <TrendingDown size={12} className="mr-1" />
+                                      ПОКУПКА
+                                    </>
+                                  ) : (
+                                    <>
+                                      <TrendingUp size={12} className="mr-1" />
+                                      ПРОДАЖА
+                                    </>
+                                  )}
+                                </Badge>
+                              )}
+                              {isOrder && (
+                                <Badge
+                                  variant="outline"
+                                  className={cn(
+                                    "text-xs",
+                                    item.side === 0
+                                      ? "bg-green-500/10 text-green-500 border-green-500/20"
+                                      : "bg-red-500/10 text-red-500 border-red-500/20"
+                                  )}
+                                >
+                                  {item.side === 0 ? (
+                                    <>
+                                      <TrendingDown size={12} className="mr-1" />
+                                      ПОКУПКА
+                                    </>
+                                  ) : (
+                                    <>
+                                      <TrendingUp size={12} className="mr-1" />
+                                      ПРОДАЖА
+                                    </>
+                                  )}
+                                </Badge>
+                              )}
+                            </td>
+                            <td className="px-3 py-2 text-right">
+                              <div className="font-medium">
+                                {formatAmount(item.amount || item.quantity)}
                               </div>
-                              {transaction.orderId && (
-                                <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                                  <Hash size={10} />
-                                  {transaction.orderId}
+                              {(item.advertisement?.price || item.price) && (
+                                <div className="text-xs text-muted-foreground">
+                                  {item.advertisement?.price || item.price} ₽/USDT
                                 </div>
                               )}
-                            </div>
-                          </td>
-                          <td className="px-3 py-2">
-                            <div className="text-xs">
-                              {formatDate(transaction.createdAt)}
-                            </div>
-                          </td>
-                          <td className="px-3 py-2">
-                            {transaction.advertisement && (
-                              <Badge
-                                variant="outline"
-                                className={cn(
-                                  "text-xs",
-                                  transaction.advertisement.type === "buy"
-                                    ? "bg-green-500/10 text-green-500 border-green-500/20"
-                                    : "bg-red-500/10 text-red-500 border-red-500/20"
+                            </td>
+                            <td className="px-3 py-2">
+                              {isTransaction && getStatusBadge(item.status)}
+                              {isPayout && (
+                                <Badge variant="outline" className="text-xs">
+                                  Статус: {item.status}
+                                </Badge>
+                              )}
+                              {isAdvertisement && (
+                                <Badge
+                                  variant="outline"
+                                  className={cn(
+                                    "text-xs",
+                                    item.isActive
+                                      ? "bg-green-500/10 text-green-500"
+                                      : "bg-gray-500/10 text-gray-500"
+                                  )}
+                                >
+                                  {item.isActive ? "Активно" : "Неактивно"}
+                                </Badge>
+                              )}
+                              {isOrder && (
+                                <Badge variant="outline" className="text-xs">
+                                  {item.orderStatus || item.status || 'PENDING'}
+                                </Badge>
+                              )}
+                            </td>
+                            <td className="px-3 py-2">
+                              <div className="space-y-1 text-xs">
+                                {(item.advertisement?.bybitAccount || item.bybitAccount || item.bybitAccountId) && (
+                                  <div className="flex items-center gap-1">
+                                    <Building2 size={12} className="text-muted-foreground" />
+                                    <span>Bybit: {item.advertisement?.bybitAccount?.accountId || item.bybitAccount?.accountId || item.bybitAccountId}</span>
+                                  </div>
                                 )}
-                              >
-                                {transaction.advertisement.type === "buy" ? (
-                                  <>
-                                    <TrendingDown size={12} className="mr-1" />
-                                    ПОКУПКА
-                                  </>
-                                ) : (
-                                  <>
-                                    <TrendingUp size={12} className="mr-1" />
-                                    ПРОДАЖА
-                                  </>
+                                {(item.payout?.gateAccount || item.gateAccount || item.gateAccountId) && (
+                                  <div className="flex items-center gap-1">
+                                    <Building2 size={12} className="text-muted-foreground" />
+                                    <span>Platform 1: {item.payout?.gateAccount || item.gateAccount || item.gateAccountId}</span>
+                                  </div>
                                 )}
-                              </Badge>
-                            )}
-                          </td>
-                          <td className="px-3 py-2 text-right">
-                            <div className="font-medium">
-                              {formatAmount(transaction.amount)}
-                            </div>
-                            {transaction.advertisement?.price && (
-                              <div className="text-xs text-muted-foreground">
-                                {transaction.advertisement.price} ₽/USDT
                               </div>
-                            )}
-                          </td>
-                          <td className="px-3 py-2">
-                            {getStatusBadge(transaction.status)}
-                          </td>
-                          <td className="px-3 py-2">
-                            <div className="space-y-1 text-xs">
-                              {transaction.advertisement?.bybitAccount && (
-                                <div className="flex items-center gap-1">
-                                  <Building2 size={12} className="text-muted-foreground" />
-                                  <span>Bybit: {transaction.advertisement.bybitAccount.accountId}</span>
-                                </div>
-                              )}
-                              {transaction.payout?.gateAccount && (
-                                <div className="flex items-center gap-1">
-                                  <Building2 size={12} className="text-muted-foreground" />
-                                  <span>Platform 1: {transaction.payout.gateAccount}</span>
-                                </div>
-                              )}
-                            </div>
-                          </td>
-                          <td className="px-3 py-2">
-                            <div className="flex items-center justify-center gap-1">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 px-2"
-                                onClick={() => onViewDetails?.(transaction)}
-                              >
-                                <Eye size={12} />
-                              </Button>
-                              {transaction.orderId && onOpenChat && (
+                            </td>
+                            <td className="px-3 py-2">
+                              <div className="flex items-center justify-center gap-1">
                                 <Button
                                   variant="ghost"
                                   size="sm"
                                   className="h-7 px-2"
-                                  onClick={() => onOpenChat(transaction)}
+                                  onClick={() => onViewDetails?.(item)}
                                 >
-                                  <MessageSquare size={12} />
+                                  <Eye size={12} />
                                 </Button>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      ))
+                                {isTransaction && item.orderId && onOpenChat && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 px-2"
+                                    onClick={() => onOpenChat(item)}
+                                  >
+                                    <MessageSquare size={12} />
+                                  </Button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
                     )}
                   </tbody>
                 </table>
@@ -508,7 +651,7 @@ export function StatusView({ transactions, loading = false, onRefresh, onViewDet
               {totalPages > 1 && (
                 <div className="flex items-center justify-between px-4 py-3 border-t">
                   <div className="text-sm text-muted-foreground">
-                    Показано {(currentPage - 1) * itemsPerPage + 1}-{Math.min(currentPage * itemsPerPage, filteredTransactions.length)} из {filteredTransactions.length}
+                    Показано {(currentPage - 1) * itemsPerPage + 1}-{Math.min(currentPage * itemsPerPage, filteredItems.length)} из {filteredItems.length}
                   </div>
                   <div className="flex items-center gap-2">
                     <Button
