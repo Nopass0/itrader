@@ -115,9 +115,10 @@ export function KanbanColumn({ column, cards, isDragging, currentUser }: KanbanC
       ref={setNodeRef}
       data-droppable="true"
       className={cn(
-        "flex flex-col w-[320px] h-full max-h-full bg-muted/30 rounded-lg transition-all duration-300 overflow-hidden",
+        "flex flex-col w-[320px] h-full bg-muted/30 rounded-lg transition-all duration-300",
         isOver && "ring-2 ring-primary bg-primary/5"
       )}
+      style={{ maxHeight: 'calc(100vh - 240px)' }}
     >
       {/* Column Header */}
       <div className={cn(
@@ -195,25 +196,27 @@ export function KanbanColumn({ column, cards, isDragging, currentUser }: KanbanC
       </div>
 
       {/* Column Content */}
-      <ScrollArea className="flex-1 p-2 overflow-y-auto">
-        <div className="pr-2">
-          <SortableContext
-            items={cardIds}
-            strategy={verticalListSortingStrategy}
-          >
-            <div className="space-y-2">
-              {filteredCards.map((card) => (
-                <KanbanCard
-                  key={card.id}
-                  card={card}
-                  columnId={column.id}
-                  currentUser={currentUser}
-                />
-              ))}
-            </div>
-          </SortableContext>
-        </div>
-      </ScrollArea>
+      <div className="flex-1 overflow-hidden">
+        <ScrollArea className="h-full">
+          <div className="p-2">
+            <SortableContext
+              items={cardIds}
+              strategy={verticalListSortingStrategy}
+            >
+              <div className="space-y-2 pb-2">
+                {filteredCards.map((card) => (
+                  <KanbanCard
+                    key={card.id}
+                    card={card}
+                    columnId={column.id}
+                    currentUser={currentUser}
+                  />
+                ))}
+              </div>
+            </SortableContext>
+          </div>
+        </ScrollArea>
+      </div>
 
       {/* Drop indicator */}
       {isDragging && (

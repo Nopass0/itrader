@@ -361,6 +361,7 @@ export function KanbanBoard({
         <div 
           ref={scrollContainerRef}
           className="flex-1 overflow-x-auto overflow-y-hidden relative"
+          style={{ height: 'calc(100vh - 200px)' }}
         >
           <DndContext
             sensors={sensors}
