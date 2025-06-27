@@ -43,19 +43,27 @@ export class WebSocketServer {
 
   constructor(port: number = 3002) {
     this.port = port;
-    this.httpServer = createServer((req, res) => {
-      // Health check endpoint
+    // Create HTTP server without default request listener so Socket.IO can
+    // handle its own requests. We'll add a lightweight health check handler
+    // separately to avoid interfering with the Socket.IO path.
+    this.httpServer = createServer();
+
+    // Health check endpoint
+    this.httpServer.on('request', (req, res) => {
       if (req.url === '/health' && req.method === 'GET') {
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({
-          status: 'ok',
-          timestamp: new Date().toISOString(),
-          version: '1.0.0',
-          service: 'itrader-websocket'
-        }));
-      } else {
-        res.writeHead(404, { 'Content-Type': 'text/plain' });
-        res.end('Not Found');
+        res.writeHead(200, {
+          'Content-Type': 'application/json',
+          // Allow cross-origin requests for the health check
+          'Access-Control-Allow-Origin': '*',
+        });
+        res.end(
+          JSON.stringify({
+            status: 'ok',
+            timestamp: new Date().toISOString(),
+            version: '1.0.0',
+            service: 'itrader-websocket',
+          }),
+        );
       }
     });
     
