@@ -18,7 +18,7 @@ export interface BaseReceipt {
   datetime: Date; // Дата и время из чека
   amount: number; // Сумма (не Итого!)
   total?: number; // Итого
-  status: "SUCCESS"; // Только успешные чеки
+  status: "SUCCESS" | "Успешно"; // Только успешные чеки
   sender: string; // Отправитель
   senderAccount?: string; // Счет списания
   transferType: TransferType;
@@ -408,7 +408,7 @@ export class TinkoffReceiptParser {
     const result: PhoneTransferReceipt = {
       datetime,
       amount,
-      status: "SUCCESS",
+      status: "Успешно",
       sender,
       transferType: TransferType.BY_PHONE,
       recipientPhone: ''
@@ -639,7 +639,7 @@ export class TinkoffReceiptParser {
     const result: PhoneTransferReceipt = {
       datetime,
       amount,
-      status: "SUCCESS",
+      status: "Успешно",
       sender,
       transferType: TransferType.BY_PHONE,
       recipientPhone: phone
@@ -715,7 +715,7 @@ export class TinkoffReceiptParser {
     return {
       datetime,
       amount,
-      status: "SUCCESS",
+      status: "Успешно",
       sender,
       transferType: TransferType.TO_TBANK,
       recipientName: recipientMatch[1].trim(),
@@ -741,7 +741,7 @@ export class TinkoffReceiptParser {
     const result: CardTransferReceipt = {
       datetime,
       amount,
-      status: "SUCCESS",
+      status: "Успешно",
       sender,
       transferType: TransferType.TO_CARD,
       recipientCard: cardMatch[1]

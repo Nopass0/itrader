@@ -73,9 +73,9 @@ export class ReceiptMatcher {
         return false;
       }
 
-      // 1. Проверяем статус - должен быть SUCCESS
-      if (receipt.status !== "SUCCESS") {
-        console.log("Receipt status is not SUCCESS");
+      // 1. Проверяем статус - должен быть SUCCESS или Успешно
+      if (receipt.status !== "SUCCESS" && receipt.status !== "Успешно") {
+        console.log(`Receipt status is not SUCCESS/Успешно: ${receipt.status}`);
         return false;
       }
 
@@ -280,9 +280,9 @@ export class ReceiptMatcher {
       receiptStatus: receipt.status
     });
     
-    // 1. Проверяем статус
-    if (receipt.status !== "SUCCESS") {
-      console.log('[ReceiptMatcher] Receipt status is not SUCCESS:', receipt.status);
+    // 1. Проверяем статус - должен быть SUCCESS или Успешно
+    if (receipt.status !== "SUCCESS" && receipt.status !== "Успешно") {
+      console.log('[ReceiptMatcher] Receipt status is not SUCCESS/Успешно:', receipt.status);
       return false;
     }
 
