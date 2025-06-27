@@ -157,6 +157,7 @@ interface KanbanBoardProps {
   transactions: Transaction[];
   payouts: any[];
   advertisements: any[];
+  orders?: any[];
   loading: boolean;
   onRefresh: () => void;
   currentUser?: any;
@@ -166,6 +167,7 @@ export function KanbanBoard({
   transactions, 
   payouts, 
   advertisements,
+  orders,
   loading,
   onRefresh,
   currentUser
@@ -177,7 +179,7 @@ export function KanbanBoard({
     getColumnCards,
     activeId,
     setActiveId,
-  } = useKanban(transactions, payouts, advertisements);
+  } = useKanban(transactions, payouts, advertisements, orders);
 
   const [isDragging, setIsDragging] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);

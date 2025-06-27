@@ -2322,6 +2322,7 @@ export default function TransactionsPage() {
                   transactions={transactions}
                   payouts={payouts}
                   advertisements={advertisements}
+                  orders={orders}
                   loading={transactionsLoading}
                   onRefresh={loadTransactions}
                   currentUser={currentUser}

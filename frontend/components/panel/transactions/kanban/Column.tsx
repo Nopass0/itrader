@@ -196,26 +196,22 @@ export function KanbanColumn({ column, cards, isDragging, currentUser }: KanbanC
       </div>
 
       {/* Column Content */}
-      <div className="flex-1 overflow-hidden">
-        <ScrollArea className="h-full">
-          <div className="p-2">
-            <SortableContext
-              items={cardIds}
-              strategy={verticalListSortingStrategy}
-            >
-              <div className="space-y-2 pb-2">
-                {filteredCards.map((card) => (
-                  <KanbanCard
-                    key={card.id}
-                    card={card}
-                    columnId={column.id}
-                    currentUser={currentUser}
-                  />
-                ))}
-              </div>
-            </SortableContext>
+      <div className="flex-1 overflow-y-auto overflow-x-hidden p-2" style={{ minHeight: 0 }}>
+        <SortableContext
+          items={cardIds}
+          strategy={verticalListSortingStrategy}
+        >
+          <div className="space-y-2 pb-2">
+            {filteredCards.map((card) => (
+              <KanbanCard
+                key={card.id}
+                card={card}
+                columnId={column.id}
+                currentUser={currentUser}
+              />
+            ))}
           </div>
-        </ScrollArea>
+        </SortableContext>
       </div>
 
       {/* Drop indicator */}

@@ -22,6 +22,10 @@ export function mapStatusToStage(transaction: Transaction, payouts: any[]): numb
       if (!transaction.orderId) return 1; // Advertisement
       return 2; // Order
     
+    case 'order_created':
+    case 'order_pending':
+      return 2; // Order
+    
     case 'chat_started':
       return 3; // Chat
     
@@ -61,7 +65,8 @@ export function mapStatusToStage(transaction: Transaction, payouts: any[]): numb
 export function useKanban(
   transactions: Transaction[], 
   payouts: any[], 
-  advertisements: any[]
+  advertisements: any[],
+  orders?: any[]
 ) {
   const { socket } = useSocket();
   const { toast } = useToast();
@@ -121,6 +126,20 @@ export function useKanban(
         grouped[1].push(card);
       });
 
+    // Add orders to stage 2
+    if (orders) {
+      orders.forEach(order => {
+        const card = {
+          ...order,
+          type: 'order',
+          id: order.orderId || order.id,
+          amount: order.amount || 0,
+          createdAt: order.createdAt || order.orderMtime || new Date().toISOString(),
+        };
+        grouped[2].push(card);
+      });
+    }
+
     // Sort cards by creation date (newest first)
     Object.keys(grouped).forEach(key => {
       grouped[Number(key)].sort((a, b) => 
@@ -129,7 +148,7 @@ export function useKanban(
     });
 
     return grouped;
-  }, [transactions, payouts, advertisements, columns]);
+  }, [transactions, payouts, advertisements, orders, columns]);
 
   // Get cards for a specific column
   const getColumnCards = useCallback((columnId: number) => {
