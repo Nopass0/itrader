@@ -238,13 +238,24 @@ export class ReceiptProcessorService extends EventEmitter {
       });
       
       let checkSince: Date;
-      if (!lastReceipt || lastReceipt.createdAt < new Date(Date.now() - 24 * 60 * 60 * 1000)) {
-        // No recent receipts, check last 7 days
-        checkSince = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-        logger.info("No recent receipts found, checking emails from last 7 days");
+      const now = new Date();
+      const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+      
+      if (!lastReceipt) {
+        // No receipts at all, check last 7 days
+        checkSince = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        logger.info("No receipts found in DB, checking emails from last 7 days");
+      } else if (lastReceipt.createdAt < oneDayAgo) {
+        // Last receipt is older than 24 hours, check from that date
+        checkSince = new Date(lastReceipt.createdAt.getTime() - 60 * 60 * 1000); // 1 hour before last receipt
+        logger.info("Last receipt is old, checking emails from", { 
+          lastReceiptDate: lastReceipt.createdAt,
+          checkSince: checkSince 
+        });
       } else {
-        // Check from last interval
-        checkSince = new Date(Date.now() - this.config.checkInterval - 60000);
+        // Recent receipt exists, check from last interval
+        checkSince = new Date(now.getTime() - this.config.checkInterval - 60000);
+        logger.info("Recent receipt exists, checking from last interval", { checkSince });
       }
       
       await this.mailslurpService.processReceipts(checkSince);

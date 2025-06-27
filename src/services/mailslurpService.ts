@@ -335,10 +335,40 @@ export class MailSlurpService extends EventEmitter {
    */
   async downloadAttachment(emailId: string, attachmentIndex: number = 0): Promise<Buffer | null> {
     try {
+      console.log(`[MailSlurp] downloadAttachment called for email ${emailId}, index ${attachmentIndex}`);
       logger.info('Attempting to download attachment via raw email method', { emailId, attachmentIndex });
 
-      // Get raw email JSON which contains the full email with attachments
+      // Try direct attachment download first
       try {
+        console.log(`[MailSlurp] Trying direct attachment download...`);
+        const attachments = await this.emailController.getEmailAttachments({ emailId });
+        
+        if (attachments && attachments[attachmentIndex]) {
+          const attachment = attachments[attachmentIndex];
+          console.log(`[MailSlurp] Found attachment: ${attachment.name}, trying to download...`);
+          
+          // Try to download using attachmentController
+          try {
+            const attachmentData = await this.attachmentController.downloadAttachmentAsBase64Encoded({
+              emailId,
+              attachmentId: attachment.attachmentId
+            });
+            
+            if (attachmentData && attachmentData.base64FileContents) {
+              console.log(`[MailSlurp] Successfully downloaded attachment via attachmentController`);
+              return Buffer.from(attachmentData.base64FileContents, 'base64');
+            }
+          } catch (error) {
+            console.log(`[MailSlurp] Direct download failed:`, error);
+          }
+        }
+      } catch (error) {
+        console.log(`[MailSlurp] Failed to get attachments list:`, error);
+      }
+
+      // Fallback to raw email JSON method
+      try {
+        console.log(`[MailSlurp] Falling back to raw email JSON method...`);
         logger.info('Getting raw email JSON...');
         const rawEmailJson = await this.emailController.getRawEmailJson({
           emailId: emailId
@@ -459,6 +489,18 @@ export class MailSlurpService extends EventEmitter {
 
       const emails = await this.checkForNewEmails(since);
       
+      // Log all found emails for debugging
+      logger.info(`[MailSlurp] checkForNewEmails returned ${emails.length} emails`);
+      emails.forEach((email, idx) => {
+        logger.debug(`Email ${idx + 1}:`, {
+          id: email.id,
+          from: email.from,
+          subject: email.subject,
+          date: email.createdAt,
+          hasAttachments: email.hasAttachments
+        });
+      });
+      
       console.log(`[MailSlurp] Found ${emails.length} emails from noreply@tinkoff.ru`);
       
       if (emails.length === 0) {
@@ -468,16 +510,21 @@ export class MailSlurpService extends EventEmitter {
 
       for (const emailSummary of emails) {
         try {
+          console.log(`[MailSlurp] Processing email ${emailSummary.id} - ${emailSummary.subject}`);
+          
           // Check if already processed
           const existingReceipt = await db.prisma.receipt.findUnique({
             where: { emailId: emailSummary.id! }
           });
 
           if (existingReceipt) {
+            console.log(`[MailSlurp] Email ${emailSummary.id} already processed`);
             logger.debug('Email already processed', { emailId: emailSummary.id });
             continue;
           }
 
+          console.log(`[MailSlurp] Email ${emailSummary.id} is new, processing...`);
+          
           logger.info('Processing new email', {
             emailId: emailSummary.id,
             subject: emailSummary.subject,
@@ -486,6 +533,7 @@ export class MailSlurpService extends EventEmitter {
           });
 
           // Get full email
+          console.log(`[MailSlurp] Getting full email details for ${emailSummary.id}`);
           const email = await this.getEmailWithAttachments(emailSummary.id!);
           
           // Always get attachments metadata separately as email.attachments might just be IDs
@@ -501,7 +549,10 @@ export class MailSlurpService extends EventEmitter {
           }
 
           // Process PDF attachments
+          console.log(`[MailSlurp] Email ${emailSummary.id} has ${attachmentMetadata?.length || 0} attachments`);
+          
           if (attachmentMetadata && attachmentMetadata.length > 0) {
+            console.log(`[MailSlurp] Processing ${attachmentMetadata.length} attachments for email ${emailSummary.id}`);
             logger.info(`Processing ${attachmentMetadata.length} attachments`);
             
             let attachmentIndex = 0;
@@ -517,6 +568,7 @@ export class MailSlurpService extends EventEmitter {
               });
 
               if (isPdf) {
+                console.log(`[MailSlurp] Found PDF attachment: ${attachment.name}`);
                 logger.info('Found PDF attachment', {
                   filename: attachment.name,
                   size: attachment.size,
@@ -524,14 +576,59 @@ export class MailSlurpService extends EventEmitter {
                 });
 
                 // Download attachment using the new EML method
+                console.log(`[MailSlurp] Downloading PDF attachment ${attachment.name} for email ${email.id}`);
                 logger.info('Downloading PDF attachment via EML method', {
                   emailId: email.id,
                   attachmentIndex
                 });
                 
-                const buffer = await this.downloadAttachment(email.id!, attachmentIndex);
+                let buffer: Buffer | null = null;
+                
+                // Log attachment info
+                console.log(`[MailSlurp] Attachment info:`, {
+                  name: attachment.name,
+                  attachmentId: attachment.attachmentId,
+                  id: attachment.id,
+                  contentType: attachment.contentType,
+                  size: attachment.size
+                });
+                
+                // Try direct download with attachment ID with timeout
+                const attachmentIdToUse = attachment.attachmentId || attachment.id;
+                if (attachmentIdToUse) {
+                  try {
+                    console.log(`[MailSlurp] Trying direct download with attachmentId: ${attachmentIdToUse}`);
+                    
+                    // Create a timeout promise
+                    const timeoutPromise = new Promise((_, reject) => {
+                      setTimeout(() => reject(new Error('Download timeout')), 10000); // 10 second timeout
+                    });
+                    
+                    // Race between download and timeout
+                    const attachmentData = await Promise.race([
+                      this.attachmentController.downloadAttachmentAsBase64Encoded({
+                        emailId: email.id!,
+                        attachmentId: attachmentIdToUse
+                      }),
+                      timeoutPromise
+                    ]) as any;
+                    
+                    if (attachmentData && attachmentData.base64FileContents) {
+                      console.log(`[MailSlurp] Direct download successful`);
+                      buffer = Buffer.from(attachmentData.base64FileContents, 'base64');
+                    }
+                  } catch (error: any) {
+                    console.log(`[MailSlurp] Direct download failed:`, error.message || error);
+                  }
+                }
+                
+                // Skip fallback for now since it hangs
+                // if (!buffer) {
+                //   buffer = await this.downloadAttachment(email.id!, attachmentIndex);
+                // }
                 
                 if (!buffer) {
+                  console.log(`[MailSlurp] Failed to download attachment ${attachment.name}`);
                   logger.error('Failed to download attachment', {
                     emailId: email.id,
                     name: attachment.name,
@@ -540,6 +637,8 @@ export class MailSlurpService extends EventEmitter {
                   attachmentIndex++;
                   continue;
                 }
+                
+                console.log(`[MailSlurp] Successfully downloaded PDF, size: ${buffer.length} bytes`);
                 
                 // Ensure receipts directory exists
                 const receiptsDir = path.join(process.cwd(), 'data', 'receipts');
