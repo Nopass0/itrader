@@ -239,7 +239,7 @@ export class ReceiptProcessorService extends EventEmitter {
       const unprocessedReceipts = await prisma.receipt.findMany({
         where: {
           processed: false,
-          sender: { contains: '@tbank.ru' }
+          sender: { contains: '@tinkoff.ru' }
         },
         orderBy: { receivedAt: 'desc' },
         take: 10

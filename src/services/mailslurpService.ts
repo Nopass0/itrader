@@ -227,8 +227,17 @@ export class MailSlurpService extends EventEmitter {
 
           // Filter for emails from noreply@tinkoff.ru
           const tinkoffEmails = (emails.content || []).filter(email => {
+            // Log the 'from' field to debug
+            if (email.from) {
+              logger.debug('Checking email from field', {
+                from: email.from,
+                emailId: email.id,
+                subject: email.subject
+              });
+            }
+            
             const isFromTinkoff = email.from?.toLowerCase() === 'noreply@tinkoff.ru' || 
-                                 email.from?.toLowerCase().includes('<noreply@tinkoff.ru>');
+                                 email.from?.toLowerCase().includes('noreply@tinkoff.ru');
             
             // Process non-Tinkoff emails with attachments as bad receipts
             if (!isFromTinkoff && email.attachments && email.attachments.length > 0) {
