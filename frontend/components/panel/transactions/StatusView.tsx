@@ -209,6 +209,7 @@ export function StatusView({
 }: StatusViewProps) {
   const [activeStatus, setActiveStatus] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
+  const [stageFilter, setStageFilter] = useState<'online' | 'all'>('online');
   const itemsPerPage = 20;
   const { toast } = useToast();
 
@@ -330,7 +331,63 @@ export function StatusView({
   }, [transactions, payouts, advertisements, orders]);
 
 
-  const filteredItems = itemsByStatus[activeStatus] || [];
+  // Apply online filter for kanban stages (except payouts)
+  const filteredItems = useMemo(() => {
+    let items = itemsByStatus[activeStatus] || [];
+    
+    // Apply online filter only for kanban stages (not for payouts stage_0)
+    if (stageFilter === 'online' && activeStatus !== 'stage_0' && activeStatus.startsWith('stage_')) {
+      items = items.filter(item => {
+        // For transactions in kanban stages, check if they're in the current stage
+        if (item.type !== 'payout' && item.type !== 'advertisement' && item.type !== 'order') {
+          const stage = (() => {
+            switch (item.status) {
+              case 'pending':
+                if (!item.advertisementId) return 11;
+                if (!item.orderId) return 1;
+                return 2;
+              case 'order_created':
+              case 'order_pending':
+                return 2;
+              case 'chat_started':
+                return 3;
+              case 'payment_received':
+              case 'waiting_payment':
+                return 4;
+              case 'check_received':
+              case 'receipt_received':
+                return 5;
+              case 'release_money':
+                return 6;
+              case 'completed':
+                return 7;
+              case 'cancelled_by_counterparty':
+                return 8;
+              case 'failed':
+              case 'cancelled':
+                return item.customStatuses?.some(s => s.includes('dispute')) ? 9 : 10;
+              default:
+                return 11;
+            }
+          })();
+          const expectedStage = parseInt(activeStatus.replace('stage_', ''));
+          return stage === expectedStage;
+        }
+        // For advertisements in stage 1 - show only active
+        if (activeStatus === 'stage_1' && item.type === 'advertisement') {
+          return item.isActive;
+        }
+        // For orders in stage 2 - show only active orders
+        if (activeStatus === 'stage_2' && item.type === 'order') {
+          const onlineStatuses = ['PENDING', 'ONGOING', 'BUYER_PAID', 'APPEAL'];
+          return onlineStatuses.includes(item.orderStatus || item.status);
+        }
+        return true;
+      });
+    }
+    
+    return items;
+  }, [itemsByStatus, activeStatus, stageFilter]);
 
   // Pagination
   const totalPages = Math.ceil(filteredItems.length / itemsPerPage);
@@ -389,6 +446,33 @@ export function StatusView({
     );
   };
 
+  // Calculate time in current status
+  const getTimeInStatus = (item: any) => {
+    const now = new Date();
+    const lastUpdate = new Date(item.updatedAt || item.lastModifyTime || item.createdAt);
+    
+    const diff = now.getTime() - lastUpdate.getTime();
+    const minutes = Math.floor(diff / 60000);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+    
+    if (days > 0) return `${days}д ${hours % 24}ч`;
+    if (hours > 0) return `${hours}ч ${minutes % 60}м`;
+    return `${minutes}м`;
+  };
+
+  // Get payout method label
+  const getPayoutMethodLabel = (payout: any) => {
+    const methodMap: Record<string, string> = {
+      'sbp': 'СБП',
+      'card': 'Карта',
+      'cash': 'Наличные',
+      'bank': 'Банковский перевод',
+      'other': 'Другое',
+    };
+    return methodMap[payout.method] || payout.method || '-';
+  };
+
   return (
     <div className="h-full flex flex-col">
       <Tabs value={activeStatus} onValueChange={handleStatusChange} className="h-full flex flex-col">
@@ -420,30 +504,74 @@ export function StatusView({
         </TabsList>
 
           <TabsContent value={activeStatus} className="flex-1 mt-4 flex flex-col">
+            {/* Online/All filter for non-payout stages */}
+            {activeStatus !== 'stage_0' && activeStatus.startsWith('stage_') && (
+              <div className="flex justify-end mb-2">
+                <div className="flex gap-2 p-1 bg-muted rounded-lg">
+                  <Button
+                    variant={stageFilter === 'online' ? 'default' : 'ghost'}
+                    size="sm"
+                    onClick={() => setStageFilter('online')}
+                    className="h-7 px-3 text-xs"
+                  >
+                    Онлайн
+                  </Button>
+                  <Button
+                    variant={stageFilter === 'all' ? 'default' : 'ghost'}
+                    size="sm"
+                    onClick={() => setStageFilter('all')}
+                    className="h-7 px-3 text-xs"
+                  >
+                    Все
+                  </Button>
+                </div>
+              </div>
+            )}
+            
             <Card className="flex-1 overflow-hidden flex flex-col">
               <div className="flex-1 overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className="w-full text-base">
                   <thead className="border-b bg-muted/50">
-                    <tr className="text-xs text-muted-foreground">
+                    <tr className="text-sm text-muted-foreground">
                       <th className="text-left px-3 py-2 font-medium">ID / Ордер</th>
                       <th className="text-left px-3 py-2 font-medium">Дата</th>
-                      <th className="text-left px-3 py-2 font-medium">Тип</th>
-                      <th className="text-right px-3 py-2 font-medium">Сумма</th>
-                      <th className="text-left px-3 py-2 font-medium">Статус</th>
-                      <th className="text-left px-3 py-2 font-medium">Аккаунты</th>
+                      <th className="text-left px-3 py-2 font-medium">Время</th>
+                      {activeStatus === 'stage_0' ? (
+                        <>
+                          <th className="text-left px-3 py-2 font-medium">Трейдер</th>
+                          <th className="text-right px-3 py-2 font-medium">Сумма</th>
+                          <th className="text-left px-3 py-2 font-medium">Курс захода</th>
+                          <th className="text-left px-3 py-2 font-medium">Метод</th>
+                          <th className="text-left px-3 py-2 font-medium">Реквизиты</th>
+                          <th className="text-left px-3 py-2 font-medium">Аккаунты</th>
+                        </>
+                      ) : activeStatus === 'stage_1' || activeStatus === 'stage_2' ? (
+                        <>
+                          <th className="text-right px-3 py-2 font-medium">Сумма</th>
+                          <th className="text-right px-3 py-2 font-medium">Курс</th>
+                          <th className="text-left px-3 py-2 font-medium">Аккаунты</th>
+                        </>
+                      ) : (
+                        <>
+                          <th className="text-left px-3 py-2 font-medium">Тип</th>
+                          <th className="text-right px-3 py-2 font-medium">Сумма</th>
+                          <th className="text-left px-3 py-2 font-medium">Статус</th>
+                          <th className="text-left px-3 py-2 font-medium">Аккаунты</th>
+                        </>
+                      )}
                       <th className="text-center px-3 py-2 font-medium">Действия</th>
                     </tr>
                   </thead>
                   <tbody>
                     {loading ? (
                       <tr>
-                        <td colSpan={7} className="text-center py-8">
+                        <td colSpan={activeStatus === 'stage_0' ? 10 : activeStatus === 'stage_1' || activeStatus === 'stage_2' ? 7 : 8} className="text-center py-8">
                           <div className="text-muted-foreground">Загрузка...</div>
                         </td>
                       </tr>
                     ) : paginatedItems.length === 0 ? (
                       <tr>
-                        <td colSpan={7} className="text-center py-8">
+                        <td colSpan={activeStatus === 'stage_0' ? 10 : activeStatus === 'stage_1' || activeStatus === 'stage_2' ? 7 : 8} className="text-center py-8">
                           <div className="text-muted-foreground">
                             Нет транзакций
                             {activeStatus !== 'all' && ` со статусом "${TRANSACTION_STATUSES.find(s => s.id === activeStatus)?.label}"`}
@@ -459,11 +587,12 @@ export function StatusView({
                         const isOrder = item.type === 'order';
 
                         return (
-                          <tr key={item.id} className="hover:bg-muted/50 transition-colors border-b">
+                          <tr key={item.id} className="hover:bg-muted/50 transition-colors border-b text-sm">
+                            {/* ID/Order column */}
                             <td className="px-3 py-2">
                               <div className="space-y-0.5">
                                 <div className="flex items-center gap-1">
-                                  <span className="font-mono text-xs">
+                                  <span className="font-mono">
                                     {item.id.slice(0, 6)}...
                                   </span>
                                   <Button
@@ -483,140 +612,147 @@ export function StatusView({
                                 )}
                               </div>
                             </td>
+                            
+                            {/* Date column */}
                             <td className="px-3 py-2">
-                              <div className="text-xs">
+                              <div>
                                 {formatDate(item.createdAt || item.lastModifyTime || item.createdTime)}
                               </div>
                             </td>
+                            
+                            {/* Time in status column */}
                             <td className="px-3 py-2">
-                              {isTransaction && item.advertisement && (
-                                <Badge
-                                  variant="outline"
-                                  className={cn(
-                                    "text-xs",
-                                    item.advertisement.type === "buy"
-                                      ? "bg-green-500/10 text-green-500 border-green-500/20"
-                                      : "bg-red-500/10 text-red-500 border-red-500/20"
-                                  )}
-                                >
-                                  {item.advertisement.type === "buy" ? (
-                                    <>
-                                      <TrendingDown size={12} className="mr-1" />
-                                      ПОКУПКА
-                                    </>
-                                  ) : (
-                                    <>
-                                      <TrendingUp size={12} className="mr-1" />
-                                      ПРОДАЖА
-                                    </>
-                                  )}
-                                </Badge>
-                              )}
-                              {isPayout && (
-                                <Badge variant="outline" className="text-xs bg-slate-500/10 text-slate-500">
-                                  <Wallet size={12} className="mr-1" />
-                                  ВЫПЛАТА
-                                </Badge>
-                              )}
-                              {isAdvertisement && (
-                                <Badge
-                                  variant="outline"
-                                  className={cn(
-                                    "text-xs",
-                                    item.type === "buy"
-                                      ? "bg-green-500/10 text-green-500 border-green-500/20"
-                                      : "bg-red-500/10 text-red-500 border-red-500/20"
-                                  )}
-                                >
-                                  {item.type === "buy" ? (
-                                    <>
-                                      <TrendingDown size={12} className="mr-1" />
-                                      ПОКУПКА
-                                    </>
-                                  ) : (
-                                    <>
-                                      <TrendingUp size={12} className="mr-1" />
-                                      ПРОДАЖА
-                                    </>
-                                  )}
-                                </Badge>
-                              )}
-                              {isOrder && (
-                                <Badge
-                                  variant="outline"
-                                  className={cn(
-                                    "text-xs",
-                                    item.side === 0
-                                      ? "bg-green-500/10 text-green-500 border-green-500/20"
-                                      : "bg-red-500/10 text-red-500 border-red-500/20"
-                                  )}
-                                >
-                                  {item.side === 0 ? (
-                                    <>
-                                      <TrendingDown size={12} className="mr-1" />
-                                      ПОКУПКА
-                                    </>
-                                  ) : (
-                                    <>
-                                      <TrendingUp size={12} className="mr-1" />
-                                      ПРОДАЖА
-                                    </>
-                                  )}
-                                </Badge>
-                              )}
-                            </td>
-                            <td className="px-3 py-2 text-right">
-                              <div className="font-medium">
-                                {formatAmount(item.amount || item.quantity)}
-                              </div>
-                              {(item.advertisement?.price || item.price) && (
-                                <div className="text-xs text-muted-foreground">
-                                  {item.advertisement?.price || item.price} ₽/USDT
-                                </div>
-                              )}
-                            </td>
-                            <td className="px-3 py-2">
-                              {isTransaction && getStatusBadge(item.status)}
-                              {isPayout && (
-                                <Badge variant="outline" className="text-xs">
-                                  Статус: {item.status}
-                                </Badge>
-                              )}
-                              {isAdvertisement && (
-                                <Badge
-                                  variant="outline"
-                                  className={cn(
-                                    "text-xs",
-                                    item.isActive
-                                      ? "bg-green-500/10 text-green-500"
-                                      : "bg-gray-500/10 text-gray-500"
-                                  )}
-                                >
-                                  {item.isActive ? "Активно" : "Неактивно"}
-                                </Badge>
-                              )}
-                              {isOrder && (
-                                <Badge variant="outline" className="text-xs">
-                                  {item.orderStatus || item.status || 'PENDING'}
-                                </Badge>
-                              )}
-                            </td>
-                            <td className="px-3 py-2">
-                              <div className="space-y-1 text-xs">
-                                {(item.advertisement?.bybitAccount || item.bybitAccount || item.bybitAccountId) && (
-                                  <div className="flex items-center gap-1">
-                                    <Building2 size={12} className="text-muted-foreground" />
-                                    <span>Bybit: {item.advertisement?.bybitAccount?.accountId || item.bybitAccount?.accountId || item.bybitAccountId}</span>
-                                  </div>
-                                )}
-                                {(item.payout?.gateAccount || item.gateAccount || item.gateAccountId) && (
-                                  <div className="flex items-center gap-1">
-                                    <Building2 size={12} className="text-muted-foreground" />
-                                    <span>Platform 1: {item.payout?.gateAccount || item.gateAccount || item.gateAccountId}</span>
-                                  </div>
-                                )}
+                              <div className="text-muted-foreground">
+                                {getTimeInStatus(item)}
                               </div>
                             </td>
+                            {/* Conditional content based on active status */}
+                            {activeStatus === 'stage_0' ? (
+                              // Payouts columns
+                              <>
+                                <td className="px-3 py-2">
+                                  {item.amountTrader ? (
+                                    <>
+                                      {item.amountTrader['000001'] || '-'}
+                                    </>
+                                  ) : '-'}
+                                </td>
+                                <td className="px-3 py-2 text-right">
+                                  <div className="font-medium">
+                                    {item.amountTrader && item.amountTrader['643'] 
+                                      ? formatAmount(item.amountTrader['643'])
+                                      : formatAmount(item.amount)}
+                                  </div>
+                                </td>
+                                <td className="px-3 py-2">
+                                  {item.meta?.courses?.trader ? (
+                                    <div>
+                                      {(item.meta.courses.trader * 0.979).toFixed(2)} ₽/USDT
+                                    </div>
+                                  ) : '-'}
+                                </td>
+                                <td className="px-3 py-2">
+                                  {getPayoutMethodLabel(item)}
+                                </td>
+                                <td className="px-3 py-2">
+                                  <div className="font-mono text-xs">
+                                    {item.wallet || '-'}
+                                  </div>
+                                </td>
+                                <td className="px-3 py-2">
+                                  <div className="space-y-1">
+                                    {item.gateAccount && (
+                                      <div className="flex items-center gap-1 text-xs">
+                                        <Building2 size={12} className="text-muted-foreground" />
+                                        <span>Platform 1: {item.gateAccount}</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
+                              </>
+                            ) : activeStatus === 'stage_1' || activeStatus === 'stage_2' ? (
+                              // Advertisements and Orders columns  
+                              <>
+                                <td className="px-3 py-2 text-right">
+                                  <div className="font-medium">
+                                    {isOrder && item.totalOrderAmount 
+                                      ? formatAmount(item.totalOrderAmount)
+                                      : formatAmount(item.amount || item.quantity)}
+                                  </div>
+                                </td>
+                                <td className="px-3 py-2 text-right">
+                                  {item.price || item.advertisement?.price || '-'} ₽/USDT
+                                </td>
+                                <td className="px-3 py-2">
+                                  <div className="space-y-1">
+                                    {(item.bybitAccount || item.bybitAccountId || item.advertisement?.bybitAccount) && (
+                                      <div className="flex items-center gap-1 text-xs">
+                                        <Building2 size={12} className="text-muted-foreground" />
+                                        <span>Bybit: {item.bybitAccount?.accountId || item.bybitAccountId || item.advertisement?.bybitAccount?.accountId}</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
+                              </>
+                            ) : (
+                              // Regular transaction columns
+                              <>
+                                <td className="px-3 py-2">
+                                  {item.advertisement && (
+                                    <Badge
+                                      variant="outline"
+                                      className={cn(
+                                        "text-xs",
+                                        item.advertisement.type === "buy"
+                                          ? "bg-green-500/10 text-green-500 border-green-500/20"
+                                          : "bg-red-500/10 text-red-500 border-red-500/20"
+                                      )}
+                                    >
+                                      {item.advertisement.type === "buy" ? (
+                                        <>
+                                          <TrendingDown size={12} className="mr-1" />
+                                          ПОКУПКА
+                                        </>
+                                      ) : (
+                                        <>
+                                          <TrendingUp size={12} className="mr-1" />
+                                          ПРОДАЖА
+                                        </>
+                                      )}
+                                    </Badge>
+                                  )}
+                                </td>
+                                <td className="px-3 py-2 text-right">
+                                  <div className="font-medium">
+                                    {formatAmount(item.amount)}
+                                  </div>
+                                  {item.advertisement?.price && (
+                                    <div className="text-xs text-muted-foreground">
+                                      {item.advertisement.price} ₽/USDT
+                                    </div>
+                                  )}
+                                </td>
+                                <td className="px-3 py-2">
+                                  {getStatusBadge(item.status)}
+                                </td>
+                                <td className="px-3 py-2">
+                                  <div className="space-y-1">
+                                    {item.advertisement?.bybitAccount && (
+                                      <div className="flex items-center gap-1 text-xs">
+                                        <Building2 size={12} className="text-muted-foreground" />
+                                        <span>Bybit: {item.advertisement.bybitAccount.accountId}</span>
+                                      </div>
+                                    )}
+                                    {item.payout?.gateAccount && (
+                                      <div className="flex items-center gap-1 text-xs">
+                                        <Building2 size={12} className="text-muted-foreground" />
+                                        <span>Platform 1: {item.payout.gateAccount}</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
+                              </>
+                            )}
                             <td className="px-3 py-2">
                               <div className="flex items-center justify-center gap-1">
                                 <Button
