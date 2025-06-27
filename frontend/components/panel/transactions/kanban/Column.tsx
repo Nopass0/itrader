@@ -40,7 +40,7 @@ export function KanbanColumn({ column, cards, isDragging, currentUser }: KanbanC
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [filter, setFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [orderFilter, setOrderFilter] = useState<string>('online'); // Фильтр для ордеров - по умолчанию онлайн
+  const [stageFilter, setStageFilter] = useState<string>('online'); // Фильтр онлайн/все - по умолчанию онлайн
   const { accounts: gateAccounts } = useGateAccounts();
   const { accounts: bybitAccounts } = useBybitAccounts();
 
@@ -63,17 +63,64 @@ export function KanbanColumn({ column, cards, isDragging, currentUser }: KanbanC
         if (column.id === 1 && card.type === 'advertisement') {
           return card.bybitAccountId === filter;
         }
-        // Filter orders by online/all
-        if (column.id === 2 && card.type === 'order') {
-          if (orderFilter === 'online') {
-            // Онлайн ордера - те, которые в работе (не завершены и не отменены)
-            const onlineStatuses = ['PENDING', 'ONGOING', 'BUYER_PAID', 'APPEAL'];
-            const status = card.orderStatus || card.status;
-            return onlineStatuses.includes(status);
-          }
-          return true; // Если фильтр 'all', показываем все
-        }
         // Add more filter logic as needed
+        return true;
+      });
+    }
+    
+    // Apply stage filter (online/all) for all columns except payouts (column 0)
+    if (column.id !== 0 && stageFilter === 'online') {
+      filtered = filtered.filter(card => {
+        // Для транзакций проверяем, что их текущий этап соответствует колонке
+        if (card.type === 'transaction') {
+          // Импортируем функцию mapStatusToStage inline чтобы определить текущий этап
+          const currentStage = (() => {
+            switch (card.status) {
+              case 'pending':
+                if (!card.advertisementId) return 11;
+                if (!card.orderId) return 1;
+                return 2;
+              case 'order_created':
+              case 'order_pending':
+                return 2;
+              case 'chat_started':
+                return 3;
+              case 'payment_received':
+              case 'waiting_payment':
+                return 4;
+              case 'check_received':
+              case 'receipt_received':
+                return 5;
+              case 'release_money':
+                return 6;
+              case 'completed':
+                return 7;
+              case 'cancelled_by_counterparty':
+                return 8;
+              case 'failed':
+              case 'cancelled':
+                if (card.customStatuses?.some(s => s.includes('dispute'))) {
+                  return 9;
+                }
+                return 10;
+              case 'stupid':
+                return 11;
+              default:
+                return 11;
+            }
+          })();
+          return currentStage === column.id;
+        }
+        // Для объявлений в колонке 1 - показываем только активные
+        if (column.id === 1 && card.type === 'advertisement') {
+          return card.isActive;
+        }
+        // Для ордеров в колонке 2 - показываем только активные (не завершенные)
+        if (column.id === 2 && card.type === 'order') {
+          const onlineStatuses = ['PENDING', 'ONGOING', 'BUYER_PAID', 'APPEAL'];
+          const status = card.orderStatus || card.status;
+          return onlineStatuses.includes(status);
+        }
         return true;
       });
     }
@@ -227,11 +274,11 @@ export function KanbanColumn({ column, cards, isDragging, currentUser }: KanbanC
           </Select>
         )}
         
-        {/* Orders filter */}
-        {column.id === 2 && (
-          <Select value={orderFilter} onValueChange={setOrderFilter}>
+        {/* Stage filter for all columns except payouts */}
+        {column.id !== 0 && (
+          <Select value={stageFilter} onValueChange={setStageFilter}>
             <SelectTrigger className="h-7 text-xs bg-white/10 border-white/20">
-              <SelectValue placeholder="Фильтр ордеров" />
+              <SelectValue placeholder="Фильтр" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="online">Онлайн</SelectItem>
