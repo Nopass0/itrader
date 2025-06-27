@@ -83,9 +83,8 @@ The system uses SQLite database and stores configuration in the database. Key se
 - **Mode**: `manual` or `automatic` - controls whether user confirmation is required
 - **Exchange Rate**: Can be set to constant or automatic mode
 - **Gmail**: OAuth2 authentication for receipt processing
-- **CORS_ORIGIN**: Set to your frontend URL (e.g. `http://localhost:3000`) to
-  allow the panel to connect to the WebSocket API. Use `*` to allow all origins.
-  When using `*`, credentials are disabled automatically, so send auth tokens in
-  the request payload.
+- **CORS_ORIGIN**: Comma-separated list of allowed origins. Example:
+  `http://147.45.71.51:3000,http://localhost:3000`. The default `*` allows any
+  origin but disables credentials, so send auth tokens in the request payload.
 
 This project was created using `bun init` in bun v1.2.2. [Bun](https://bun.sh) is a fast all-in-one JavaScript runtime.
