@@ -507,7 +507,7 @@ async function configureWebSocketPort() {
     // .env doesn't exist
   }
   
-  const currentPort = process.env.WEBSOCKET_PORT || "3001";
+  const currentPort = process.env.WEBSOCKET_PORT || "3002";
   console.log(`\n${colors.bright}Current WebSocket Port: ${colors.yellow}${currentPort}${colors.reset}`);
   
   const { port } = await inquirer.prompt([

@@ -20,7 +20,7 @@
 - Ubuntu 20.04+ or similar Linux distribution
 - Node.js 18+ and npm
 - Bun runtime
-- Ports 3000 and 3001 available
+- Ports 3000 and 3002 available
 - At least 2GB RAM
 
 ### 2. Installation
@@ -69,13 +69,13 @@ Open required ports:
 ```bash
 # Using ufw
 sudo ufw allow 3000/tcp  # Frontend
-sudo ufw allow 3001/tcp  # WebSocket API
+sudo ufw allow 3002/tcp  # WebSocket API
 sudo ufw allow 22/tcp    # SSH
 sudo ufw enable
 
 # Using iptables
 sudo iptables -A INPUT -p tcp --dport 3000 -j ACCEPT
-sudo iptables -A INPUT -p tcp --dport 3001 -j ACCEPT
+sudo iptables -A INPUT -p tcp --dport 3002 -j ACCEPT
 ```
 
 ### 5. Running as Service
@@ -150,7 +150,7 @@ server {
 
     # WebSocket API
     location /socket.io/ {
-        proxy_pass http://localhost:3001;
+        proxy_pass http://localhost:3002;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
@@ -183,11 +183,11 @@ After deployment, access your application at:
 
 - **Local Access:**
   - Panel: http://localhost:3000
-  - API: http://localhost:3001
+  - API: http://localhost:3002
 
 - **External Access (Direct IP):**
   - Panel: http://YOUR_SERVER_IP:3000
-  - API: http://YOUR_SERVER_IP:3001
+  - API: http://YOUR_SERVER_IP:3002
 
 - **Domain Access (with Nginx):**
   - Panel: https://your-domain.com
@@ -263,7 +263,7 @@ sudo journalctl -u itrader-frontend -n 100
 ls -la /home/itrader/itrader_project
 
 # Check ports
-sudo netstat -tlnp | grep -E '3000|3001'
+sudo netstat -tlnp | grep -E '3000|3002'
 ```
 
 #### MailSlurp API key error

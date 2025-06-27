@@ -61,18 +61,18 @@ if [ "$1" == "production" ] || [ "$MODE" == "production" ]; then
     echo "========================================"
     echo -e "${BLUE}Local Access:${NC}"
     echo "  Panel: http://localhost:3000"
-    echo "  API: http://localhost:3001"
+    echo "  API: http://localhost:3002"
     
     if [ -n "$EXTERNAL_IP" ]; then
         echo ""
         echo -e "${BLUE}External Access:${NC}"
         echo "  Panel: http://$EXTERNAL_IP:3000"
-        echo "  API: http://$EXTERNAL_IP:3001"
+        echo "  API: http://$EXTERNAL_IP:3002"
     fi
     
     echo ""
     echo -e "${YELLOW}Important:${NC}"
-    echo "- Make sure ports 3000 and 3001 are open in firewall"
+    echo "- Make sure ports 3000 and 3002 are open in firewall"
     echo "- For production, use a reverse proxy (nginx) with SSL"
     echo "========================================"
     

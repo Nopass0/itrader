@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Project Overview
 
 This is a full-stack TypeScript application for P2P trading automation:
-- **Backend**: Bun runtime with Socket.IO WebSocket server on port 3001
+- **Backend**: Bun runtime with Socket.IO WebSocket server on port 3002
 - **Frontend**: Next.js 14 with React, Tailwind CSS, and shadcn/ui components
 - **Database**: SQLite with Prisma ORM
 - **Integrations**: Bybit P2P, Gate.io, Gmail API, MailSlurp

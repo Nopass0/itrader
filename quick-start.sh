@@ -53,7 +53,7 @@ if [ "$1" == "production" ]; then
     echo -e "${BLUE}Starting in PRODUCTION mode${NC}"
     
     # Start backend
-    NODE_ENV=production WEBSOCKET_PORT=3001 bun run src/app.ts &
+    NODE_ENV=production WEBSOCKET_PORT=3002 bun run src/app.ts &
     BACKEND_PID=$!
     
     # Wait for backend to start
@@ -75,7 +75,7 @@ else
     fi
     
     # Start both services with concurrently
-    WEBSOCKET_PORT=3001 concurrently \
+    WEBSOCKET_PORT=3002 concurrently \
         --names "backend,frontend" \
         --prefix-colors "blue,green" \
         "bun run src/app.ts" \
@@ -89,13 +89,13 @@ echo -e "${GREEN}🚀 iTrader Started!${NC}"
 echo -e "${GREEN}============================================================${NC}"
 echo -e "${BLUE}Local Access:${NC}"
 echo "  Panel: http://localhost:3000"
-echo "  API: http://localhost:3001"
+echo "  API: http://localhost:3002"
 
 if [ -n "$EXTERNAL_IP" ]; then
     echo ""
     echo -e "${BLUE}External Access:${NC}"
     echo "  Panel: http://$EXTERNAL_IP:3000"
-    echo "  API: http://$EXTERNAL_IP:3001"
+    echo "  API: http://$EXTERNAL_IP:3002"
 fi
 
 echo -e "${GREEN}============================================================${NC}"

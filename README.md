@@ -29,7 +29,7 @@ bun run src/app.ts
 
 ## WebSocket Server
 
-The application includes a Socket.IO WebSocket server for remote control and monitoring. It automatically starts on port 3001 (configurable via WEBSOCKET_PORT environment variable).
+The application includes a Socket.IO WebSocket server for remote control and monitoring. It automatically starts on port 3002 (configurable via `WEBSOCKET_PORT` environment variable).
 
 ### Features
 
@@ -83,9 +83,10 @@ The system uses SQLite database and stores configuration in the database. Key se
 - **Mode**: `manual` or `automatic` - controls whether user confirmation is required
 - **Exchange Rate**: Can be set to constant or automatic mode
 - **Gmail**: OAuth2 authentication for receipt processing
-- **CORS_ORIGIN**: Set to your frontend URL (e.g. `http://localhost:3000`) to
-  allow the panel to connect to the WebSocket API. Use `*` to allow all origins.
-  When using `*`, credentials are disabled automatically, so send auth tokens in
-  the request payload.
+- **CORS_ORIGIN**: Set to the exact URL of your frontend (e.g. `http://localhost:3000` or `http://your.server.ip:3000`).
+  Browsers must see a matching origin header to connect to the WebSocket API.
+  You can specify multiple domains separated by commas or use `*` to allow all
+  origins (in this case, credentials are disabled, so send auth tokens in the
+  request payload).
 
 This project was created using `bun init` in bun v1.2.2. [Bun](https://bun.sh) is a fast all-in-one JavaScript runtime.

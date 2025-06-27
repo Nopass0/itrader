@@ -188,7 +188,7 @@ if %ERRORLEVEL% equ 0 (
 
 echo %GREEN%Starting development server...%NC%
 echo.
-echo %CYAN%📝 Backend will run on port 3001 (WebSocket API)%NC%
+echo %CYAN%📝 Backend will run on port 3002 (WebSocket API)%NC%
 echo %CYAN%🎨 Frontend will run on port 3000%NC%
 echo %CYAN%🔥 Hot reload enabled for both services%NC%
 echo.

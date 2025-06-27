@@ -28,7 +28,7 @@ async connect(): Promise<void> {
 const wsPort = parseInt(new URL(apiUrl).port || '3000') + 10; // = 3010
 
 // To:
-const wsUrl = process.env.NEXT_PUBLIC_WS_URL || 'http://localhost:3001';
+const wsUrl = process.env.NEXT_PUBLIC_WS_URL || 'http://localhost:3002';
 ```
 
 ### 4. Implemented Missing Backend Endpoints
@@ -42,7 +42,7 @@ Created `PlatformAccountController` with all Gate/Bybit account operations:
 
 ## Current Status
 
-✅ Backend WebSocket server running on port 3001
+✅ Backend WebSocket server running on port 3002
 ✅ Frontend running on port 3000
 ✅ All API endpoints implemented
 ✅ Socket.IO client properly configured
