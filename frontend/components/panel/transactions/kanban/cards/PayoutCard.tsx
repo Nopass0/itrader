@@ -24,6 +24,7 @@ import { useSocket } from '@/hooks/useSocket';
 import { createLogger } from '@/services/logger';
 import { StageTimer } from '../StageTimer';
 import { useState } from 'react';
+import { copyToClipboard } from '@/lib/clipboard';
 
 const logger = createLogger('PayoutCard');
 
@@ -37,12 +38,20 @@ export function PayoutCard({ payout, onViewDetails }: PayoutCardProps) {
   const { socket } = useSocket();
   const [showManualUpload, setShowManualUpload] = useState(false);
 
-  const copyToClipboard = (text: string, label: string) => {
-    navigator.clipboard.writeText(text);
-    toast({
-      title: "Скопировано",
-      description: `${label} скопирован в буфер обмена`,
-    });
+  const handleCopyToClipboard = async (text: string, label: string) => {
+    const success = await copyToClipboard(text);
+    if (success) {
+      toast({
+        title: "Скопировано",
+        description: `${label} скопирован в буфер обмена`,
+      });
+    } else {
+      toast({
+        title: "Ошибка",
+        description: "Не удалось скопировать в буфер обмена",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleCloseManually = async () => {
@@ -225,7 +234,7 @@ export function PayoutCard({ payout, onViewDetails }: PayoutCardProps) {
             variant="ghost"
             size="sm"
             className="h-4 w-4 p-0"
-            onClick={() => copyToClipboard(payout.gatePayoutId.toString(), 'Platform 1 ID')}
+            onClick={() => handleCopyToClipboard(payout.gatePayoutId.toString(), 'Platform 1 ID')}
           >
             <Copy size={10} />
           </Button>
@@ -241,7 +250,7 @@ export function PayoutCard({ payout, onViewDetails }: PayoutCardProps) {
             variant="ghost"
             size="sm"
             className="h-4 w-4 p-0"
-            onClick={() => copyToClipboard(payout.wallet, 'Кошелек')}
+            onClick={() => handleCopyToClipboard(payout.wallet, 'Кошелек')}
           >
             <Copy size={10} />
           </Button>

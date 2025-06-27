@@ -22,6 +22,7 @@ import { Transaction } from '@/hooks/useTransactions';
 import { StageTimer } from '../StageTimer';
 import { getStageTimestamp } from '../utils/getStageTimestamp';
 import { ReleaseMoneyButton } from '@/components/ReleaseMoneyButton';
+import { copyToClipboard } from '@/lib/clipboard';
 
 interface TransactionCardProps {
   transaction: Transaction;
@@ -42,12 +43,20 @@ export function TransactionCard({
 }: TransactionCardProps) {
   const { toast } = useToast();
 
-  const copyToClipboard = (text: string, label: string) => {
-    navigator.clipboard.writeText(text);
-    toast({
-      title: "Скопировано",
-      description: `${label} скопирован в буфер обмена`,
-    });
+  const handleCopyToClipboard = async (text: string, label: string) => {
+    const success = await copyToClipboard(text);
+    if (success) {
+      toast({
+        title: "Скопировано",
+        description: `${label} скопирован в буфер обмена`,
+      });
+    } else {
+      toast({
+        title: "Ошибка",
+        description: "Не удалось скопировать в буфер обмена",
+        variant: "destructive",
+      });
+    }
   };
 
   const formatDate = (date: string | Date) => {
@@ -188,7 +197,7 @@ export function TransactionCard({
             variant="ghost"
             size="sm"
             className="h-4 w-4 p-0"
-            onClick={() => copyToClipboard(transaction.orderId!, 'Order ID')}
+            onClick={() => handleCopyToClipboard(transaction.orderId!, 'Order ID')}
           >
             <Copy size={10} />
           </Button>

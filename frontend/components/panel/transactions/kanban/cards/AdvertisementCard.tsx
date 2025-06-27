@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -11,11 +12,35 @@ import {
   Activity,
   Percent,
   Clock,
-  CheckCircle
+  CheckCircle,
+  Edit,
+  Trash2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Advertisement } from '@/hooks/useTransactions';
 import { StageTimer } from '../StageTimer';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { useSocket } from '@/hooks/useSocket';
+import { useToast } from '@/components/ui/use-toast';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 interface AdvertisementCardProps {
   advertisement: Advertisement;
@@ -23,6 +48,13 @@ interface AdvertisementCardProps {
 }
 
 export function AdvertisementCard({ advertisement, onViewDetails }: AdvertisementCardProps) {
+  const { socket } = useSocket();
+  const { toast } = useToast();
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [newPrice, setNewPrice] = useState(advertisement.price.toString());
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const formatDate = (date: string | Date) => {
     return new Date(date).toLocaleString('ru-RU', {
       day: '2-digit',
@@ -198,7 +230,143 @@ export function AdvertisementCard({ advertisement, onViewDetails }: Advertisemen
           <Eye size={12} className="mr-1" />
           Детали
         </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 px-2 text-xs flex-1"
+          onClick={() => setIsEditDialogOpen(true)}
+        >
+          <Edit size={12} className="mr-1" />
+          Изменить курс
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 px-2 text-xs text-destructive hover:text-destructive"
+          onClick={() => setIsDeleteDialogOpen(true)}
+        >
+          <Trash2 size={12} />
+        </Button>
       </div>
     </Card>
+
+      {/* Edit Price Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Изменить курс объявления</DialogTitle>
+            <DialogDescription>
+              Текущий курс: {advertisement.price} ₽/USDT
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="price" className="text-right">
+                Новый курс
+              </Label>
+              <Input
+                id="price"
+                type="number"
+                step="0.01"
+                value={newPrice}
+                onChange={(e) => setNewPrice(e.target.value)}
+                className="col-span-3"
+                placeholder="Введите новый курс"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsEditDialogOpen(false);
+                setNewPrice(advertisement.price.toString());
+              }}
+            >
+              Отмена
+            </Button>
+            <Button 
+              onClick={async () => {
+                const price = parseFloat(newPrice);
+                if (isNaN(price) || price <= 0) {
+                  toast({
+                    title: "Ошибка",
+                    description: "Введите корректный курс",
+                    variant: "destructive",
+                  });
+                  return;
+                }
+
+                setIsUpdating(true);
+                socket.emit('bybitAdvertisements:update', {
+                  itemId: advertisement.itemId,
+                  updates: { price }
+                }, (response: any) => {
+                  setIsUpdating(false);
+                  if (response.success) {
+                    toast({
+                      title: "Успешно",
+                      description: `Курс изменен на ${price} ₽/USDT`,
+                    });
+                    setIsEditDialogOpen(false);
+                  } else {
+                    toast({
+                      title: "Ошибка",
+                      description: response.error?.message || "Не удалось изменить курс",
+                      variant: "destructive",
+                    });
+                  }
+                });
+              }}
+              disabled={isUpdating}
+            >
+              {isUpdating ? "Сохранение..." : "Сохранить"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Удалить объявление?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Вы уверены, что хотите удалить это объявление? Это действие нельзя отменить.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Отмена</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async () => {
+                setIsDeleting(true);
+                socket.emit('bybitAdvertisements:delete', {
+                  itemId: advertisement.itemId,
+                  bybitAccountId: advertisement.bybitAccountId
+                }, (response: any) => {
+                  setIsDeleting(false);
+                  if (response.success) {
+                    toast({
+                      title: "Успешно",
+                      description: "Объявление удалено",
+                    });
+                  } else {
+                    toast({
+                      title: "Ошибка",
+                      description: response.error?.message || "Не удалось удалить объявление",
+                      variant: "destructive",
+                    });
+                  }
+                });
+              }}
+              disabled={isDeleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeleting ? "Удаление..." : "Удалить"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }

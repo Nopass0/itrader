@@ -60,8 +60,67 @@ export class BybitChatController {
         }
       }
 
+      // Если всё ещё не нашли, пробуем найти через активные ордера
       if (!bybitAccountId) {
-        throw new Error('Bybit account not found for this order');
+        logger.info('Trying to find account through active orders', { orderId: data.orderId });
+        
+        // Получаем все активные Bybit аккаунты
+        const activeAccounts = await prisma.bybitAccount.findMany({
+          where: { isActive: true }
+        });
+        
+        // Получаем BybitP2PManager
+        const { getBybitP2PManager } = require('../../app');
+        const bybitManager = getBybitP2PManager();
+        
+        if (bybitManager) {
+          // Проверяем каждый аккаунт на наличие этого ордера
+          for (const account of activeAccounts) {
+            try {
+              const client = bybitManager.getClient(account.accountId);
+              if (client) {
+                const orderDetails = await client.getOrderDetails(data.orderId);
+                if (orderDetails && orderDetails.orderId === data.orderId) {
+                  bybitAccountId = account.accountId;
+                  logger.info('Found account for order', { 
+                    orderId: data.orderId, 
+                    accountId: account.accountId 
+                  });
+                  
+                  // Попробуем обновить транзакцию, если она существует
+                  if (data.transactionId) {
+                    const transaction = await prisma.transaction.findUnique({
+                      where: { id: data.transactionId },
+                      include: { advertisement: true }
+                    });
+                    
+                    if (transaction && transaction.advertisement && !transaction.advertisement.bybitAccountId) {
+                      await prisma.advertisement.update({
+                        where: { id: transaction.advertisement.id },
+                        data: { bybitAccountId: account.id }
+                      });
+                      logger.info('Updated advertisement with Bybit account', {
+                        advertisementId: transaction.advertisement.id,
+                        accountId: account.id
+                      });
+                    }
+                  }
+                  
+                  break;
+                }
+              }
+            } catch (error) {
+              logger.debug('Order not found in account', { 
+                accountId: account.accountId, 
+                orderId: data.orderId 
+              });
+            }
+          }
+        }
+      }
+
+      if (!bybitAccountId) {
+        throw new Error('Bybit account not found for this order. Please ensure the order is linked to a transaction with an advertisement.');
       }
 
       // Получаем BybitP2PManager
@@ -247,11 +306,67 @@ export class BybitChatController {
         throw new Error('Transaction not found');
       }
 
-      if (!transaction.advertisement?.bybitAccount) {
-        throw new Error('Bybit account not found for this transaction');
+      let bybitAccountId: string | null = null;
+      
+      if (transaction.advertisement?.bybitAccount) {
+        bybitAccountId = transaction.advertisement.bybitAccount.accountId;
       }
-
-      const bybitAccountId = transaction.advertisement.bybitAccount.accountId;
+      
+      // Если не нашли аккаунт через транзакцию, пробуем найти через orderId
+      if (!bybitAccountId && data.orderId) {
+        logger.info('Trying to find account through active orders for sending', { orderId: data.orderId });
+        
+        // Получаем все активные Bybit аккаунты
+        const activeAccounts = await prisma.bybitAccount.findMany({
+          where: { isActive: true }
+        });
+        
+        // Получаем BybitP2PManager раньше для проверки
+        const { getBybitP2PManager } = require('../../app');
+        const tempBybitManager = getBybitP2PManager();
+        
+        if (tempBybitManager) {
+          // Проверяем каждый аккаунт на наличие этого ордера
+          for (const account of activeAccounts) {
+            try {
+              const client = tempBybitManager.getClient(account.accountId);
+              if (client) {
+                const orderDetails = await client.getOrderDetails(data.orderId);
+                if (orderDetails && orderDetails.orderId === data.orderId) {
+                  bybitAccountId = account.accountId;
+                  logger.info('Found account for order', { 
+                    orderId: data.orderId, 
+                    accountId: account.accountId 
+                  });
+                  
+                  // Обновляем транзакцию с правильным аккаунтом
+                  if (transaction.advertisement && !transaction.advertisement.bybitAccountId) {
+                    await prisma.advertisement.update({
+                      where: { id: transaction.advertisement.id },
+                      data: { bybitAccountId: account.id }
+                    });
+                    logger.info('Updated advertisement with Bybit account', {
+                      advertisementId: transaction.advertisement.id,
+                      accountId: account.id
+                    });
+                  }
+                  
+                  break;
+                }
+              }
+            } catch (error) {
+              logger.debug('Order not found in account', { 
+                accountId: account.accountId, 
+                orderId: data.orderId 
+              });
+            }
+          }
+        }
+      }
+      
+      if (!bybitAccountId) {
+        throw new Error('Bybit account not found for this transaction. Please ensure the order is linked to a transaction with an advertisement.');
+      }
 
       // Получаем BybitP2PManager
       const { getBybitP2PManager } = require('../../app');
@@ -395,11 +510,54 @@ export class BybitChatController {
         throw new Error('Transaction not found');
       }
 
-      if (!transaction.advertisement?.bybitAccount) {
+      let bybitAccountId: string | null = null;
+      
+      if (transaction.advertisement?.bybitAccount) {
+        bybitAccountId = transaction.advertisement.bybitAccount.accountId;
+      }
+      
+      // Если не нашли аккаунт через транзакцию, пробуем найти через orderId
+      if (!bybitAccountId && data.orderId) {
+        logger.info('Trying to find account through active orders for image', { orderId: data.orderId });
+        
+        // Получаем все активные Bybit аккаунты
+        const activeAccounts = await prisma.bybitAccount.findMany({
+          where: { isActive: true }
+        });
+        
+        // Получаем BybitP2PManager раньше для проверки
+        const { getBybitP2PManager } = require('../../app');
+        const tempBybitManager = getBybitP2PManager();
+        
+        if (tempBybitManager) {
+          // Проверяем каждый аккаунт на наличие этого ордера
+          for (const account of activeAccounts) {
+            try {
+              const client = tempBybitManager.getClient(account.accountId);
+              if (client) {
+                const orderDetails = await client.getOrderDetails(data.orderId);
+                if (orderDetails && orderDetails.orderId === data.orderId) {
+                  bybitAccountId = account.accountId;
+                  logger.info('Found account for order', { 
+                    orderId: data.orderId, 
+                    accountId: account.accountId 
+                  });
+                  break;
+                }
+              }
+            } catch (error) {
+              logger.debug('Order not found in account', { 
+                accountId: account.accountId, 
+                orderId: data.orderId 
+              });
+            }
+          }
+        }
+      }
+      
+      if (!bybitAccountId) {
         throw new Error('Bybit account not found for this transaction');
       }
-
-      const bybitAccountId = transaction.advertisement.bybitAccount.accountId;
 
       // Получаем BybitP2PManager
       const { getBybitP2PManager } = require('../../app');

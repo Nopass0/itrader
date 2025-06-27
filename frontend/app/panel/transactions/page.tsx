@@ -90,6 +90,7 @@ import { TransactionChat } from "@/components/TransactionChat";
 import { ReceiptPopover } from "@/components/ReceiptPopover";
 import { AdvertisementsTab } from "@/components/panel/AdvertisementsTab";
 import { KanbanBoard } from "@/components/panel/transactions/kanban";
+import { StatusView } from "@/components/panel/transactions/StatusView";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { ReleaseMoneyButton } from "@/components/ReleaseMoneyButton";
 
@@ -154,10 +155,10 @@ export default function TransactionsPage() {
     useState<any>(null);
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
   const [isRealTimeActive, setIsRealTimeActive] = useState(false);
-  const [viewMode, setViewMode] = useState<"table" | "kanban">(() => {
+  const [viewMode, setViewMode] = useState<"table" | "kanban" | "status">(() => {
     // Load view mode from localStorage or default to 'table'
     const savedMode = localStorage.getItem("transactionsViewMode");
-    return savedMode === "kanban" || savedMode === "table"
+    return savedMode === "kanban" || savedMode === "table" || savedMode === "status"
       ? savedMode
       : "table";
   });
@@ -2205,7 +2206,7 @@ export default function TransactionsPage() {
                 value={viewMode}
                 onValueChange={(value) => {
                   if (value) {
-                    setViewMode(value as "table" | "kanban");
+                    setViewMode(value as "table" | "kanban" | "status");
                     // Save to localStorage
                     localStorage.setItem("transactionsViewMode", value);
                   }
@@ -2226,6 +2227,14 @@ export default function TransactionsPage() {
                 >
                   <Kanban className="h-4 w-4 mr-1" />
                   Kanban
+                </ToggleGroupItem>
+                <ToggleGroupItem
+                  value="status"
+                  aria-label="Status view"
+                  className="px-3"
+                >
+                  <BarChart3 className="h-4 w-4 mr-1" />
+                  По статусам
                 </ToggleGroupItem>
               </ToggleGroup>
             )}
@@ -2316,7 +2325,7 @@ export default function TransactionsPage() {
           >
             {viewMode === "table" ? (
               <TransactionsTab />
-            ) : (
+            ) : viewMode === "kanban" ? (
               <div className="h-full">
                 <KanbanBoard
                   transactions={transactions}
@@ -2328,6 +2337,14 @@ export default function TransactionsPage() {
                   currentUser={currentUser}
                 />
               </div>
+            ) : (
+              <StatusView
+                transactions={transactions}
+                loading={transactionsLoading}
+                onRefresh={loadTransactions}
+                onViewDetails={(transaction) => setSelectedItem(transaction)}
+                onOpenChat={(transaction) => setSelectedChatTransaction(transaction)}
+              />
             )}
           </TabsContent>
 

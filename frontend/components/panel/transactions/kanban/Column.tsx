@@ -40,6 +40,7 @@ export function KanbanColumn({ column, cards, isDragging, currentUser }: KanbanC
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [filter, setFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [orderFilter, setOrderFilter] = useState<string>('online'); // Фильтр для ордеров - по умолчанию онлайн
   const { accounts: gateAccounts } = useGateAccounts();
   const { accounts: bybitAccounts } = useBybitAccounts();
 
@@ -61,6 +62,16 @@ export function KanbanColumn({ column, cards, isDragging, currentUser }: KanbanC
         // Filter by Bybit account for advertisements
         if (column.id === 1 && card.type === 'advertisement') {
           return card.bybitAccountId === filter;
+        }
+        // Filter orders by online/all
+        if (column.id === 2 && card.type === 'order') {
+          if (orderFilter === 'online') {
+            // Онлайн ордера - те, которые в работе (не завершены и не отменены)
+            const onlineStatuses = ['PENDING', 'ONGOING', 'BUYER_PAID', 'APPEAL'];
+            const status = card.orderStatus || card.status;
+            return onlineStatuses.includes(status);
+          }
+          return true; // Если фильтр 'all', показываем все
         }
         // Add more filter logic as needed
         return true;
@@ -113,7 +124,7 @@ export function KanbanColumn({ column, cards, isDragging, currentUser }: KanbanC
     return (
       <div
         className={cn(
-          "flex flex-col h-full bg-muted/30 rounded-lg transition-all duration-300 w-12 cursor-pointer hover:bg-muted/40",
+          "flex flex-col h-full rounded-lg transition-all duration-300 w-12 cursor-pointer",
           stageConfig?.color || 'bg-gray-500'
         )}
         onClick={() => setIsCollapsed(false)}
@@ -212,6 +223,19 @@ export function KanbanColumn({ column, cards, isDragging, currentUser }: KanbanC
                   {account.accountName || account.name || account.accountId}
                 </SelectItem>
               ))}
+            </SelectContent>
+          </Select>
+        )}
+        
+        {/* Orders filter */}
+        {column.id === 2 && (
+          <Select value={orderFilter} onValueChange={setOrderFilter}>
+            <SelectTrigger className="h-7 text-xs bg-white/10 border-white/20">
+              <SelectValue placeholder="Фильтр ордеров" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="online">Онлайн</SelectItem>
+              <SelectItem value="all">Все</SelectItem>
             </SelectContent>
           </Select>
         )}
