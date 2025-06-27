@@ -85,5 +85,7 @@ The system uses SQLite database and stores configuration in the database. Key se
 - **Gmail**: OAuth2 authentication for receipt processing
 - **CORS_ORIGIN**: Set to your frontend URL (e.g. `http://localhost:3000`) to
   allow the panel to connect to the WebSocket API. Use `*` to allow all origins.
+  When using `*`, credentials are disabled automatically, so send auth tokens in
+  the request payload.
 
 This project was created using `bun init` in bun v1.2.2. [Bun](https://bun.sh) is a fast all-in-one JavaScript runtime.
