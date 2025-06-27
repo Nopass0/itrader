@@ -65,14 +65,17 @@ export class WebSocketServer {
       corsOrigin === '*'
         ? '*'
         : corsOrigin.split(',').map((o) => o.trim());
+    // If CORS is set to wildcard, credentials cannot be enabled
+    const allowCredentials = corsOrigin !== '*';
 
     this.io = new Server(this.httpServer, {
       cors: {
         origin: allowedOrigins,
         methods: ['GET', 'POST'],
-        credentials: true,
+        credentials: allowCredentials,
       },
     });
+    logger.info('Configured CORS', { allowedOrigins, credentials: allowCredentials });
 
     this.setupMiddleware();
     this.setupEventHandlers();
