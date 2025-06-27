@@ -463,6 +463,11 @@ export function StatusView({
 
   // Get payout method label
   const getPayoutMethodLabel = (payout: any) => {
+    // Handle if method is an object
+    if (payout.method && typeof payout.method === 'object') {
+      return payout.method.label || payout.method.name || '-';
+    }
+    
     const methodMap: Record<string, string> = {
       'sbp': 'СБП',
       'card': 'Карта',
