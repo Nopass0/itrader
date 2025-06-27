@@ -233,7 +233,7 @@ export function StatusView({
       switch (transaction.status) {
         case 'pending':
           if (!transaction.advertisementId) return 11;
-          if (!transaction.orderId) return 1;
+          if (!transaction.orderId) return 2;
           return 2;
         case 'order_created':
         case 'order_pending':
@@ -344,7 +344,7 @@ export function StatusView({
             switch (item.status) {
               case 'pending':
                 if (!item.advertisementId) return 11;
-                if (!item.orderId) return 1;
+                if (!item.orderId) return 2;
                 return 2;
               case 'order_created':
               case 'order_pending':

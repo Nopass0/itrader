@@ -19,7 +19,7 @@ export function mapStatusToStage(transaction: Transaction, payouts: any[]): numb
   switch (transaction.status) {
     case 'pending':
       if (!transaction.advertisementId) return 11; // Other
-      if (!transaction.orderId) return 1; // Advertisement
+      if (!transaction.orderId) return 2; // Order (waiting for order creation)
       return 2; // Order
     
     case 'order_created':
