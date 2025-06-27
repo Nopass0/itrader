@@ -58,11 +58,24 @@ export class BybitAdvertisementController {
           offset: data.offset || 0
         });
 
-        // Добавляем accountId к каждому объявлению
-        let adsWithAccount = advertisements.list.map(ad => ({
-          ...ad,
-          bybitAccountId: data.accountId
-        }));
+        // Добавляем accountId и статус к каждому объявлению
+        let adsWithAccount = advertisements.list.map(ad => {
+          // Определяем статус объявления
+          const isActive = ad.status === 'ONLINE' || 
+                          ad.status === 1 || 
+                          ad.status === '1' ||
+                          ad.isActive === true ||
+                          ad.online === true ||
+                          ad.online === 1 ||
+                          ad.online === '1';
+          
+          return {
+            ...ad,
+            bybitAccountId: data.accountId,
+            isListed: isActive,
+            statusDisplay: isActive ? 'Listed' : 'Not Listed'
+          };
+        });
 
         // Фильтруем по статусу если указан
         if (data.status) {
@@ -133,11 +146,24 @@ export class BybitAdvertisementController {
                 }
               }
               
-              // Добавляем accountId к каждому объявлению
-              let adsWithAccount = ads.list.map(ad => ({
-                ...ad,
-                bybitAccountId: accountId
-              }));
+              // Добавляем accountId и статус к каждому объявлению
+              let adsWithAccount = ads.list.map(ad => {
+                // Определяем статус объявления
+                const isActive = ad.status === 'ONLINE' || 
+                                ad.status === 1 || 
+                                ad.status === '1' ||
+                                ad.isActive === true ||
+                                ad.online === true ||
+                                ad.online === 1 ||
+                                ad.online === '1';
+                
+                return {
+                  ...ad,
+                  bybitAccountId: accountId,
+                  isListed: isActive,
+                  statusDisplay: isActive ? 'Listed' : 'Not Listed'
+                };
+              });
 
               // Фильтруем по статусу если указан
               if (data.status) {
@@ -262,6 +288,7 @@ export class BybitAdvertisementController {
     data: { 
       itemId: string;
       bybitAccountId: string;
+      actionType?: 'MODIFY' | 'ACTIVE'; // ACTIVE для релистинга
       updates: {
         price?: number;
         premium?: string;
@@ -300,35 +327,29 @@ export class BybitAdvertisementController {
         throw new Error(`Bybit client not found for account ${data.bybitAccountId}`);
       }
 
-      // Обновляем объявление через Bybit API
-      const updateData: any = {
-        itemId: data.itemId
-      };
+      // Сначала получаем текущее объявление для заполнения обязательных полей
+      const currentAds = await client.getMyAdvertisements({ limit: 100 });
+      const currentAd = currentAds.list.find(ad => ad.itemId === data.itemId || ad.id === data.itemId);
+      
+      if (!currentAd) {
+        throw new Error(`Advertisement ${data.itemId} not found`);
+      }
 
-      if (data.updates.price !== undefined) {
-        updateData.price = data.updates.price.toString();
-      }
-      if (data.updates.premium !== undefined) {
-        updateData.premium = data.updates.premium;
-      }
-      if (data.updates.quantity !== undefined) {
-        updateData.quantity = data.updates.quantity.toString();
-      }
-      if (data.updates.minAmount !== undefined) {
-        updateData.minOrderAmount = data.updates.minAmount.toString();
-      }
-      if (data.updates.maxAmount !== undefined) {
-        updateData.maxOrderAmount = data.updates.maxAmount.toString();
-      }
-      if (data.updates.remarks !== undefined) {
-        updateData.remark = data.updates.remarks;
-      }
-      if (data.updates.paymentPeriod !== undefined) {
-        updateData.paymentPeriod = data.updates.paymentPeriod;
-      }
-      if (data.updates.priceType !== undefined) {
-        updateData.priceType = data.updates.priceType;
-      }
+      // Подготавливаем данные для обновления согласно API Bybit
+      const updateData: any = {
+        id: data.itemId,
+        priceType: data.updates.priceType !== undefined ? data.updates.priceType : (currentAd.priceType || "0"),
+        premium: data.updates.premium !== undefined ? data.updates.premium : (currentAd.premium || ""),
+        price: data.updates.price !== undefined ? data.updates.price.toString() : (currentAd.price || "0"),
+        minAmount: data.updates.minAmount !== undefined ? data.updates.minAmount.toString() : (currentAd.minAmount || currentAd.minOrderAmount || "0"),
+        maxAmount: data.updates.maxAmount !== undefined ? data.updates.maxAmount.toString() : (currentAd.maxAmount || currentAd.maxOrderAmount || "0"),
+        remark: data.updates.remarks !== undefined ? data.updates.remarks : (currentAd.remark || currentAd.remarks || ""),
+        tradingPreferenceSet: currentAd.tradingPreferenceSet || {},
+        paymentIds: currentAd.paymentIds || currentAd.payments || ["-1"],
+        actionType: data.actionType || "MODIFY", // MODIFY для изменения, ACTIVE для релистинга
+        quantity: data.updates.quantity !== undefined ? data.updates.quantity.toString() : (currentAd.quantity || "0"),
+        paymentPeriod: data.updates.paymentPeriod !== undefined ? data.updates.paymentPeriod.toString() : (currentAd.paymentPeriod || "15")
+      };
 
       const result = await client.updateAdvertisement(updateData);
 

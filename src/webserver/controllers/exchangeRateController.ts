@@ -16,21 +16,18 @@ export class ExchangeRateController {
    */
   static async get(socket: AuthenticatedSocket, callback: Function) {
     try {
-      // Получаем настройки из БД
-      const mode = (await db.getSetting("exchangeRateMode")) || "constant";
-      const constantRate = parseFloat(
-        (await db.getSetting("constantExchangeRate")) || "77.89",
-      );
-      const markup = parseFloat(
-        (await db.getSetting("exchangeRateMarkup")) || "2.5",
-      );
-
-      // Получаем текущий курс из ExchangeRateManager
+      // Получаем данные из ExchangeRateManager
       const { getExchangeRateManager } = await import(
         "../../services/exchangeRateManager"
       );
       const exchangeRateManager = getExchangeRateManager();
+      const config = exchangeRateManager.getConfig();
       const currentRate = await exchangeRateManager.getRate();
+      
+      // Get markup from DB (still stored there)
+      const markup = parseFloat(
+        (await db.getSetting("exchangeRateMarkup")) || "2.5",
+      );
 
       // Получаем последнюю запись из истории
       const lastHistory = await prisma.exchangeRateHistory.findFirst({
@@ -39,11 +36,11 @@ export class ExchangeRateController {
 
       handleSuccess(
         {
-          mode,
-          constantRate,
+          mode: config.mode,
+          constantRate: config.constantRate,
           markup,
           currentRate,
-          lastUpdate: lastHistory?.timestamp,
+          lastUpdate: lastHistory?.timestamp || config.lastUpdate,
           source: lastHistory?.source,
         },
         undefined,
@@ -72,15 +69,15 @@ export class ExchangeRateController {
         throw new Error("Invalid rate value");
       }
 
-      // Сохраняем настройки
-      await db.setSetting("exchangeRateMode", "constant");
-      await db.setSetting("constantExchangeRate", data.rate.toString());
-
-      // Update ExchangeRateManager
+      // Update ExchangeRateManager - first set mode, then rate
       const { getExchangeRateManager } = await import(
         "../../services/exchangeRateManager"
       );
       const exchangeRateManager = getExchangeRateManager();
+      
+      // Set mode to constant first
+      await exchangeRateManager.setMode("constant");
+      // Then set the rate
       await exchangeRateManager.setRate(data.rate);
 
       // Записываем в историю
@@ -97,7 +94,7 @@ export class ExchangeRateController {
 
       // Emit событие об изменении курса всем клиентам, включая отправителя
       socket.server.emit("rate:changed", {
-        oldRate: parseFloat(await db.getSetting("constantExchangeRate") || "77.89"),
+        oldRate: exchangeRateManager.getConfig().constantRate,
         newRate: data.rate,
         mode: "constant",
       });
@@ -229,19 +226,18 @@ export class ExchangeRateController {
       await db.setSetting("exchangeRateMarkup", data.markup.toString());
 
       // Если режим автоматический, обновляем курс
-      const mode = await db.getSetting("exchangeRateMode");
-      if (mode === "automatic") {
-        const { ExchangeRateManager } = await import(
-          "../../services/exchangeRateManager"
-        );
-        const manager = ExchangeRateManager.getInstance();
+      const { getExchangeRateManager } = await import(
+        "../../services/exchangeRateManager"
+      );
+      const manager = getExchangeRateManager();
+      if (manager.getConfig().mode === "automatic") {
         await manager.updateRateAsync();
       }
 
       handleSuccess(
         {
           markup: data.markup,
-          currentRate: await db.getCurrentExchangeRate(),
+          currentRate: await manager.getRate(),
         },
         "Markup updated successfully",
         callback,
@@ -261,15 +257,15 @@ export class ExchangeRateController {
         throw new Error("Viewers cannot force update");
       }
 
-      const mode = await db.getSetting("exchangeRateMode");
-      if (mode === "constant") {
+      const { getExchangeRateManager } = await import(
+        "../../services/exchangeRateManager"
+      );
+      const manager = getExchangeRateManager();
+      
+      if (manager.getConfig().mode === "constant") {
         throw new Error("Cannot force update in constant mode");
       }
 
-      const { ExchangeRateManager } = await import(
-        "../../services/exchangeRateManager"
-      );
-      const manager = ExchangeRateManager.getInstance();
       const newRate = await manager.updateRateAsync();
 
       handleSuccess(
