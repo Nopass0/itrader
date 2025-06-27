@@ -435,10 +435,7 @@ export class P2PClient extends EventEmitter {
     const bybitParams = {
       orderId: params.orderId,
       message: params.message,
-      contentType:
-        params.messageType === "TEXT"
-          ? "str"
-          : params.messageType?.toLowerCase() || "str",
+      messageType: "TEXT", // Bybit API expects "TEXT" not "str"
       msgUuid: msgUuid,
       fileName: params.fileName,
     };
