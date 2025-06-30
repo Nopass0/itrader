@@ -57,6 +57,7 @@ export default function EmailsPage() {
   const { toast } = useToast();
   const { 
     listEmails, 
+    getEmail,
     downloadAttachment: downloadAttachmentHook, 
     markAsRead: markAsReadHook,
     getInboxes,
@@ -69,6 +70,7 @@ export default function EmailsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedEmail, setSelectedEmail] = useState<Email | null>(null);
   const [showEmailDialog, setShowEmailDialog] = useState(false);
+  const [loadingEmailDetails, setLoadingEmailDetails] = useState(false);
 
   // Load inboxes
   const loadInboxes = async () => {
@@ -118,9 +120,29 @@ export default function EmailsPage() {
           variant: 'destructive'
         });
         setEmails([]);
+      } else if (!Array.isArray(response.emails)) {
+        console.error('Emails is not an array:', response.emails);
+        toast({
+          title: 'Ошибка формата данных',
+          description: 'Письма получены в неверном формате',
+          variant: 'destructive'
+        });
+        setEmails([]);
       } else {
-        setEmails(response.emails);
-        console.log(`Successfully loaded ${response.emails.length} emails`);
+        // Filter out invalid emails
+        const validEmails = response.emails.filter(email => email && email.id);
+        console.log(`Successfully loaded ${validEmails.length} valid emails out of ${response.emails.length} total`);
+        setEmails(validEmails);
+        
+        // Check for warnings
+        if (response.warning) {
+          console.warn('Email loading warning:', response.warning);
+          toast({
+            title: 'Предупреждение',
+            description: response.warning,
+            variant: 'default'
+          });
+        }
         
         // Log first few emails for debugging
         if (response.emails.length > 0) {
@@ -172,17 +194,28 @@ export default function EmailsPage() {
   const downloadAttachment = async (emailId: string, attachmentId: string, fileName: string) => {
     if (!socket?.connected) return;
     
+    console.log('Downloading attachment:', { emailId, attachmentId, fileName });
+    
     try {
       const response = await downloadAttachmentHook(emailId, attachmentId);
+      
+      console.log('Download response:', response);
 
       // Create download link
       if (response.downloadUrl) {
         const link = document.createElement('a');
         link.href = response.downloadUrl;
-        link.download = fileName;
+        link.download = fileName || 'attachment';
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+      } else {
+        console.error('No download URL in response');
+        toast({
+          title: 'Ошибка',
+          description: 'Не удалось получить ссылку для скачивания',
+          variant: 'destructive'
+        });
       }
 
       toast({
@@ -217,13 +250,40 @@ export default function EmailsPage() {
   };
 
   // Open email dialog
-  const openEmail = (email: Email) => {
-    setSelectedEmail(email);
-    setShowEmailDialog(true);
-    
-    // Mark as read if not already read
-    if (!email.read) {
-      markAsRead(email.id, email.inboxId);
+  const openEmail = async (email: Email) => {
+    try {
+      // Show dialog with loading state
+      setSelectedEmail(email);
+      setShowEmailDialog(true);
+      setLoadingEmailDetails(true);
+      
+      // Fetch full email details from server
+      const fullEmail = await getEmail(email.id, email.inboxId);
+      
+      // Update selected email with full details
+      console.log('Full email details:', fullEmail);
+      console.log('Full email attachments:', fullEmail.attachments);
+      
+      setSelectedEmail({
+        ...email,
+        ...fullEmail,
+        body: fullEmail.body || email.body, // Ensure we have body content
+        attachments: fullEmail.attachments || email.attachments || [] // Ensure we have attachments
+      });
+      
+      // Mark as read if not already read
+      if (!email.read) {
+        markAsRead(email.id, email.inboxId);
+      }
+    } catch (error) {
+      console.error('Failed to load email details:', error);
+      toast({
+        title: 'Ошибка',
+        description: 'Не удалось загрузить детали письма',
+        variant: 'destructive'
+      });
+    } finally {
+      setLoadingEmailDetails(false);
     }
   };
 
@@ -413,6 +473,34 @@ export default function EmailsPage() {
             <div className="text-center py-8 text-muted-foreground">
               <Mail size={48} className="mx-auto mb-4 opacity-50" />
               <p>Письма не найдены</p>
+              {emails.length === 0 && searchQuery === '' && (
+                <div className="mt-4 p-4 bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 dark:border-yellow-800 rounded-lg max-w-md mx-auto">
+                  <p className="text-sm font-medium mb-2 text-yellow-800 dark:text-yellow-200">
+                    ⚠️ Возможные причины:
+                  </p>
+                  <ul className="text-xs text-left list-disc list-inside space-y-1 text-yellow-700 dark:text-yellow-300">
+                    <li>MailSlurp API временно недоступен (ошибка 503)</li>
+                    <li>Нет писем в почтовом ящике</li>
+                    <li>Проблема с подключением к MailSlurp</li>
+                  </ul>
+                  <p className="text-xs mt-3 text-yellow-600 dark:text-yellow-400">
+                    Попробуйте обновить страницу через несколько минут
+                  </p>
+                </div>
+              )}
+              {inboxes.length === 0 && (
+                <div className="mt-4 p-4 bg-muted/50 rounded-lg max-w-md mx-auto">
+                  <p className="text-sm font-medium mb-2">MailSlurp не настроен</p>
+                  <p className="text-xs">
+                    Для получения писем необходимо:
+                  </p>
+                  <ol className="text-xs mt-2 text-left list-decimal list-inside space-y-1">
+                    <li>Добавить MAILSLURP_API_KEY в файл .env</li>
+                    <li>Перезапустить сервер</li>
+                    <li>Создать почтовый ящик через раздел "MailSlurp аккаунты"</li>
+                  </ol>
+                </div>
+              )}
             </div>
           ) : (
             <ScrollArea className="h-[600px]">
@@ -478,9 +566,9 @@ export default function EmailsPage() {
                           
                           {email.attachments.length > 0 && (
                             <div className="flex flex-wrap gap-1">
-                              {email.attachments.slice(0, 3).map((attachment) => (
+                              {email.attachments.slice(0, 3).map((attachment, idx) => (
                                 <Button
-                                  key={attachment.id}
+                                  key={attachment.id || `att-${idx}`}
                                   variant="outline"
                                   size="sm"
                                   className="h-6 px-2 text-xs"
@@ -490,7 +578,7 @@ export default function EmailsPage() {
                                   }}
                                 >
                                   <Download size={10} className="mr-1" />
-                                  {attachment.name}
+                                  {attachment.name || `файл ${idx + 1}`}
                                 </Button>
                               ))}
                               {email.attachments.length > 3 && (
@@ -513,13 +601,16 @@ export default function EmailsPage() {
 
       {/* Email Detail Dialog */}
       <Dialog open={showEmailDialog} onOpenChange={setShowEmailDialog}>
-        <DialogContent className="max-w-4xl max-h-[80vh]">
+        <DialogContent className="max-w-4xl max-h-[80vh]" aria-describedby="email-dialog-description">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Mail size={20} />
               {selectedEmail?.subject || 'Без темы'}
             </DialogTitle>
           </DialogHeader>
+          <p id="email-dialog-description" className="sr-only">
+            Детальная информация о письме
+          </p>
           
           {selectedEmail && (
             <div className="space-y-4">
@@ -553,25 +644,32 @@ export default function EmailsPage() {
                     Вложения ({selectedEmail.attachments.length})
                   </h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                    {selectedEmail.attachments.map((attachment) => (
-                      <Card key={attachment.id} className="p-3">
-                        <div className="flex items-center justify-between">
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium truncate">{attachment.name}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {attachment.contentType} • {formatFileSize(attachment.size)}
-                            </p>
+                    {selectedEmail.attachments.map((attachment, index) => {
+                      console.log(`Attachment ${index}:`, attachment);
+                      return (
+                        <Card key={attachment.id || index} className="p-3">
+                          <div className="flex items-center justify-between">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium truncate">{attachment.name || `Вложение ${index + 1}`}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {attachment.contentType || 'Неизвестный тип'} • {formatFileSize(attachment.size || 0)}
+                              </p>
+                              <p className="text-xs text-muted-foreground opacity-50">
+                                ID: {attachment.id}
+                              </p>
+                            </div>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => downloadAttachment(selectedEmail.id, attachment.id, attachment.name)}
+                              disabled={!attachment.id}
+                            >
+                              <Download size={14} />
+                            </Button>
                           </div>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => downloadAttachment(selectedEmail.id, attachment.id, attachment.name)}
-                          >
-                            <Download size={14} />
-                          </Button>
-                        </div>
-                      </Card>
-                    ))}
+                        </Card>
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -580,7 +678,12 @@ export default function EmailsPage() {
               <div>
                 <h4 className="font-medium mb-2">Содержимое письма:</h4>
                 <ScrollArea className="h-[400px] w-full border rounded-md p-4 bg-muted/30">
-                  {selectedEmail.body ? (
+                  {loadingEmailDetails ? (
+                    <div className="text-center text-muted-foreground py-8">
+                      <RefreshCw className="animate-spin mx-auto mb-2" size={32} />
+                      <p>Загрузка содержимого...</p>
+                    </div>
+                  ) : selectedEmail.body ? (
                     <div 
                       className="prose prose-sm max-w-none dark:prose-invert whitespace-pre-wrap"
                       dangerouslySetInnerHTML={{ 

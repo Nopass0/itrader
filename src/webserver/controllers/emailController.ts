@@ -50,7 +50,13 @@ export class EmailController {
       
       if (!mailSlurpService) {
         logger.error('MailSlurp service not initialized');
-        throw new Error('MailSlurp service not initialized. Please check if MAILSLURP_API_KEY is configured.');
+        // Return empty list instead of throwing error
+        handleSuccess({
+          emails: [],
+          total: 0,
+          warning: 'MailSlurp service not initialized. Please check if MAILSLURP_API_KEY is configured.'
+        }, 'No emails available', callback);
+        return;
       }
 
       // Check if service has inboxes and initialize if needed
@@ -84,14 +90,34 @@ export class EmailController {
       });
       
       // Получаем все письма
+      console.log('[EmailController] Calling getAllEmails with params:', {
+        limit: data.limit || 100,
+        search: data.search,
+        inboxId: data.inboxId
+      });
+      
       const emails = await mailSlurpService.getAllEmails({
         limit: data.limit || 100,
         search: data.search,
         inboxId: data.inboxId
       });
+      
+      console.log('[EmailController] getAllEmails returned:', {
+        count: emails?.length || 0,
+        type: typeof emails,
+        isArray: Array.isArray(emails),
+        sample: emails?.[0]
+      });
 
       logger.info('Got emails from MailSlurp', { 
         emailCount: emails?.length || 0,
+        firstEmail: emails?.[0] ? {
+          id: emails[0].id,
+          subject: emails[0].subject,
+          from: emails[0].from
+        } : null,
+        hasEmails: Array.isArray(emails),
+        emailsType: typeof emails
         firstEmail: emails?.length > 0 ? {
           id: emails[0].id,
           subject: emails[0].subject,

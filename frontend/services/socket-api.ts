@@ -52,10 +52,10 @@ class SocketApiClient {
       try {
         // WebSocket server runs on port 3002
         // Determine WebSocket URL dynamically
-        let wsUrl = process.env.NEXT_PUBLIC_WS_URL || 'http://localhost:3002';
+        let wsUrl = process.env.NEXT_PUBLIC_SOCKET_URL || process.env.NEXT_PUBLIC_WS_URL || 'http://localhost:3002';
         
         // If in browser and no explicit URL is set, use current hostname
-        if (typeof window !== 'undefined' && !process.env.NEXT_PUBLIC_WS_URL) {
+        if (typeof window !== 'undefined' && !process.env.NEXT_PUBLIC_SOCKET_URL && !process.env.NEXT_PUBLIC_WS_URL) {
           const hostname = window.location.hostname;
           const protocol = window.location.protocol;
           // WebSocket API runs on port 3002

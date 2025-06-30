@@ -51,6 +51,12 @@ export class MailSlurpService extends EventEmitter {
     
     try {
       logger.info('Initializing MailSlurp service');
+      
+      // Check if API key is valid
+      if (!this.apiKey || this.apiKey === 'undefined' || this.apiKey === 'stub') {
+        logger.warn('Invalid or missing MAILSLURP_API_KEY, service will return empty data');
+        return 'No email addresses configured';
+      }
 
       // Load ALL existing inboxes from database
       const existingAccounts = await db.prisma.mailSlurpAccount.findMany({
@@ -120,8 +126,16 @@ export class MailSlurpService extends EventEmitter {
       });
 
       return emails.join(', ');
-    } catch (error) {
+    } catch (error: any) {
       logger.error('Failed to initialize MailSlurp', error);
+      
+      // Check if it's a service unavailable error
+      if (error?.status === 503 || error?.message?.includes('503')) {
+        logger.error('MailSlurp API is temporarily unavailable (503 error)');
+        // Don't throw - return empty state so app can continue
+        return 'MailSlurp temporarily unavailable';
+      }
+      
       throw error;
     }
   }
@@ -867,6 +881,57 @@ export class MailSlurpService extends EventEmitter {
   }
 
   /**
+   * Process email attachments to get full metadata
+   */
+  private async processAttachments(email: any): Promise<any[]> {
+    if (!email.attachments || email.attachments.length === 0) {
+      return [];
+    }
+    
+    const processedAttachments = [];
+    
+    for (const att of email.attachments) {
+      try {
+        // If att is just a string (attachment ID), fetch metadata
+        if (typeof att === 'string') {
+          try {
+            const attachmentInfo = await this.attachmentController.getAttachmentInfo({
+              attachmentId: att
+            });
+            
+            processedAttachments.push({
+              id: attachmentInfo.id || att,
+              name: attachmentInfo.name || 'attachment',
+              contentType: attachmentInfo.contentType || 'application/octet-stream',
+              size: attachmentInfo.contentLength || 0
+            });
+          } catch (error) {
+            logger.warn('Failed to get attachment info', { attachmentId: att, error });
+            processedAttachments.push({
+              id: att,
+              name: 'attachment',
+              contentType: 'application/octet-stream',
+              size: 0
+            });
+          }
+        } else {
+          // If att is already an object, map the fields
+          processedAttachments.push({
+            id: att?.attachmentId || att?.id || '',
+            name: att?.name || '',
+            contentType: att?.contentType || '',
+            size: att?.size || att?.contentLength || 0
+          });
+        }
+      } catch (e) {
+        logger.error('Error processing attachment', e, { attachment: att });
+      }
+    }
+    
+    return processedAttachments;
+  }
+
+  /**
    * Get all emails from all inboxes
    */
   async getAllEmails(params: {
@@ -876,6 +941,25 @@ export class MailSlurpService extends EventEmitter {
   } = {}): Promise<any[]> {
     try {
       const allEmails = [];
+      
+      // Ensure service is initialized
+      if (!this.inboxes || this.inboxes.length === 0) {
+        logger.info('No inboxes available, attempting to initialize...');
+        try {
+          await this.initialize();
+        } catch (initError: any) {
+          logger.error('Failed to initialize MailSlurp service', initError);
+          
+          // Check if it's a service unavailable error
+          if (initError?.status === 503 || initError?.message?.includes('503')) {
+            logger.warn('MailSlurp API is temporarily unavailable, returning empty email list');
+          }
+          
+          // Return empty array instead of throwing to prevent frontend errors
+          return [];
+        }
+      }
+      
       const inboxesToCheck = params.inboxId 
         ? this.inboxes.filter(inbox => inbox.id === params.inboxId)
         : this.inboxes;
@@ -895,10 +979,11 @@ export class MailSlurpService extends EventEmitter {
       // Try to get all emails at once first
       try {
         logger.info('Attempting to get all emails from all inboxes at once...');
-        const allEmailsResponse = await this.emailController.getAllEmails({
+        const allEmailsResponse = await this.emailController.getEmailsPaginated({
           page: 0,
           size: params.limit || 200,
-          sort: 'DESC'
+          sort: 'DESC',
+          unreadOnly: false
         });
 
         if (allEmailsResponse && (Array.isArray(allEmailsResponse) || allEmailsResponse.content)) {
@@ -913,16 +998,11 @@ export class MailSlurpService extends EventEmitter {
               subject: email.subject || 'Без темы',
               from: email.from || 'Неизвестный отправитель',
               to: email.to || [],
-              body: email.body || '',
-              bodyExcerpt: email.bodyExcerpt || (email.body ? email.body.substring(0, 150) + '...' : ''),
+              body: email.body || email.bodyHTML || email.bodyPlainText || email.textContent || '',
+              bodyExcerpt: email.bodyExcerpt || ((email.body || email.bodyHTML || email.bodyPlainText || email.textContent) ? (email.body || email.bodyHTML || email.bodyPlainText || email.textContent).substring(0, 150) + '...' : ''),
               createdAt: email.createdAt,
               read: email.read || false,
-              attachments: email.attachments?.map(att => ({
-                id: att.attachmentId || att.id,
-                name: att.name,
-                contentType: att.contentType,
-                size: att.size || 0
-              })) || [],
+              attachments: await this.processAttachments(email) || [],
               inboxId: email.inboxId || inboxesToCheck[0]?.id,
               emailAddress: email.recipients?.[0] || email.to?.[0] || inboxesToCheck[0]?.emailAddress
             });
@@ -950,7 +1030,10 @@ export class MailSlurpService extends EventEmitter {
           return filteredEmails;
         }
       } catch (error) {
-        logger.warn('Failed to get all emails at once, falling back to per-inbox method', error);
+        logger.warn('Failed to get all emails at once, falling back to per-inbox method', {
+          error: error instanceof Error ? error.message : error,
+          stack: error instanceof Error ? error.stack : undefined
+        });
       }
 
       for (const inbox of inboxesToCheck) {
@@ -1001,16 +1084,28 @@ export class MailSlurpService extends EventEmitter {
                 subject: fullEmail.subject || 'Без темы',
                 from: fullEmail.from || 'Неизвестный отправитель',
                 to: fullEmail.to || [],
-                body: fullEmail.body || '',
-                bodyExcerpt: fullEmail.bodyExcerpt || (fullEmail.body ? fullEmail.body.substring(0, 150) + '...' : ''),
+                body: fullEmail.body || fullEmail.bodyHTML || fullEmail.bodyPlainText || fullEmail.textContent || '',
+                bodyExcerpt: fullEmail.bodyExcerpt || ((fullEmail.body || fullEmail.bodyHTML || fullEmail.bodyPlainText || fullEmail.textContent) ? (fullEmail.body || fullEmail.bodyHTML || fullEmail.bodyPlainText || fullEmail.textContent).substring(0, 150) + '...' : ''),
                 createdAt: fullEmail.createdAt,
                 read: fullEmail.read || false,
-                attachments: fullEmail.attachments?.map(att => ({
-                  id: att.attachmentId || att.id,
-                  name: att.name,
-                  contentType: att.contentType,
-                  size: att.size || 0
-                })) || [],
+                attachments: fullEmail.attachments?.map(att => {
+                  try {
+                    return {
+                      id: att?.attachmentId || att?.id || '',
+                      name: att?.name || '',
+                      contentType: att?.contentType || '',
+                      size: att?.size || 0
+                    };
+                  } catch (e) {
+                    logger.error('Error processing attachment in email details', e, { attachment: att });
+                    return {
+                      id: '',
+                      name: '',
+                      contentType: '',
+                      size: 0
+                    };
+                  }
+                }) || [],
                 inboxId: inbox.id,
                 emailAddress: inbox.emailAddress
               });
@@ -1073,10 +1168,41 @@ export class MailSlurpService extends EventEmitter {
    */
   async getEmail(inboxId: string, emailId: string): Promise<any> {
     try {
+      logger.info(`Getting email details for ${emailId} in inbox ${inboxId}`);
       const email = await this.emailController.getEmail({ emailId });
       
-      // If body is missing, try to get raw email
-      let body = email.body || '';
+      logger.debug('Email response structure', {
+        hasBody: !!email.body,
+        hasRawEmail: !!email.rawEmail,
+        hasBodyHTML: !!email.bodyHTML,
+        hasBodyPlainText: !!email.bodyPlainText,
+        hasTextContent: !!email.textContent,
+        bodyLength: email.body?.length || 0,
+        keys: Object.keys(email).filter(k => k.toLowerCase().includes('body') || k.toLowerCase().includes('content'))
+      });
+      
+      // Get attachment metadata separately if needed
+      if (email.attachments && email.attachments.length > 0) {
+        try {
+          const attachmentMetadata = await this.emailController.getEmailAttachments({ emailId });
+          if (attachmentMetadata && attachmentMetadata.length > 0) {
+            logger.debug('Got attachment metadata', { count: attachmentMetadata.length });
+            // Merge metadata with existing attachments
+            email.attachments = email.attachments.map((att, index) => {
+              const metadata = attachmentMetadata[index] || attachmentMetadata.find(m => m.id === att.id || m.attachmentId === att.attachmentId);
+              if (metadata) {
+                return { ...att, ...metadata };
+              }
+              return att;
+            });
+          }
+        } catch (error) {
+          logger.warn('Failed to get attachment metadata', error);
+        }
+      }
+      
+      // Try different body fields
+      let body = email.body || email.bodyHTML || email.bodyPlainText || email.textContent || '';
       if (!body && email.rawEmail) {
         body = email.rawEmail;
       }
@@ -1090,12 +1216,7 @@ export class MailSlurpService extends EventEmitter {
         bodyExcerpt: email.bodyExcerpt || (body ? body.substring(0, 150) + '...' : ''),
         createdAt: email.createdAt,
         read: email.read || false,
-        attachments: email.attachments?.map(att => ({
-          id: att.attachmentId || att.id,
-          name: att.name,
-          contentType: att.contentType,
-          size: att.size || 0
-        })) || [],
+        attachments: await this.processAttachments(email) || [],
         inboxId: inboxId,
         rawEmail: email.rawEmail
       };
@@ -1115,28 +1236,73 @@ export class MailSlurpService extends EventEmitter {
     size: number;
   }> {
     try {
+      logger.info(`Downloading attachment ${attachmentId} from email ${emailId}`);
+      
       // Get email details first to find attachment info
       const email = await this.emailController.getEmail({ emailId });
-      const attachment = email.attachments?.find(att => att.attachmentId === attachmentId);
+      
+      logger.debug('Email attachments info', {
+        attachmentCount: email.attachments?.length || 0,
+        attachments: email.attachments?.map(att => ({
+          id: att.id,
+          attachmentId: att.attachmentId,
+          name: att.name,
+          contentType: att.contentType,
+          size: att.size
+        }))
+      });
+      
+      const attachment = email.attachments?.find(att => 
+        (att.attachmentId === attachmentId) || (att.id === attachmentId)
+      );
       
       if (!attachment) {
+        logger.error('Attachment not found', { attachmentId, availableIds: email.attachments?.map(a => ({ id: a.id, attachmentId: a.attachmentId })) });
         throw new Error('Attachment not found');
       }
 
-      // Get attachment binary data
-      const attachmentData = await this.attachmentController.downloadAttachmentAsBase64Encoded({
-        emailId,
-        attachmentId
-      });
+      // Get attachment binary data using the correct ID
+      const attachmentIdToUse = attachment.attachmentId || attachment.id || attachmentId;
+      logger.debug(`Using attachment ID: ${attachmentIdToUse}`);
+      
+      let attachmentData;
+      try {
+        attachmentData = await this.attachmentController.downloadAttachmentAsBase64Encoded({
+          emailId,
+          attachmentId: attachmentIdToUse
+        });
+      } catch (error) {
+        logger.error('Failed to download attachment data', { error, emailId, attachmentIdToUse });
+        
+        // Try alternative method - get attachment as bytes
+        try {
+          logger.info('Trying alternative download method...');
+          const attachmentBytes = await this.attachmentController.downloadAttachmentAsBytes({
+            emailId,
+            attachmentId: attachmentIdToUse
+          });
+          
+          // Convert bytes to base64
+          const base64Content = Buffer.from(attachmentBytes).toString('base64');
+          attachmentData = { base64FileContents: base64Content };
+        } catch (altError) {
+          logger.error('Alternative download method also failed', altError);
+          throw new Error('Failed to download attachment using all available methods');
+        }
+      }
+
+      if (!attachmentData || !attachmentData.base64FileContents) {
+        throw new Error('No attachment data received');
+      }
 
       // Convert base64 to data URL
-      const downloadUrl = `data:${attachment.contentType};base64,${attachmentData.base64FileContents}`;
+      const downloadUrl = `data:${attachment.contentType || 'application/octet-stream'};base64,${attachmentData.base64FileContents}`;
 
       return {
         downloadUrl,
-        fileName: attachment.name,
-        contentType: attachment.contentType,
-        size: attachment.size || 0
+        fileName: attachment.name || 'attachment',
+        contentType: attachment.contentType || 'application/octet-stream',
+        size: attachment.size || attachment.contentLength || attachment.length || attachmentData.base64FileContents.length || 0
       };
     } catch (error) {
       logger.error(`Error downloading attachment ${attachmentId} from email ${emailId}`, error as Error);
@@ -1255,8 +1421,12 @@ export async function getMailSlurpService(): Promise<MailSlurpService> {
   // Start initialization
   initializationPromise = (async () => {
     const apiKey = process.env.MAILSLURP_API_KEY;
-    if (!apiKey) {
-      throw new Error('MAILSLURP_API_KEY not configured');
+    if (!apiKey || apiKey === 'undefined' || apiKey === '') {
+      logger.warn('MAILSLURP_API_KEY not configured, creating stub service');
+      // Create a stub service that returns empty data
+      const service = new MailSlurpService({ apiKey: 'stub' });
+      mailslurpService = service;
+      return service;
     }
 
     const service = new MailSlurpService({ apiKey });
